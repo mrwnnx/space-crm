@@ -1,6 +1,6 @@
 # Academy CRM
 
-CRM inspiré de [Frappe CRM](https://github.com/frappe/crm) — rebuilt en Next.js avec le feature set Frappe (Leads, Deals, Contacts, Organizations, Notes, Tasks, Call Logs, Activities, Email Templates, Custom Views, Notifications, Data Import, Dashboard, Calendar).
+CRM — gestion des leads, deals, contacts, organizations, notes, tasks, call logs, activities, email templates, custom views, notifications, data import, dashboard, calendar.
 
 ## Stack
 - Next.js 16 (App Router) + React 19
@@ -67,7 +67,7 @@ src/
     data-import/        — CSV importer
     notifications/      — notification bell
     settings/           — email templates manager
-    sidebar.tsx         — navigation (Frappe-style)
+    sidebar.tsx         — navigation
     page-header.tsx     — reusable header
     data-table.tsx      — reusable table
     form.tsx            — form primitives (NewEntityButton, Input, Select, etc.)
