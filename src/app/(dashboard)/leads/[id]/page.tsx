@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getLeadById, getLeadStatuses, getLeadSources, getIndustries } from "@/lib/queries";
+import { getLeadById, getLeadStatuses, getLeadSources, getIndustries, getEmailTemplates } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
-import { LeadActivities } from "@/components/leads/lead-activities";
+import { ActivityPanel } from "@/components/activities/activity-panel";
+import { LinkedTasks } from "@/components/tasks/linked-tasks";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +30,11 @@ export default async function LeadDetailPage({
 
   if (!lead) notFound();
 
-  const [statuses, sources, industries] = await Promise.all([
+  const [statuses, sources, industries, templates] = await Promise.all([
     getLeadStatuses(),
     getLeadSources(),
     getIndustries(),
+    getEmailTemplates(),
   ]);
 
   const sc = lead.status ? statusColor(lead.status.color) : null;
@@ -50,14 +52,23 @@ export default async function LeadDetailPage({
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main: Activities */}
+        {/* Main: Activity panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          <LeadActivities
-            leadId={lead.id}
+          <ActivityPanel
+            referenceType="lead"
+            referenceId={lead.id}
             activities={lead.activities.map((a) => ({
               ...a,
               createdAt: a.createdAt.toISOString(),
             }))}
+            comments={lead.comments.map((c) => ({
+              ...c,
+              createdAt: c.createdAt.toISOString(),
+            }))}
+            leadEmail={lead.email}
+            leadMobile={lead.mobileNo}
+            leadWhatsapp={lead.mobileNo}
+            templates={templates}
           />
         </div>
 
@@ -95,7 +106,13 @@ export default async function LeadDetailPage({
             industries={industries}
           />
 
-          <div className="border-t border-border p-4 text-xs text-muted-foreground">
+          <LinkedTasks
+            tasks={lead.tasks}
+            referenceType="lead"
+            referenceId={lead.id}
+          />
+
+          <div className="mt-auto border-t border-border p-4 text-xs text-muted-foreground">
             <div className="flex justify-between py-1">
               <span>Créé le</span>
               <span className="font-medium text-foreground">

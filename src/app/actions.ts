@@ -20,6 +20,13 @@ import {
   updateDealStatus as updateDealStatusQuery,
   deleteDeal as deleteDealQuery,
   getDefaultDealStatus,
+  createNote as createNoteQuery,
+  updateNote as updateNoteQuery,
+  deleteNote as deleteNoteQuery,
+  createTask as createTaskQuery,
+  updateTask as updateTaskQuery,
+  updateTaskStatus as updateTaskStatusQuery,
+  deleteTask as deleteTaskQuery,
 } from "@/lib/queries";
 
 // ── Lead actions ───────────────────────────────────────
@@ -340,4 +347,254 @@ export async function addDealNoteAction(dealId: string, content: string) {
   });
 
   revalidatePath(`/deals/${dealId}`);
+}
+
+// ── Note actions ───────────────────────────────────────
+
+export async function createNoteAction(formData: FormData) {
+  const content = String(formData.get("content") || "").trim();
+  if (!content) return;
+
+  const referenceType = String(formData.get("referenceType") || "") || null;
+  const referenceId = String(formData.get("referenceId") || "") || null;
+
+  await createNoteQuery({
+    title: String(formData.get("title") || "").trim() || null,
+    content,
+    referenceType: (referenceType as "lead" | "deal" | "contact" | "organization" | null) ?? null,
+    referenceId: referenceId || null,
+  });
+
+  if (referenceType && referenceId) {
+    revalidatePath(`/${referenceType === "lead" ? "leads" : referenceType === "deal" ? "deals" : referenceType + "s"}/${referenceId}`);
+  }
+  revalidatePath("/notes");
+}
+
+export async function deleteNoteAction(noteId: string) {
+  await deleteNoteQuery(noteId);
+  revalidatePath("/notes");
+}
+
+// ── Task actions ───────────────────────────────────────
+
+export async function createTaskAction(formData: FormData) {
+  const title = String(formData.get("title") || "").trim();
+  if (!title) return;
+
+  const referenceType = String(formData.get("referenceType") || "") || null;
+  const referenceId = String(formData.get("referenceId") || "") || null;
+  const dueDate = String(formData.get("dueDate") || "") || null;
+
+  await createTaskQuery({
+    title,
+    priority: (String(formData.get("priority") || "medium") as "low" | "medium" | "high") ?? "medium",
+    status: "todo",
+    assignedTo: String(formData.get("assignedTo") || "").trim() || null,
+    dueDate: dueDate ? new Date(dueDate) : null,
+    description: String(formData.get("description") || "").trim() || null,
+    referenceType: (referenceType as "lead" | "deal" | "contact" | "organization" | null) ?? null,
+    referenceId: referenceId || null,
+  });
+
+  if (referenceType && referenceId) {
+    revalidatePath(`/${referenceType === "lead" ? "leads" : referenceType === "deal" ? "deals" : referenceType + "s"}/${referenceId}`);
+  }
+  revalidatePath("/tasks");
+}
+
+export async function updateTaskStatusAction(taskId: string, status: string) {
+  await updateTaskStatusQuery(taskId, status);
+  revalidatePath("/tasks");
+}
+
+export async function deleteTaskAction(taskId: string) {
+  await deleteTaskQuery(taskId);
+  revalidatePath("/tasks");
+}
+
+// ── Messaging actions ──────────────────────────────────
+
+export async function sendEmailAction(
+  referenceType: "lead" | "deal",
+  referenceId: string,
+  to: string,
+  subject: string,
+  content: string,
+  templateId?: string
+) {
+  const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
+
+  let html = content;
+  if (templateId) {
+    const { getEmailTemplateById } = await import("@/lib/queries");
+    const tpl = await getEmailTemplateById(templateId);
+    if (tpl) {
+      html = renderTemplate(tpl.content, { subject, content });
+      subject = renderTemplate(tpl.subject || subject, { subject });
+    }
+  }
+
+  const result = await sendEmail({ to, subject, html });
+
+  await createActivity({
+    referenceType,
+    referenceId,
+    type: "email",
+    direction: "outbound",
+    subject,
+    content: html,
+  });
+
+  if (referenceType === "lead") {
+    await updateLeadQuery(referenceId, { lastContactedAt: new Date() });
+    revalidatePath(`/leads/${referenceId}`);
+  } else {
+    revalidatePath(`/deals/${referenceId}`);
+  }
+
+  return result;
+}
+
+export async function sendWhatsAppAction(
+  referenceType: "lead" | "deal",
+  referenceId: string,
+  to: string,
+  body: string
+) {
+  const { sendWhatsApp } = await import("@/lib/messaging/whatsapp");
+  const result = await sendWhatsApp({ to, body });
+
+  await createActivity({
+    referenceType,
+    referenceId,
+    type: "whatsapp",
+    direction: "outbound",
+    subject: "WhatsApp envoyé",
+    content: body,
+  });
+
+  if (referenceType === "lead") {
+    await updateLeadQuery(referenceId, { lastContactedAt: new Date() });
+    revalidatePath(`/leads/${referenceId}`);
+  } else {
+    revalidatePath(`/deals/${referenceId}`);
+  }
+
+  return result;
+}
+
+export async function sendSMSAction(
+  referenceType: "lead" | "deal",
+  referenceId: string,
+  to: string,
+  body: string
+) {
+  const { sendSMS } = await import("@/lib/messaging/sms");
+  const result = await sendSMS({ to, body });
+
+  await createActivity({
+    referenceType,
+    referenceId,
+    type: "sms",
+    direction: "outbound",
+    subject: "SMS envoyé",
+    content: body,
+  });
+
+  if (referenceType === "lead") {
+    await updateLeadQuery(referenceId, { lastContactedAt: new Date() });
+    revalidatePath(`/leads/${referenceId}`);
+  } else {
+    revalidatePath(`/deals/${referenceId}`);
+  }
+
+  return result;
+}
+
+export async function logCallAction(
+  referenceType: "lead" | "deal",
+  referenceId: string,
+  formData: FormData
+) {
+  const { createCallLog } = await import("@/lib/queries");
+
+  const type = String(formData.get("type") || "outgoing") as "incoming" | "outgoing";
+  const status = String(formData.get("status") || "completed") as never;
+  const duration = Number(formData.get("duration") || 0);
+  const notes = String(formData.get("notes") || "").trim();
+
+  await createCallLog({
+    type,
+    status,
+    duration,
+    telephonyMedium: "manual",
+    referenceType,
+    referenceId,
+    startTime: new Date(),
+    endTime: new Date(),
+  });
+
+  await createActivity({
+    referenceType,
+    referenceId,
+    type: "call",
+    direction: type === "incoming" ? "inbound" : "outbound",
+    subject: `Appel ${type === "incoming" ? "entrant" : "sortant"}`,
+    content: notes || `Durée: ${duration}s`,
+  });
+
+  if (referenceType === "lead") {
+    await updateLeadQuery(referenceId, { lastContactedAt: new Date() });
+    revalidatePath(`/leads/${referenceId}`);
+  } else {
+    revalidatePath(`/deals/${referenceId}`);
+  }
+  revalidatePath("/call-logs");
+}
+
+export async function addCommentAction(
+  referenceType: "lead" | "deal" | "contact" | "organization",
+  referenceId: string,
+  content: string
+) {
+  if (!content.trim()) return;
+
+  const { createComment } = await import("@/lib/queries");
+  await createComment({
+    referenceType,
+    referenceId,
+    content: content.trim(),
+  });
+
+  const pathMap: Record<string, string> = {
+    lead: "leads",
+    deal: "deals",
+    contact: "contacts",
+    organization: "organizations",
+  };
+  revalidatePath(`/${pathMap[referenceType]}/${referenceId}`);
+}
+
+// ── Email Template actions ─────────────────────────────
+
+export async function createEmailTemplateAction(formData: FormData) {
+  const name = String(formData.get("name") || "").trim();
+  const content = String(formData.get("content") || "").trim();
+  if (!name || !content) return;
+
+  const { createEmailTemplate } = await import("@/lib/queries");
+  await createEmailTemplate({
+    name,
+    subject: String(formData.get("subject") || "").trim() || null,
+    content,
+  });
+
+  revalidatePath("/settings");
+}
+
+export async function deleteEmailTemplateAction(id: string) {
+  const { deleteEmailTemplate } = await import("@/lib/queries");
+  await deleteEmailTemplate(id);
+  revalidatePath("/settings");
 }

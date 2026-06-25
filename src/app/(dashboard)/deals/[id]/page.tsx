@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getDealById, getDealStatuses, getLostReasons } from "@/lib/queries";
+import { getDealById, getDealStatuses, getLostReasons, getEmailTemplates } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { DealDetailHeader } from "@/components/deals/deal-detail-header";
 import { DealSidePanel } from "@/components/deals/deal-side-panel";
-import { DealActivities } from "@/components/deals/deal-activities";
+import { ActivityPanel } from "@/components/activities/activity-panel";
+import { LinkedTasks } from "@/components/tasks/linked-tasks";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +30,10 @@ export default async function DealDetailPage({
 
   if (!deal) notFound();
 
-  const [statuses, lostReasons] = await Promise.all([
+  const [statuses, lostReasons, templates] = await Promise.all([
     getDealStatuses(),
     getLostReasons(),
+    getEmailTemplates(),
   ]);
 
   const sc = deal.status ? statusColor(deal.status.color) : null;
@@ -51,14 +53,23 @@ export default async function DealDetailPage({
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main: Activities */}
+        {/* Main: Activity panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          <DealActivities
-            dealId={deal.id}
+          <ActivityPanel
+            referenceType="deal"
+            referenceId={deal.id}
             activities={deal.activities.map((a) => ({
               ...a,
               createdAt: a.createdAt.toISOString(),
             }))}
+            comments={deal.comments.map((c) => ({
+              ...c,
+              createdAt: c.createdAt.toISOString(),
+            }))}
+            leadEmail={deal.email}
+            leadMobile={deal.mobileNo}
+            leadWhatsapp={deal.mobileNo}
+            templates={templates}
           />
         </div>
 
@@ -111,6 +122,12 @@ export default async function DealDetailPage({
               expectedClosureDate: deal.expectedClosureDate,
               lostNotes: deal.lostNotes,
             }}
+          />
+
+          <LinkedTasks
+            tasks={deal.tasks}
+            referenceType="deal"
+            referenceId={deal.id}
           />
 
           {/* Contacts linked */}

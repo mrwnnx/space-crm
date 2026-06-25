@@ -17,6 +17,9 @@ import {
   contacts,
   territories,
   lostReasons,
+  emailTemplates,
+  comments,
+  callLogs,
 } from "@/db/schema";
 import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
 
@@ -112,7 +115,7 @@ export async function getLeadById(id: string) {
   });
   if (!lead) return null;
 
-  const [leadActivities, leadTasks, leadNotes] = await Promise.all([
+  const [leadActivities, leadTasks, leadNotes, leadComments] = await Promise.all([
     db.query.activities.findMany({
       where: and(
         eq(activities.referenceType, "lead"),
@@ -128,6 +131,10 @@ export async function getLeadById(id: string) {
       where: and(eq(notes.referenceType, "lead"), eq(notes.referenceId, id)),
       orderBy: [desc(notes.createdAt)],
     }),
+    db.query.comments.findMany({
+      where: and(eq(comments.referenceType, "lead"), eq(comments.referenceId, id)),
+      orderBy: [desc(comments.createdAt)],
+    }),
   ]);
 
   return {
@@ -135,6 +142,7 @@ export async function getLeadById(id: string) {
     activities: leadActivities,
     tasks: leadTasks,
     notes: leadNotes,
+    comments: leadComments,
   };
 }
 
@@ -433,7 +441,7 @@ export async function getDealById(id: string) {
   });
   if (!deal) return null;
 
-  const [dealContactLinks, dealActivities] = await Promise.all([
+  const [dealContactLinks, dealActivities, dealTasks, dealComments] = await Promise.all([
     db.query.dealContacts.findMany({
       where: eq(dealContacts.dealId, id),
       with: { contact: { with: { organization: true } } },
@@ -445,12 +453,22 @@ export async function getDealById(id: string) {
       ),
       orderBy: [desc(activities.createdAt)],
     }),
+    db.query.tasks.findMany({
+      where: and(eq(tasks.referenceType, "deal"), eq(tasks.referenceId, id)),
+      orderBy: [desc(tasks.createdAt)],
+    }),
+    db.query.comments.findMany({
+      where: and(eq(comments.referenceType, "deal"), eq(comments.referenceId, id)),
+      orderBy: [desc(comments.createdAt)],
+    }),
   ]);
 
   return {
     ...deal,
     contacts: dealContactLinks.map((d) => d.contact),
     activities: dealActivities,
+    tasks: dealTasks,
+    comments: dealComments,
   };
 }
 
@@ -495,4 +513,183 @@ export async function getProducts() {
 export async function createProduct(data: typeof products.$inferInsert) {
   const [product] = await db.insert(products).values(data).returning();
   return product;
+}
+
+// ── Notes ──────────────────────────────────────────────
+
+export async function getNotes() {
+  return db.query.notes.findMany({
+    orderBy: [desc(notes.createdAt)],
+  });
+}
+
+export async function getNotesByReference(
+  referenceType: "lead" | "deal" | "contact" | "organization",
+  referenceId: string
+) {
+  return db.query.notes.findMany({
+    where: and(
+      eq(notes.referenceType, referenceType),
+      eq(notes.referenceId, referenceId)
+    ),
+    orderBy: [desc(notes.createdAt)],
+  });
+}
+
+export async function createNote(data: typeof notes.$inferInsert) {
+  const [note] = await db.insert(notes).values(data).returning();
+  return note;
+}
+
+export async function updateNote(id: string, data: Partial<typeof notes.$inferInsert>) {
+  const [note] = await db
+    .update(notes)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(notes.id, id))
+    .returning();
+  return note;
+}
+
+export async function deleteNote(id: string) {
+  await db.delete(notes).where(eq(notes.id, id));
+}
+
+// ── Tasks ──────────────────────────────────────────────
+
+export async function getTasks() {
+  return db.query.tasks.findMany({
+    orderBy: [desc(tasks.createdAt)],
+  });
+}
+
+export async function getTasksByStatus() {
+  const statuses = ["backlog", "todo", "in_progress", "done", "canceled"] as const;
+  const result = await Promise.all(
+    statuses.map(async (status) => ({
+      status,
+      tasks: await db.query.tasks.findMany({
+        where: eq(tasks.status, status),
+        orderBy: [desc(tasks.createdAt)],
+      }),
+    }))
+  );
+  return result;
+}
+
+export async function getTasksByReference(
+  referenceType: "lead" | "deal" | "contact" | "organization",
+  referenceId: string
+) {
+  return db.query.tasks.findMany({
+    where: and(
+      eq(tasks.referenceType, referenceType),
+      eq(tasks.referenceId, referenceId)
+    ),
+    orderBy: [desc(tasks.createdAt)],
+  });
+}
+
+export async function createTask(data: typeof tasks.$inferInsert) {
+  const [task] = await db.insert(tasks).values(data).returning();
+  return task;
+}
+
+export async function updateTask(id: string, data: Partial<typeof tasks.$inferInsert>) {
+  const [task] = await db
+    .update(tasks)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(tasks.id, id))
+    .returning();
+  return task;
+}
+
+export async function updateTaskStatus(taskId: string, status: string) {
+  const [task] = await db
+    .update(tasks)
+    .set({ status: status as never, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId))
+    .returning();
+  return task;
+}
+
+export async function deleteTask(id: string) {
+  await db.delete(tasks).where(eq(tasks.id, id));
+}
+
+// ── Email Templates ────────────────────────────────────
+
+export async function getEmailTemplates() {
+  return db.query.emailTemplates.findMany({
+    orderBy: [desc(emailTemplates.createdAt)],
+  });
+}
+
+export async function getEmailTemplateById(id: string) {
+  return db.query.emailTemplates.findFirst({
+    where: eq(emailTemplates.id, id),
+  });
+}
+
+export async function createEmailTemplate(data: typeof emailTemplates.$inferInsert) {
+  const [tpl] = await db.insert(emailTemplates).values(data).returning();
+  return tpl;
+}
+
+export async function updateEmailTemplate(id: string, data: Partial<typeof emailTemplates.$inferInsert>) {
+  const [tpl] = await db
+    .update(emailTemplates)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(emailTemplates.id, id))
+    .returning();
+  return tpl;
+}
+
+export async function deleteEmailTemplate(id: string) {
+  await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+}
+
+// ── Comments ───────────────────────────────────────────
+
+export async function getCommentsByReference(
+  referenceType: "lead" | "deal" | "contact" | "organization",
+  referenceId: string
+) {
+  return db.query.comments.findMany({
+    where: and(
+      eq(comments.referenceType, referenceType),
+      eq(comments.referenceId, referenceId)
+    ),
+    orderBy: [desc(comments.createdAt)],
+  });
+}
+
+export async function createComment(data: typeof comments.$inferInsert) {
+  const [comment] = await db.insert(comments).values(data).returning();
+  return comment;
+}
+
+// ── Call Logs ──────────────────────────────────────────
+
+export async function getCallLogs() {
+  return db.query.callLogs.findMany({
+    orderBy: [desc(callLogs.createdAt)],
+  });
+}
+
+export async function getCallLogsByReference(
+  referenceType: "lead" | "deal" | "contact" | "organization",
+  referenceId: string
+) {
+  return db.query.callLogs.findMany({
+    where: and(
+      eq(callLogs.referenceType, referenceType),
+      eq(callLogs.referenceId, referenceId)
+    ),
+    orderBy: [desc(callLogs.createdAt)],
+  });
+}
+
+export async function createCallLog(data: typeof callLogs.$inferInsert) {
+  const [log] = await db.insert(callLogs).values(data).returning();
+  return log;
 }
