@@ -1,308 +1,343 @@
 "use server";
 
-import { db } from "@/db";
-import {
-  leads,
-  leadActivities,
-  cohorts,
-  sequences,
-  sequenceSteps,
-} from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { recomputeLeadScore } from "@/lib/scoring-server";
-import { sendEmail } from "@/lib/messaging/email";
-import { sendWhatsApp } from "@/lib/messaging/whatsapp";
-import { sendSMS } from "@/lib/messaging/sms";
-import { enrollLeadInSequence } from "@/lib/sequences";
+import {
+  createLead as createLeadQuery,
+  updateLead as updateLeadQuery,
+  updateLeadStatus as updateLeadStatusQuery,
+  deleteLead as deleteLeadQuery,
+  createActivity,
+  createContact as createContactQuery,
+  updateContact as updateContactQuery,
+  deleteContact as deleteContactQuery,
+  createOrganization as createOrganizationQuery,
+  updateOrganization as updateOrganizationQuery,
+  deleteOrganization as deleteOrganizationQuery,
+  getOrCreateOrganizationByName,
+  getLeadById,
+  createDeal as createDealQuery,
+  updateDeal as updateDealQuery,
+  updateDealStatus as updateDealStatusQuery,
+  deleteDeal as deleteDealQuery,
+  getDefaultDealStatus,
+} from "@/lib/queries";
 
-// ── Move lead to a different pipeline stage ────────────
+// ── Lead actions ───────────────────────────────────────
 
-export async function moveLeadToStage(leadId: string, stageId: string) {
-  const lead = await db.query.leads.findFirst({
-    where: eq(leads.id, leadId),
+export async function createLeadAction(formData: FormData) {
+  const fullName = String(formData.get("fullName") || "").trim();
+  if (!fullName) return;
+
+  const lead = await createLeadQuery({
+    fullName,
+    firstName: String(formData.get("firstName") || "").trim() || null,
+    lastName: String(formData.get("lastName") || "").trim() || null,
+    email: String(formData.get("email") || "").trim() || null,
+    mobileNo: String(formData.get("mobileNo") || "").trim() || null,
+    phone: String(formData.get("phone") || "").trim() || null,
+    organizationName: String(formData.get("organizationName") || "").trim() || null,
+    jobTitle: String(formData.get("jobTitle") || "").trim() || null,
+    website: String(formData.get("website") || "").trim() || null,
+    sourceId: String(formData.get("sourceId") || "") || null,
+    industryId: String(formData.get("industryId") || "") || null,
   });
-  if (!lead) throw new Error("Lead not found");
 
-  await db
-    .update(leads)
-    .set({ stageId, updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
-
-  await db.insert(leadActivities).values({
-    leadId,
-    type: "status_change",
-    direction: "outbound",
-    subject: "Changement d'étape",
-    content: `${lead.stageId ?? "?"} → ${stageId}`,
-  });
-
-  revalidatePath("/pipeline");
+  revalidatePath("/leads");
+  return lead;
 }
 
-// ── Add a note to a lead ───────────────────────────────
+export async function updateLeadFieldAction(
+  leadId: string,
+  field: string,
+  value: string
+) {
+  const allowed = [
+    "fullName",
+    "firstName",
+    "lastName",
+    "email",
+    "mobileNo",
+    "phone",
+    "jobTitle",
+    "website",
+    "organizationName",
+  ];
+  if (!allowed.includes(field)) return;
 
-export async function addLeadNote(leadId: string, content: string) {
+  await updateLeadQuery(leadId, { [field]: value || null });
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function updateLeadStatusAction(
+  leadId: string,
+  statusId: string
+) {
+  const lead = await updateLeadStatusQuery(leadId, statusId);
+
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "status_change",
+    direction: "outbound",
+    subject: "Statut modifié",
+    content: `Nouveau statut: ${lead?.statusId ?? statusId}`,
+  });
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function deleteLeadAction(leadId: string) {
+  await deleteLeadQuery(leadId);
+  revalidatePath("/leads");
+}
+
+export async function addLeadNoteAction(leadId: string, content: string) {
   if (!content.trim()) return;
 
-  await db.insert(leadActivities).values({
-    leadId,
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
     type: "note",
     direction: "outbound",
+    subject: "Note",
     content: content.trim(),
   });
 
-  await db
-    .update(leads)
-    .set({ lastContactedAt: new Date(), updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
-
-  await recomputeLeadScore(leadId);
   revalidatePath(`/leads/${leadId}`);
 }
 
-// ── Update lead contact info ───────────────────────────
+export async function convertToDealAction(leadId: string) {
+  const lead = await getLeadById(leadId);
+  if (!lead) return;
 
-export async function updateLeadInfo(
-  leadId: string,
-  data: {
-    fullName?: string;
-    email?: string;
-    phone?: string;
-    whatsapp?: string;
-    notes?: string;
-    cohortInterestId?: string | null;
-  }
-) {
-  await db
-    .update(leads)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
-
-  await recomputeLeadScore(leadId);
-  revalidatePath(`/leads/${leadId}`);
-}
-
-// ── Create a cohort ────────────────────────────────────
-
-export async function createCohort(formData: FormData) {
-  const name = formData.get("name") as string;
-  const startDate = formData.get("start_date") as string;
-  const endDate = (formData.get("end_date") as string) || null;
-  const capacity = formData.get("capacity")
-    ? Number(formData.get("capacity"))
-    : null;
-
-  const slug = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  await db.insert(cohorts).values({
-    name,
-    slug,
-    startDate,
-    endDate: endDate ?? undefined,
-    capacity: capacity ?? undefined,
-    status: "upcoming",
-  });
-
-  revalidatePath("/cohorts");
-}
-
-// ── Update cohort status ───────────────────────────────
-
-export async function updateCohortStatus(cohortId: string, status: string) {
-  await db
-    .update(cohorts)
-    .set({ status: status as (typeof cohorts.status.enumValues)[number] })
-    .where(eq(cohorts.id, cohortId));
-
-  revalidatePath("/cohorts");
-}
-
-// ── Send a message via email/whatsapp/sms ──────────────
-
-export async function sendMessage(
-  leadId: string,
-  channel: "email" | "whatsapp" | "sms",
-  subject: string | null,
-  content: string
-): Promise<{ ok: boolean; error?: string }> {
-  const lead = await db.query.leads.findFirst({
-    where: eq(leads.id, leadId),
-  });
-  if (!lead) return { ok: false, error: "Lead introuvable" };
-
-  let result: { ok: boolean; error?: string };
-
-  if (channel === "email") {
-    if (!lead.email) return { ok: false, error: "Le lead n'a pas d'email" };
-    result = await sendEmail({
-      to: lead.email,
-      subject: subject ?? "Space Academy",
-      html: content.replace(/\n/g, "<br>"),
-    });
-  } else if (channel === "whatsapp") {
-    if (!lead.whatsapp && !lead.phone)
-      return { ok: false, error: "Le lead n'a pas de numéro WhatsApp" };
-    result = await sendWhatsApp({
-      to: lead.whatsapp ?? lead.phone!,
-      body: content,
-    });
-  } else {
-    if (!lead.phone)
-      return { ok: false, error: "Le lead n'a pas de téléphone" };
-    result = await sendSMS({ to: lead.phone, body: content });
+  // Auto-create organization from lead's organizationName (if provided)
+  let organizationId: string | null = null;
+  if (lead.organizationName) {
+    const org = await getOrCreateOrganizationByName(lead.organizationName);
+    organizationId = org.id;
+    if (lead.industryId) {
+      await updateOrganizationQuery(org.id, { industryId: lead.industryId });
+    }
   }
 
-  // Log the activity regardless of success/failure
-  await db.insert(leadActivities).values({
+  // Auto-create contact from lead
+  const contact = await createContactQuery({
+    firstName: lead.firstName,
+    lastName: lead.lastName,
+    fullName: lead.fullName,
+    email: lead.email,
+    mobileNo: lead.mobileNo,
+    phone: lead.phone,
+    organizationId,
+  });
+
+  // Mark lead as converted + link to org
+  await updateLeadQuery(leadId, {
+    converted: true,
+    organizationId,
+  });
+
+  // Create the Deal linked to lead + org
+  const defaultStatus = await getDefaultDealStatus();
+  const deal = await createDealQuery({
     leadId,
-    type: channel,
+    organizationId,
+    statusId: defaultStatus?.id ?? null,
+    firstName: lead.firstName,
+    lastName: lead.lastName,
+    email: lead.email,
+    mobileNo: lead.mobileNo,
+    phone: lead.phone,
+    website: lead.website,
+    sourceId: lead.sourceId,
+    industryId: lead.industryId,
+  });
+
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "status_change",
     direction: "outbound",
-    subject: subject ?? undefined,
-    content: result.ok ? content : `[ÉCHEC] ${content}`,
+    subject: "Converti en Deal",
+    content: `Contact ${contact.fullName} créé + Deal créé${organizationId ? " + organization liée" : ""}`,
   });
-
-  if (result.ok) {
-    await db
-      .update(leads)
-      .set({ lastContactedAt: new Date(), updatedAt: new Date() })
-      .where(eq(leads.id, leadId));
-
-    await recomputeLeadScore(leadId);
-  }
 
   revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/pipeline");
-
-  return result;
+  revalidatePath("/leads");
+  revalidatePath("/deals");
+  revalidatePath(`/deals/${deal.id}`);
+  revalidatePath("/contacts");
+  revalidatePath("/organizations");
 }
 
-// ── Log an inbound reply ───────────────────────────────
+// ── Contact actions ────────────────────────────────────
 
-export async function logInboundReply(
-  leadId: string,
-  channel: "email" | "whatsapp" | "sms",
-  content: string
-) {
-  await db.insert(leadActivities).values({
-    leadId,
-    type: channel,
-    direction: "inbound",
-    content,
+export async function createContactAction(formData: FormData) {
+  const fullName = String(formData.get("fullName") || "").trim();
+  if (!fullName) return;
+
+  const organizationId = String(formData.get("organizationId") || "") || null;
+
+  await createContactQuery({
+    fullName,
+    firstName: String(formData.get("firstName") || "").trim() || null,
+    lastName: String(formData.get("lastName") || "").trim() || null,
+    email: String(formData.get("email") || "").trim() || null,
+    mobileNo: String(formData.get("mobileNo") || "").trim() || null,
+    phone: String(formData.get("phone") || "").trim() || null,
+    organizationId: organizationId || null,
   });
 
-  await db
-    .update(leads)
-    .set({ lastContactedAt: new Date(), updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
-
-  await recomputeLeadScore(leadId);
-  revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/pipeline");
+  revalidatePath("/contacts");
 }
 
-// ── Create a sequence with steps ───────────────────────
-
-export async function createSequence(formData: FormData) {
-  const name = formData.get("name") as string;
-  const description = (formData.get("description") as string) || null;
-  const trigger = (formData.get("trigger") as string) || "manual";
-
-  const [seq] = await db
-    .insert(sequences)
-    .values({
-      name,
-      description: description ?? undefined,
-      trigger: trigger as (typeof sequences.trigger.enumValues)[number],
-      status: "draft",
-    })
-    .returning();
-
-  // Parse steps from form data (step_1_channel, step_1_delay, etc.)
-  const stepRegex = /^step_(\d+)_(channel|delay_days|subject|content)$/;
-  const stepMap = new Map<
-    number,
-    {
-      channel?: string;
-      delayDays?: number;
-      subject?: string;
-      content?: string;
-    }
-  >();
-
-  for (const [key, value] of formData.entries()) {
-    const match = key.match(stepRegex);
-    if (!match) continue;
-    const stepNum = Number(match[1]);
-    const field = match[2];
-    const step = stepMap.get(stepNum) ?? {};
-    if (field === "delay_days") {
-      step.delayDays = Number(value);
-    } else {
-      step[field as "channel" | "subject" | "content"] = value as string;
-    }
-    stepMap.set(stepNum, step);
-  }
-
-  const sortedSteps = [...stepMap.entries()].sort((a, b) => a[0] - b[0]);
-  for (let i = 0; i < sortedSteps.length; i++) {
-    const [, step] = sortedSteps[i];
-    if (!step.content || !step.channel) continue;
-
-    await db.insert(sequenceSteps).values({
-      sequenceId: seq.id,
-      order: i,
-      channel: step.channel as (typeof sequenceSteps.channel.enumValues)[number],
-      delayDays: step.delayDays ?? 0,
-      subject: step.subject ?? undefined,
-      content: step.content,
-    });
-  }
-
-  revalidatePath("/sequences");
-}
-
-// ── Toggle sequence status ─────────────────────────────
-
-export async function toggleSequenceStatus(sequenceId: string) {
-  const seq = await db.query.sequences.findFirst({
-    where: eq(sequences.id, sequenceId),
-  });
-  if (!seq) return;
-
-  const newStatus = seq.status === "active" ? "paused" : "active";
-  await db
-    .update(sequences)
-    .set({ status: newStatus })
-    .where(eq(sequences.id, sequenceId));
-
-  revalidatePath("/sequences");
-}
-
-// ── Enroll a lead in a sequence ────────────────────────
-
-export async function enrollLead(leadId: string, sequenceId: string) {
-  const result = await enrollLeadInSequence(leadId, sequenceId);
-  revalidatePath("/sequences");
-  return result;
-}
-
-// ── Enroll all stale leads in a sequence ───────────────
-
-export async function enrollAllStaleLeads(
-  sequenceId: string,
-  staleLeadIds: string[]
+export async function updateContactFieldAction(
+  contactId: string,
+  field: string,
+  value: string
 ) {
-  let enrolled = 0;
-  for (const leadId of staleLeadIds) {
-    const result = await enrollLeadInSequence(leadId, sequenceId);
-    if (result.ok) enrolled++;
-  }
-  revalidatePath("/sequences");
-  return { enrolled, total: staleLeadIds.length };
+  const allowed = [
+    "fullName",
+    "firstName",
+    "lastName",
+    "email",
+    "mobileNo",
+    "phone",
+  ];
+  if (!allowed.includes(field)) return;
+
+  await updateContactQuery(contactId, { [field]: value || null });
+  revalidatePath(`/contacts/${contactId}`);
+}
+
+export async function deleteContactAction(contactId: string) {
+  await deleteContactQuery(contactId);
+  revalidatePath("/contacts");
+}
+
+// ── Organization actions ───────────────────────────────
+
+export async function createOrganizationAction(formData: FormData) {
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return;
+
+  await createOrganizationQuery({
+    name,
+    website: String(formData.get("website") || "").trim() || null,
+    industryId: String(formData.get("industryId") || "") || null,
+    territoryId: String(formData.get("territoryId") || "") || null,
+    annualRevenue: String(formData.get("annualRevenue") || "").trim() || null,
+    noOfEmployees: (String(formData.get("noOfEmployees") || "") || null) as
+      | "1-10"
+      | "11-50"
+      | "51-200"
+      | "201-500"
+      | "501-1000"
+      | "1000+"
+      | null,
+  });
+
+  revalidatePath("/organizations");
+}
+
+export async function updateOrganizationFieldAction(
+  orgId: string,
+  field: string,
+  value: string
+) {
+  const allowed = ["name", "website", "annualRevenue"];
+  if (!allowed.includes(field)) return;
+
+  await updateOrganizationQuery(orgId, { [field]: value || null });
+  revalidatePath(`/organizations/${orgId}`);
+}
+
+export async function deleteOrganizationAction(orgId: string) {
+  await deleteOrganizationQuery(orgId);
+  revalidatePath("/organizations");
+}
+
+// ── Deal actions ───────────────────────────────────────
+
+export async function updateDealFieldAction(
+  dealId: string,
+  field: string,
+  value: string
+) {
+  const allowed = [
+    "dealValue",
+    "probability",
+    "nextStep",
+    "expectedClosureDate",
+    "lostNotes",
+  ];
+  if (!allowed.includes(field)) return;
+
+  await updateDealQuery(dealId, { [field]: value || null });
+  revalidatePath(`/deals/${dealId}`);
+}
+
+export async function updateDealStatusAction(
+  dealId: string,
+  statusId: string
+) {
+  const deal = await updateDealStatusQuery(dealId, statusId);
+
+  await createActivity({
+    referenceType: "deal",
+    referenceId: dealId,
+    type: "status_change",
+    direction: "outbound",
+    subject: "Statut modifié",
+    content: `Nouveau statut: ${deal?.statusId ?? statusId}`,
+  });
+
+  revalidatePath("/deals");
+  revalidatePath(`/deals/${dealId}`);
+}
+
+export async function markDealLostAction(
+  dealId: string,
+  lostReasonId: string,
+  lostNotes: string
+) {
+  const defaultStatus = await getDefaultDealStatus();
+  await updateDealQuery(dealId, {
+    lostReasonId: lostReasonId || null,
+    lostNotes: lostNotes || null,
+    closedDate: new Date().toISOString().slice(0, 10),
+  });
+
+  await createActivity({
+    referenceType: "deal",
+    referenceId: dealId,
+    type: "status_change",
+    direction: "outbound",
+    subject: "Deal perdu",
+    content: lostNotes || "Marqué comme perdu",
+  });
+
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/deals");
+}
+
+export async function deleteDealAction(dealId: string) {
+  await deleteDealQuery(dealId);
+  revalidatePath("/deals");
+}
+
+export async function addDealNoteAction(dealId: string, content: string) {
+  if (!content.trim()) return;
+
+  await createActivity({
+    referenceType: "deal",
+    referenceId: dealId,
+    type: "note",
+    direction: "outbound",
+    subject: "Note",
+    content: content.trim(),
+  });
+
+  revalidatePath(`/deals/${dealId}`);
 }

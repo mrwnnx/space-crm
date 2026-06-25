@@ -5,6 +5,33 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const STATUS_COLORS: Record<string, { dot: string; bg: string; text: string }> = {
+  gray: { dot: "bg-gray-400", bg: "bg-gray-50", text: "text-gray-700" },
+  blue: { dot: "bg-blue-500", bg: "bg-blue-50", text: "text-blue-700" },
+  purple: { dot: "bg-purple-500", bg: "bg-purple-50", text: "text-purple-700" },
+  green: { dot: "bg-green-500", bg: "bg-green-50", text: "text-green-700" },
+  "dark-green": { dot: "bg-emerald-600", bg: "bg-emerald-50", text: "text-emerald-700" },
+  red: { dot: "bg-red-500", bg: "bg-red-50", text: "text-red-700" },
+  orange: { dot: "bg-orange-500", bg: "bg-orange-50", text: "text-orange-700" },
+  amber: { dot: "bg-amber-500", bg: "bg-amber-50", text: "text-amber-700" },
+};
+
+export function statusColor(color: string) {
+  return STATUS_COLORS[color] ?? STATUS_COLORS.gray;
+}
+
+export function initials(name: string): string {
+  return (
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
+
 export function formatDate(date: Date | string | null): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
@@ -25,14 +52,4 @@ export function formatRelative(date: Date | string | null): string {
   if (days < 7) return `Il y a ${days}j`;
   if (days < 30) return `Il y a ${Math.floor(days / 7)}sem`;
   return formatDate(d);
-}
-
-export function initials(name: string): string {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 }
