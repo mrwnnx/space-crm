@@ -4,15 +4,16 @@ import { LeadsList } from "@/components/leads/leads-list";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { LeadsViewToggle } from "@/components/leads/leads-view-toggle";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
+import { SearchBar } from "@/components/search-bar";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string }>;
 }) {
-  const { view } = await searchParams;
+  const { view, q } = await searchParams;
   const isKanban = view === "kanban";
 
   const [sources, industries, statuses] = await Promise.all([
@@ -32,6 +33,7 @@ export default async function LeadsPage({
           subtitle={`${count} lead${count > 1 ? "s" : ""}`}
           actions={
             <div className="flex items-center gap-2">
+              <SearchBar />
               <LeadsViewToggle current="kanban" />
               <NewLeadButton statuses={statuses} sources={sources} industries={industries} />
             </div>
@@ -44,7 +46,7 @@ export default async function LeadsPage({
     );
   }
 
-  const leadsData = await getLeads();
+  const leadsData = await getLeads(q);
 
   return (
     <>
@@ -53,6 +55,7 @@ export default async function LeadsPage({
         subtitle={`${leadsData.length} lead${leadsData.length > 1 ? "s" : ""}`}
         actions={
           <div className="flex items-center gap-2">
+            <SearchBar />
             <LeadsViewToggle current="list" />
             <NewLeadButton statuses={statuses} sources={sources} industries={industries} />
           </div>

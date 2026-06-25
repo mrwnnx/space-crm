@@ -2,12 +2,18 @@ import { getOrganizations, getIndustries, getTerritories } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, TextCell, DateCell } from "@/components/data-table";
 import { NewOrganizationButton } from "@/components/organizations/new-organization-button";
+import { SearchBar } from "@/components/search-bar";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrganizationsPage() {
+export default async function OrganizationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
   const [organizations, industries, territories] = await Promise.all([
-    getOrganizations(),
+    getOrganizations(q),
     getIndustries(),
     getTerritories(),
   ]);
@@ -18,7 +24,10 @@ export default async function OrganizationsPage() {
         title="Organizations"
         subtitle={`${organizations.length} organisation${organizations.length > 1 ? "s" : ""}`}
         actions={
-          <NewOrganizationButton industries={industries} territories={territories} />
+          <div className="flex items-center gap-2">
+            <SearchBar />
+            <NewOrganizationButton industries={industries} territories={territories} />
+          </div>
         }
       />
       <div className="flex-1 overflow-hidden">

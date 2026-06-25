@@ -56,8 +56,16 @@ export type LeadWithRelations = typeof leads.$inferSelect & {
   organization: typeof organizations.$inferSelect | null;
 };
 
-export async function getLeads(): Promise<LeadWithRelations[]> {
+export async function getLeads(search?: string): Promise<LeadWithRelations[]> {
   return db.query.leads.findMany({
+    where: search
+      ? or(
+          ilike(leads.fullName, `%${search}%`),
+          ilike(leads.email, `%${search}%`),
+          ilike(leads.mobileNo, `%${search}%`),
+          ilike(leads.organizationName, `%${search}%`)
+        )
+      : undefined,
     with: {
       status: true,
       source: true,
@@ -208,10 +216,58 @@ export async function getLeadStats() {
     .select({ count: sql<number>`count(*)::int` })
     .from(leads)
     .where(eq(leads.converted, true));
+  const contactedThisWeek = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(sql`${leads.lastContactedAt} > now() - interval '7 days'`);
 
   return {
     total: total[0]?.count ?? 0,
     converted: converted[0]?.count ?? 0,
+    contactedThisWeek: contactedThisWeek[0]?.count ?? 0,
+  };
+}
+
+export async function getDealStats() {
+  const total = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(deals);
+  const won = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(deals)
+    .where(sql`EXISTS (SELECT 1 FROM deal_statuses WHERE id = deals.status_id AND name = 'Won')`);
+
+  const totalValue = await db
+    .select({ sum: sql<number>`coalesce(sum(deal_value), 0)::numeric` })
+    .from(deals);
+
+  return {
+    total: total[0]?.count ?? 0,
+    won: won[0]?.count ?? 0,
+    totalValue: totalValue[0]?.sum ?? 0,
+  };
+}
+
+export async function getTaskStats() {
+  const total = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tasks);
+  const done = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tasks)
+    .where(eq(tasks.status, "done"));
+  const overdue = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tasks)
+    .where(and(
+      sql`${tasks.dueDate} < now()`,
+      sql`${tasks.status} != 'done'`
+    ));
+
+  return {
+    total: total[0]?.count ?? 0,
+    done: done[0]?.count ?? 0,
+    overdue: overdue[0]?.count ?? 0,
   };
 }
 
@@ -227,8 +283,15 @@ export type ContactWithRelations = typeof contacts.$inferSelect & {
   organization: typeof organizations.$inferSelect | null;
 };
 
-export async function getContacts(): Promise<ContactWithRelations[]> {
+export async function getContacts(search?: string): Promise<ContactWithRelations[]> {
   return db.query.contacts.findMany({
+    where: search
+      ? or(
+          ilike(contacts.fullName, `%${search}%`),
+          ilike(contacts.email, `%${search}%`),
+          ilike(contacts.mobileNo, `%${search}%`)
+        )
+      : undefined,
     with: { organization: true },
     orderBy: [desc(contacts.createdAt)],
   });
@@ -295,8 +358,14 @@ export type OrganizationWithRelations = typeof organizations.$inferSelect & {
   territory: typeof territories.$inferSelect | null;
 };
 
-export async function getOrganizations(): Promise<OrganizationWithRelations[]> {
+export async function getOrganizations(search?: string): Promise<OrganizationWithRelations[]> {
   return db.query.organizations.findMany({
+    where: search
+      ? or(
+          ilike(organizations.name, `%${search}%`),
+          ilike(organizations.website, `%${search}%`)
+        )
+      : undefined,
     with: { industry: true, territory: true },
     orderBy: [desc(organizations.createdAt)],
   });
@@ -394,8 +463,16 @@ export type DealWithRelations = typeof deals.$inferSelect & {
   lostReason: typeof lostReasons.$inferSelect | null;
 };
 
-export async function getDeals(): Promise<DealWithRelations[]> {
+export async function getDeals(search?: string): Promise<DealWithRelations[]> {
   return db.query.deals.findMany({
+    where: search
+      ? or(
+          ilike(deals.email, `%${search}%`),
+          ilike(deals.mobileNo, `%${search}%`),
+          ilike(deals.firstName, `%${search}%`),
+          ilike(deals.lastName, `%${search}%`)
+        )
+      : undefined,
     with: {
       status: true,
       organization: true,

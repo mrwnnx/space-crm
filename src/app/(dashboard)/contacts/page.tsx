@@ -2,12 +2,18 @@ import { getContacts, getOrganizations } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, AvatarCell, TextCell, DateCell } from "@/components/data-table";
 import { NewContactButton } from "@/components/contacts/new-contact-button";
+import { SearchBar } from "@/components/search-bar";
 
 export const dynamic = "force-dynamic";
 
-export default async function ContactsPage() {
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
   const [contacts, organizations] = await Promise.all([
-    getContacts(),
+    getContacts(q),
     getOrganizations(),
   ]);
 
@@ -16,7 +22,12 @@ export default async function ContactsPage() {
       <PageHeader
         title="Contacts"
         subtitle={`${contacts.length} contact${contacts.length > 1 ? "s" : ""}`}
-        actions={<NewContactButton organizations={organizations} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <SearchBar />
+            <NewContactButton organizations={organizations} />
+          </div>
+        }
       />
       <div className="flex-1 overflow-hidden">
         <DataTable
