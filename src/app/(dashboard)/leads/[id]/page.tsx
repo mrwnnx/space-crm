@@ -51,7 +51,7 @@ export default async function LeadDetailPage({
         statusName={lead.status?.name}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Main: Activity panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
           <ActivityPanel
@@ -73,7 +73,7 @@ export default async function LeadDetailPage({
         </div>
 
         {/* Side panel: Lead info */}
-        <div className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card">
+        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-border bg-card lg:w-80 lg:border-l lg:border-t-0">
           <div className="flex items-center gap-3 border-b border-border p-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
               {initials(lead.fullName)}

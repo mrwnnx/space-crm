@@ -52,7 +52,7 @@ export default async function DealDetailPage({
         dealValue={deal.dealValue}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Main: Activity panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
           <ActivityPanel
@@ -74,7 +74,7 @@ export default async function DealDetailPage({
         </div>
 
         {/* Side panel */}
-        <div className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card">
+        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-border bg-card lg:w-80 lg:border-l lg:border-t-0">
           {/* Org block */}
           {deal.organization && (
             <Link
