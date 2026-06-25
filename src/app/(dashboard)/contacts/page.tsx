@@ -1,8 +1,9 @@
-import { getContacts, getOrganizations } from "@/lib/queries";
+import { getContacts, getOrganizations, getViewSettings } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, AvatarCell, TextCell, DateCell } from "@/components/data-table";
 import { NewContactButton } from "@/components/contacts/new-contact-button";
 import { SearchBar } from "@/components/search-bar";
+import { SavedViewsDropdown } from "@/components/saved-views-dropdown";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,10 @@ export default async function ContactsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
-  const [contacts, organizations] = await Promise.all([
+  const [contacts, organizations, savedViews] = await Promise.all([
     getContacts(q),
     getOrganizations(),
+    getViewSettings("contacts"),
   ]);
 
   return (
@@ -24,6 +26,18 @@ export default async function ContactsPage({
         subtitle={`${contacts.length} contact${contacts.length > 1 ? "s" : ""}`}
         actions={
           <div className="flex items-center gap-2">
+            <SavedViewsDropdown
+              routeName="contacts"
+              views={savedViews.map((v) => ({
+                id: v.id,
+                label: v.label,
+                type: v.type,
+                filters: v.filters as { q?: string } | null,
+                public: v.public,
+              }))}
+              currentView="list"
+              currentSearch={q || ""}
+            />
             <SearchBar />
             <NewContactButton organizations={organizations} />
           </div>

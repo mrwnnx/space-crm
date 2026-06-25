@@ -709,3 +709,36 @@ export async function markAllNotificationsReadAction() {
   await markAllNotificationsRead();
   revalidatePath("/");
 }
+
+// ── Saved View actions ─────────────────────────────────
+
+export async function saveViewAction(
+  routeName: string,
+  label: string,
+  viewType: string,
+  searchQuery: string,
+  isPublic: boolean
+) {
+  const { createViewSetting } = await import("@/lib/queries");
+
+  const filters = searchQuery ? { q: searchQuery } : null;
+  const type = viewType === "kanban" ? "kanban" : "list";
+
+  await createViewSetting({
+    label,
+    routeName,
+    doctype: routeName,
+    type: type as "list" | "kanban" | "group_by",
+    filters: filters as never,
+    public: isPublic,
+    userId: null,
+  });
+
+  revalidatePath(`/${routeName}`);
+}
+
+export async function deleteViewAction(id: string, routeName: string) {
+  const { deleteViewSetting } = await import("@/lib/queries");
+  await deleteViewSetting(id);
+  revalidatePath(`/${routeName}`);
+}

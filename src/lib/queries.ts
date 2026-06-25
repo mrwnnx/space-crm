@@ -21,8 +21,8 @@ import {
   comments,
   callLogs,
   notifications,
-} from "@/db/schema";
-import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
+  viewSettings,
+} from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
 
 // ── Lead Statuses ──────────────────────────────────────
 
@@ -813,4 +813,27 @@ export async function markAllNotificationsRead(userId?: string) {
         userId ? eq(notifications.userId, userId) : sql`true`
       )
     );
+}
+
+// ── View Settings (saved views) ────────────────────────
+
+export async function getViewSettings(routeName: string) {
+  return db.query.viewSettings.findMany({
+    where: eq(viewSettings.routeName, routeName),
+    orderBy: [asc(viewSettings.label)],
+  });
+}
+
+export async function createViewSetting(data: typeof viewSettings.$inferInsert) {
+  const [view] = await db.insert(viewSettings).values(data).returning();
+  return view;
+}
+
+export async function deleteViewSetting(id: string) {
+  await db.delete(viewSettings).where(eq(viewSettings.id, id));
+}
+
+export async function setDefaultView(id: string, routeName: string) {
+  await db.update(viewSettings).set({ isDefault: false }).where(eq(viewSettings.routeName, routeName));
+  await db.update(viewSettings).set({ isDefault: true }).where(eq(viewSettings.id, id));
 }

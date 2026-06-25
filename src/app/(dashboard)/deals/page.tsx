@@ -1,9 +1,10 @@
-import { getDeals, getDealsKanban } from "@/lib/queries";
+import { getDeals, getDealsKanban, getViewSettings } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { DealsList } from "@/components/deals/deals-list";
 import { DealsKanban } from "@/components/deals/deals-kanban";
 import { ViewToggle } from "@/components/view-toggle";
 import { SearchBar } from "@/components/search-bar";
+import { SavedViewsDropdown } from "@/components/saved-views-dropdown";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function DealsPage({
 }) {
   const { view, q } = await searchParams;
   const isKanban = view === "kanban";
+
+  const savedViews = await getViewSettings("deals");
 
   if (isKanban) {
     const kanbanData = await getDealsKanban();
@@ -26,6 +29,18 @@ export default async function DealsPage({
           subtitle={`${count} deal${count > 1 ? "s" : ""}`}
           actions={
             <div className="flex items-center gap-2">
+              <SavedViewsDropdown
+                routeName="deals"
+                views={savedViews.map((v) => ({
+                  id: v.id,
+                  label: v.label,
+                  type: v.type,
+                  filters: v.filters as { q?: string } | null,
+                  public: v.public,
+                }))}
+                currentView="kanban"
+                currentSearch={q || ""}
+              />
               <SearchBar />
               <ViewToggle current="kanban" />
             </div>
@@ -47,6 +62,18 @@ export default async function DealsPage({
         subtitle={`${dealsData.length} deal${dealsData.length > 1 ? "s" : ""}`}
         actions={
           <div className="flex items-center gap-2">
+            <SavedViewsDropdown
+              routeName="deals"
+              views={savedViews.map((v) => ({
+                id: v.id,
+                label: v.label,
+                type: v.type,
+                filters: v.filters as { q?: string } | null,
+                public: v.public,
+              }))}
+              currentView="list"
+              currentSearch={q || ""}
+            />
             <SearchBar />
             <ViewToggle current="list" />
           </div>
