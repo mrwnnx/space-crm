@@ -371,6 +371,29 @@ export const viewSettings = pgTable("view_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ── Notifications ──────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "lead_assigned",
+  "lead_status_change",
+  "deal_status_change",
+  "task_assigned",
+  "task_due",
+  "comment",
+  "mention",
+]);
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  type: notificationTypeEnum("type").notNull(),
+  message: text("message").notNull(),
+  referenceType: referenceTypeEnum("reference_type"),
+  referenceId: uuid("reference_id"),
+  userId: text("user_id"),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── Relations ──────────────────────────────────────────
 
 export const leadStatusesRelations = relations(leadStatuses, ({ many }) => ({
@@ -529,3 +552,4 @@ export type Industry = typeof industries.$inferSelect;
 export type LostReason = typeof lostReasons.$inferSelect;
 export type Territory = typeof territories.$inferSelect;
 export type Product = typeof products.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

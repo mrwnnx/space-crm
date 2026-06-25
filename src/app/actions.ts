@@ -90,6 +90,15 @@ export async function updateLeadStatusAction(
     content: `Nouveau statut: ${lead?.statusId ?? statusId}`,
   });
 
+  const { createNotification } = await import("@/lib/queries");
+  await createNotification({
+    type: "lead_status_change",
+    message: `Statut du lead modifié`,
+    referenceType: "lead",
+    referenceId: leadId,
+    read: false,
+  });
+
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
 }
@@ -298,6 +307,15 @@ export async function updateDealStatusAction(
     direction: "outbound",
     subject: "Statut modifié",
     content: `Nouveau statut: ${deal?.statusId ?? statusId}`,
+  });
+
+  const { createNotification } = await import("@/lib/queries");
+  await createNotification({
+    type: "deal_status_change",
+    message: `Statut du deal modifié`,
+    referenceType: "deal",
+    referenceId: dealId,
+    read: false,
   });
 
   revalidatePath("/deals");
@@ -597,4 +615,97 @@ export async function deleteEmailTemplateAction(id: string) {
   const { deleteEmailTemplate } = await import("@/lib/queries");
   await deleteEmailTemplate(id);
   revalidatePath("/settings");
+}
+
+// ── Data Import ────────────────────────────────────────
+
+export async function bulkImportLeadsAction(
+  rows: Record<string, string>[],
+  fieldMapping: Record<string, string>
+) {
+  const { createLead: createLeadQuery, getDefaultLeadStatus } = await import("@/lib/queries");
+  const defaultStatus = await getDefaultLeadStatus();
+
+  let created = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      const leadData: Record<string, string | null> = {};
+      for (const [csvCol, fieldName] of Object.entries(fieldMapping)) {
+        if (fieldName && row[csvCol] !== undefined) {
+          leadData[fieldName] = row[csvCol].trim() || null;
+        }
+      }
+
+      if (!leadData.fullName) continue;
+
+      await createLeadQuery({
+        fullName: leadData.fullName,
+        email: leadData.email || null,
+        mobileNo: leadData.mobileNo || null,
+        phone: leadData.phone || null,
+        organizationName: leadData.organizationName || null,
+        jobTitle: leadData.jobTitle || null,
+        website: leadData.website || null,
+        statusId: defaultStatus?.id ?? null,
+      });
+      created++;
+    } catch {
+      errors++;
+    }
+  }
+
+  revalidatePath("/leads");
+  return { created, errors, total: rows.length };
+}
+
+export async function bulkImportContactsAction(
+  rows: Record<string, string>[],
+  fieldMapping: Record<string, string>
+) {
+  const { createContact: createContactQuery } = await import("@/lib/queries");
+
+  let created = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      const leadData: Record<string, string | null> = {};
+      for (const [csvCol, fieldName] of Object.entries(fieldMapping)) {
+        if (fieldName && row[csvCol] !== undefined) {
+          leadData[fieldName] = row[csvCol].trim() || null;
+        }
+      }
+
+      if (!leadData.fullName) continue;
+
+      await createContactQuery({
+        fullName: leadData.fullName,
+        email: leadData.email || null,
+        mobileNo: leadData.mobileNo || null,
+        phone: leadData.phone || null,
+      });
+      created++;
+    } catch {
+      errors++;
+    }
+  }
+
+  revalidatePath("/contacts");
+  return { created, errors, total: rows.length };
+}
+
+// ── Notification actions ───────────────────────────────
+
+export async function markNotificationReadAction(id: string) {
+  const { markNotificationRead } = await import("@/lib/queries");
+  await markNotificationRead(id);
+  revalidatePath("/");
+}
+
+export async function markAllNotificationsReadAction() {
+  const { markAllNotificationsRead } = await import("@/lib/queries");
+  await markAllNotificationsRead();
+  revalidatePath("/");
 }

@@ -18,6 +18,7 @@ import {
   Add01Icon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 type NavItem = {
   href: string;
@@ -38,6 +39,7 @@ const secondaryNav: NavItem[] = [
   { href: "/tasks", label: "Tasks", icon: Task01Icon },
   { href: "/call-logs", label: "Call Logs", icon: Call02Icon },
   { href: "/calendar", label: "Calendar", icon: Calendar03Icon },
+  { href: "/data-import", label: "Data Import", icon: Add01Icon },
 ];
 
 export function Sidebar() {
@@ -83,16 +85,19 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-border p-3">
-        <Link
-          href="/settings"
-          className={cn(
-            "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-            isActive("/settings") && "bg-muted text-foreground"
-          )}
-        >
-          <HugeiconsIcon icon={Setting06Icon} size={17} />
-          Settings
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/settings"
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              isActive("/settings") && "bg-muted text-foreground"
+            )}
+          >
+            <HugeiconsIcon icon={Setting06Icon} size={17} />
+            Settings
+          </Link>
+          <NotificationBell />
+        </div>
       </div>
     </aside>
   );

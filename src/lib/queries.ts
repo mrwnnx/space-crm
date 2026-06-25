@@ -20,6 +20,7 @@ import {
   emailTemplates,
   comments,
   callLogs,
+  notifications,
 } from "@/db/schema";
 import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
 
@@ -769,4 +770,47 @@ export async function getCallLogsByReference(
 export async function createCallLog(data: typeof callLogs.$inferInsert) {
   const [log] = await db.insert(callLogs).values(data).returning();
   return log;
+}
+
+// ── Notifications ──────────────────────────────────────
+
+export async function getNotifications(userId?: string) {
+  return db.query.notifications.findMany({
+    where: userId ? eq(notifications.userId, userId) : undefined,
+    orderBy: [desc(notifications.createdAt)],
+  });
+}
+
+export async function getUnreadNotificationCount(userId?: string) {
+  const result = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.read, false),
+        userId ? eq(notifications.userId, userId) : sql`true`
+      )
+    );
+  return result[0]?.count ?? 0;
+}
+
+export async function createNotification(data: typeof notifications.$inferInsert) {
+  const [notif] = await db.insert(notifications).values(data).returning();
+  return notif;
+}
+
+export async function markNotificationRead(id: string) {
+  await db.update(notifications).set({ read: true }).where(eq(notifications.id, id));
+}
+
+export async function markAllNotificationsRead(userId?: string) {
+  await db
+    .update(notifications)
+    .set({ read: true })
+    .where(
+      and(
+        eq(notifications.read, false),
+        userId ? eq(notifications.userId, userId) : sql`true`
+      )
+    );
 }
