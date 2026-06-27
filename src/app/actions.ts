@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireUser } from "@/lib/auth";
 import {
+  getBootcampById,
+  createBootcamp as createBootcampQuery,
+  updateBootcamp as updateBootcampQuery,
+  deleteBootcamp as deleteBootcampQuery,
   createLead as createLeadQuery,
   updateLead as updateLeadQuery,
   updateLeadStatus as updateLeadStatusQuery,
@@ -29,24 +34,117 @@ import {
   deleteTask as deleteTaskQuery,
 } from "@/lib/queries";
 
+// ── Bootcamp (Formation) actions ───────────────────────
+
+export async function createBootcampAction(formData: FormData) {
+  await requireUser();
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return;
+
+  const slug = String(formData.get("slug") || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "") || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+  await createBootcampQuery({
+    name,
+    slug,
+    description: String(formData.get("description") || "").trim() || null,
+    startDate: String(formData.get("startDate") || "") || null,
+    endDate: String(formData.get("endDate") || "") || null,
+    status: (String(formData.get("status") || "open") as "draft" | "open" | "in_progress" | "completed" | "cancelled") ?? "open",
+    capacity: Number(formData.get("capacity") || 0) || null,
+    // Offre & paiement (Phase 3a UI)
+    currency: String(formData.get("currency") || "TND").trim() || "TND",
+    priceTotal: String(formData.get("priceTotal") || "").trim() || null,
+    monthlyCount: Number(formData.get("monthlyCount") || 0) || null,
+    monthlyAmount: String(formData.get("monthlyAmount") || "").trim() || null,
+  });
+
+  revalidatePath("/bootcamps");
+}
+
+export async function updateBootcampFieldAction(
+  bootcampId: string,
+  field: string,
+  value: string
+) {
+  await requireUser();
+  const allowed = [
+    "name",
+    "slug",
+    "description",
+    "startDate",
+    "endDate",
+    "status",
+    "capacity",
+    "currency",
+    "priceTotal",
+    "monthlyCount",
+    "monthlyAmount",
+  ];
+  if (!allowed.includes(field)) return;
+
+  const data: Record<string, unknown> = { [field]: value || null };
+  // Convertir startDate/endDate en Date
+  if (field === "startDate" || field === "endDate") {
+    data[field] = value ? value : null;
+  }
+  if (field === "capacity") {
+    data[field] = value ? Number(value) : null;
+  }
+  if (field === "monthlyCount") {
+    data[field] = value ? Number(value) : null;
+  }
+  // priceTotal, monthlyAmount, currency : string direct (null si vide)
+
+  await updateBootcampQuery(bootcampId, data as never);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  revalidatePath("/bootcamps");
+}
+
+export async function deleteBootcampAction(bootcampId: string) {
+  await requireUser();
+  await deleteBootcampQuery(bootcampId);
+  revalidatePath("/bootcamps");
+}
+
 // ── Lead actions ───────────────────────────────────────
 
 export async function createLeadAction(formData: FormData) {
+  await requireUser();
   const fullName = String(formData.get("fullName") || "").trim();
   if (!fullName) return;
 
+  const firstName = String(formData.get("firstName") || "").trim() || null;
+  const lastName = String(formData.get("lastName") || "").trim() || null;
+  const email = String(formData.get("email") || "").trim() || null;
+  const mobileNo = String(formData.get("mobileNo") || "").trim() || null;
+
+  // Dédup contact : on rattache la personne dès la création manuelle (Phase 2).
+  const { getOrCreateContactForLead } = await import("@/lib/queries");
+  const contact = await getOrCreateContactForLead({
+    email,
+    mobileNo,
+    firstName,
+    lastName,
+    fullName,
+  });
+
   const lead = await createLeadQuery({
     fullName,
-    firstName: String(formData.get("firstName") || "").trim() || null,
-    lastName: String(formData.get("lastName") || "").trim() || null,
-    email: String(formData.get("email") || "").trim() || null,
-    mobileNo: String(formData.get("mobileNo") || "").trim() || null,
+    firstName,
+    lastName,
+    email,
+    mobileNo,
     phone: String(formData.get("phone") || "").trim() || null,
     organizationName: String(formData.get("organizationName") || "").trim() || null,
     jobTitle: String(formData.get("jobTitle") || "").trim() || null,
     website: String(formData.get("website") || "").trim() || null,
     sourceId: String(formData.get("sourceId") || "") || null,
     industryId: String(formData.get("industryId") || "") || null,
+    contactId: contact.id,
   });
 
   revalidatePath("/leads");
@@ -58,6 +156,7 @@ export async function updateLeadFieldAction(
   field: string,
   value: string
 ) {
+  await requireUser();
   const allowed = [
     "fullName",
     "firstName",
@@ -68,6 +167,7 @@ export async function updateLeadFieldAction(
     "jobTitle",
     "website",
     "organizationName",
+    "intendedPlan",
   ];
   if (!allowed.includes(field)) return;
 
@@ -79,6 +179,11 @@ export async function updateLeadStatusAction(
   leadId: string,
   statusId: string
 ) {
+  await requireUser();
+  // Capture l'ancien statut AVANT l'update (pour stage_history) — Phase 1, ajout pur.
+  const { getLeadStatusId, recordStageChange } = await import("@/lib/queries");
+  const oldStatusId = await getLeadStatusId(leadId);
+
   const lead = await updateLeadStatusQuery(leadId, statusId);
 
   await createActivity({
@@ -89,6 +194,9 @@ export async function updateLeadStatusAction(
     subject: "Statut modifié",
     content: `Nouveau statut: ${lead?.statusId ?? statusId}`,
   });
+
+  // Capture structurée de la transition (Phase 1) — à côté du createActivity existant.
+  await recordStageChange(leadId, oldStatusId, lead?.statusId ?? statusId);
 
   const { createNotification } = await import("@/lib/queries");
   await createNotification({
@@ -104,11 +212,13 @@ export async function updateLeadStatusAction(
 }
 
 export async function deleteLeadAction(leadId: string) {
+  await requireUser();
   await deleteLeadQuery(leadId);
   revalidatePath("/leads");
 }
 
 export async function addLeadNoteAction(leadId: string, content: string) {
+  await requireUser();
   if (!content.trim()) return;
 
   await createActivity({
@@ -124,6 +234,7 @@ export async function addLeadNoteAction(leadId: string, content: string) {
 }
 
 export async function convertToDealAction(leadId: string) {
+  await requireUser();
   const lead = await getLeadById(leadId);
   if (!lead) return;
 
@@ -179,6 +290,12 @@ export async function convertToDealAction(leadId: string) {
     content: `Contact ${contact.fullName} créé + Deal créé${organizationId ? " + organization liée" : ""}`,
   });
 
+  // Capture structurée (Phase 1) : enregistre le stage du lead au moment de la conversion.
+  // toStatusId = null car la conversion actuelle (B2B) ne déplace pas le lead vers un stage
+  // "Converti" formation — ce flux sera réécrit en Phase 2/3.
+  const { recordStageChange } = await import("@/lib/queries");
+  await recordStageChange(leadId, lead.status?.id ?? null, null);
+
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
   revalidatePath("/deals");
@@ -187,9 +304,125 @@ export async function convertToDealAction(leadId: string) {
   revalidatePath("/organizations");
 }
 
+// ── Inscription à une formation (Phase 3a) ─────────────
+// La VRAIE conversion du CRM formation-centric : inscrire un lead à sa formation,
+// avec plan de paiement. Ne crée NI deal NI organisation (contrairement à
+// convertToDealAction qui reste intacte pour le sous-système B2B legacy).
+export async function enrollLeadAction(
+  leadId: string,
+  input: { plan: "total" | "monthly"; firstPaymentReceived: boolean }
+) {
+  await requireUser();
+
+  const {
+    getLeadById,
+    getConvertedStageForBootcamp,
+    paymentStatus,
+  } = await import("@/lib/queries");
+
+  // 2. Charge le lead + son bootcamp
+  const lead = await getLeadById(leadId);
+  if (!lead) return { error: "Lead introuvable" };
+  const bootcamp = lead.bootcamp;
+  if (!bootcamp) return { error: "Lead non rattaché à une formation" };
+
+  // 3. Garde-fous
+  if (lead.converted) return { error: "déjà inscrit" };
+  if (lead.status?.kind === "converted") return { error: "déjà inscrit" };
+
+  if (input.plan === "total" && !bootcamp.priceTotal) {
+    return { error: "offre Total non configurée sur la formation" };
+  }
+  if (input.plan === "monthly" && (!bootcamp.monthlyCount || !bootcamp.monthlyAmount)) {
+    return { error: "offre Mensuelle non configurée" };
+  }
+
+  // 4. Stage kind='converted' du bootcamp
+  const convertedStage = await getConvertedStageForBootcamp(bootcamp.id);
+  if (!convertedStage) {
+    return { error: "cette formation n'a pas de colonne Converti" };
+  }
+
+  // 5-8. Transaction atomique : les écritures réussissent ensemble ou aucune.
+  // Les helpers DAL sont transaction-aware (exec = tx) — une seule source de vérité
+  // pour le calcul des dueDate (generateScheduleForLead) et l'insertion stage_history
+  // (moveLeadToStage). Aucune logique dupliquée ici.
+  const { db } = await import("@/db");
+  const {
+    moveLeadToStage,
+    generateScheduleForLead,
+    markFirstEcheancePaid,
+  } = await import("@/lib/queries");
+  const { leads: leadsTable } = await import("@/db/schema");
+  const { eq: eqOp } = await import("drizzle-orm");
+
+  await db.transaction(async (tx) => {
+    // 5. Déplace le lead vers le stage converted (insère stage_history en interne)
+    await moveLeadToStage(leadId, convertedStage.id, tx);
+
+    // 6. Marque le lead converti
+    await tx
+      .update(leadsTable)
+      .set({ converted: true, convertedAt: new Date(), updatedAt: new Date() })
+      .where(eqOp(leadsTable.id, leadId));
+
+    // 7. Génère l'échéancier (logique dueDate centralisée dans le helper)
+    await generateScheduleForLead(leadId, input.plan, tx);
+
+    // 8. 1er paiement encaissé → marque la première échéance
+    if (input.firstPaymentReceived) {
+      await markFirstEcheancePaid(leadId, tx);
+    }
+  });
+
+  // 9. revalidate
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath(`/bootcamps/${bootcamp.id}`);
+
+  // 10. Retourne le statut paiement dérivé
+  const status = await paymentStatus(leadId);
+  return { ok: true, paymentStatus: status };
+}
+
+// ── Payment schedule actions (Phase 3b) ────────────────
+
+export async function markEcheancePaidAction(echeanceId: string) {
+  await requireUser();
+  const { markEcheancePaid, getScheduleForLead } = await import("@/lib/queries");
+  const { paymentSchedules } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+
+  const [ech] = await db.select({ leadId: paymentSchedules.leadId }).from(paymentSchedules).where(eq(paymentSchedules.id, echeanceId)).limit(1);
+  if (!ech) return { error: "Échéance introuvable" };
+
+  await markEcheancePaid(echeanceId);
+  const schedule = await getScheduleForLead(ech.leadId);
+  revalidatePath(`/leads/${ech.leadId}`);
+  return { ok: true, status: schedule.summary.status };
+}
+
+export async function markEcheanceUnpaidAction(echeanceId: string) {
+  await requireUser();
+  const { markEcheanceUnpaid, getScheduleForLead } = await import("@/lib/queries");
+  const { paymentSchedules } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+
+  const [ech] = await db.select({ leadId: paymentSchedules.leadId }).from(paymentSchedules).where(eq(paymentSchedules.id, echeanceId)).limit(1);
+  if (!ech) return { error: "Échéance introuvable" };
+
+  await markEcheanceUnpaid(echeanceId);
+  const schedule = await getScheduleForLead(ech.leadId);
+  revalidatePath(`/leads/${ech.leadId}`);
+  return { ok: true, status: schedule.summary.status };
+}
+
 // ── Contact actions ────────────────────────────────────
 
 export async function createContactAction(formData: FormData) {
+  await requireUser();
   const fullName = String(formData.get("fullName") || "").trim();
   if (!fullName) return;
 
@@ -213,6 +446,7 @@ export async function updateContactFieldAction(
   field: string,
   value: string
 ) {
+  await requireUser();
   const allowed = [
     "fullName",
     "firstName",
@@ -228,6 +462,7 @@ export async function updateContactFieldAction(
 }
 
 export async function deleteContactAction(contactId: string) {
+  await requireUser();
   await deleteContactQuery(contactId);
   revalidatePath("/contacts");
 }
@@ -235,6 +470,7 @@ export async function deleteContactAction(contactId: string) {
 // ── Organization actions ───────────────────────────────
 
 export async function createOrganizationAction(formData: FormData) {
+  await requireUser();
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
 
@@ -262,6 +498,7 @@ export async function updateOrganizationFieldAction(
   field: string,
   value: string
 ) {
+  await requireUser();
   const allowed = ["name", "website", "annualRevenue"];
   if (!allowed.includes(field)) return;
 
@@ -270,6 +507,7 @@ export async function updateOrganizationFieldAction(
 }
 
 export async function deleteOrganizationAction(orgId: string) {
+  await requireUser();
   await deleteOrganizationQuery(orgId);
   revalidatePath("/organizations");
 }
@@ -281,6 +519,7 @@ export async function updateDealFieldAction(
   field: string,
   value: string
 ) {
+  await requireUser();
   const allowed = [
     "dealValue",
     "probability",
@@ -298,6 +537,7 @@ export async function updateDealStatusAction(
   dealId: string,
   statusId: string
 ) {
+  await requireUser();
   const deal = await updateDealStatusQuery(dealId, statusId);
 
   await createActivity({
@@ -327,6 +567,7 @@ export async function markDealLostAction(
   lostReasonId: string,
   lostNotes: string
 ) {
+  await requireUser();
   const defaultStatus = await getDefaultDealStatus();
   await updateDealQuery(dealId, {
     lostReasonId: lostReasonId || null,
@@ -348,11 +589,13 @@ export async function markDealLostAction(
 }
 
 export async function deleteDealAction(dealId: string) {
+  await requireUser();
   await deleteDealQuery(dealId);
   revalidatePath("/deals");
 }
 
 export async function addDealNoteAction(dealId: string, content: string) {
+  await requireUser();
   if (!content.trim()) return;
 
   await createActivity({
@@ -370,6 +613,7 @@ export async function addDealNoteAction(dealId: string, content: string) {
 // ── Note actions ───────────────────────────────────────
 
 export async function createNoteAction(formData: FormData) {
+  await requireUser();
   const content = String(formData.get("content") || "").trim();
   if (!content) return;
 
@@ -390,6 +634,7 @@ export async function createNoteAction(formData: FormData) {
 }
 
 export async function deleteNoteAction(noteId: string) {
+  await requireUser();
   await deleteNoteQuery(noteId);
   revalidatePath("/notes");
 }
@@ -397,6 +642,7 @@ export async function deleteNoteAction(noteId: string) {
 // ── Task actions ───────────────────────────────────────
 
 export async function createTaskAction(formData: FormData) {
+  await requireUser();
   const title = String(formData.get("title") || "").trim();
   if (!title) return;
 
@@ -422,11 +668,13 @@ export async function createTaskAction(formData: FormData) {
 }
 
 export async function updateTaskStatusAction(taskId: string, status: string) {
+  await requireUser();
   await updateTaskStatusQuery(taskId, status);
   revalidatePath("/tasks");
 }
 
 export async function deleteTaskAction(taskId: string) {
+  await requireUser();
   await deleteTaskQuery(taskId);
   revalidatePath("/tasks");
 }
@@ -441,6 +689,7 @@ export async function sendEmailAction(
   content: string,
   templateId?: string
 ) {
+  await requireUser();
   const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
 
   let html = content;
@@ -480,6 +729,7 @@ export async function sendWhatsAppAction(
   to: string,
   body: string
 ) {
+  await requireUser();
   const { sendWhatsApp } = await import("@/lib/messaging/whatsapp");
   const result = await sendWhatsApp({ to, body });
 
@@ -508,6 +758,7 @@ export async function sendSMSAction(
   to: string,
   body: string
 ) {
+  await requireUser();
   const { sendSMS } = await import("@/lib/messaging/sms");
   const result = await sendSMS({ to, body });
 
@@ -535,6 +786,7 @@ export async function logCallAction(
   referenceId: string,
   formData: FormData
 ) {
+  await requireUser();
   const { createCallLog } = await import("@/lib/queries");
 
   const type = String(formData.get("type") || "outgoing") as "incoming" | "outgoing";
@@ -576,6 +828,7 @@ export async function addCommentAction(
   referenceId: string,
   content: string
 ) {
+  await requireUser();
   if (!content.trim()) return;
 
   const { createComment } = await import("@/lib/queries");
@@ -597,6 +850,7 @@ export async function addCommentAction(
 // ── Email Template actions ─────────────────────────────
 
 export async function createEmailTemplateAction(formData: FormData) {
+  await requireUser();
   const name = String(formData.get("name") || "").trim();
   const content = String(formData.get("content") || "").trim();
   if (!name || !content) return;
@@ -612,6 +866,7 @@ export async function createEmailTemplateAction(formData: FormData) {
 }
 
 export async function deleteEmailTemplateAction(id: string) {
+  await requireUser();
   const { deleteEmailTemplate } = await import("@/lib/queries");
   await deleteEmailTemplate(id);
   revalidatePath("/settings");
@@ -623,7 +878,12 @@ export async function bulkImportLeadsAction(
   rows: Record<string, string>[],
   fieldMapping: Record<string, string>
 ) {
-  const { createLead: createLeadQuery, getDefaultLeadStatus } = await import("@/lib/queries");
+  await requireUser();
+  const {
+    createLead: createLeadQuery,
+    getDefaultLeadStatus,
+    getOrCreateContactForLead,
+  } = await import("@/lib/queries");
   const defaultStatus = await getDefaultLeadStatus();
 
   let created = 0;
@@ -640,6 +900,15 @@ export async function bulkImportLeadsAction(
 
       if (!leadData.fullName) continue;
 
+      // Dédup contact (Phase 2) — set contactId sur le lead importé
+      const contact = await getOrCreateContactForLead({
+        email: leadData.email || null,
+        mobileNo: leadData.mobileNo || null,
+        firstName: leadData.firstName || null,
+        lastName: leadData.lastName || null,
+        fullName: leadData.fullName,
+      });
+
       await createLeadQuery({
         fullName: leadData.fullName,
         email: leadData.email || null,
@@ -649,6 +918,7 @@ export async function bulkImportLeadsAction(
         jobTitle: leadData.jobTitle || null,
         website: leadData.website || null,
         statusId: defaultStatus?.id ?? null,
+        contactId: contact.id,
       });
       created++;
     } catch {
@@ -664,7 +934,8 @@ export async function bulkImportContactsAction(
   rows: Record<string, string>[],
   fieldMapping: Record<string, string>
 ) {
-  const { createContact: createContactQuery } = await import("@/lib/queries");
+  await requireUser();
+  const { getOrCreateContactForLead } = await import("@/lib/queries");
 
   let created = 0;
   let errors = 0;
@@ -680,11 +951,13 @@ export async function bulkImportContactsAction(
 
       if (!leadData.fullName) continue;
 
-      await createContactQuery({
-        fullName: leadData.fullName,
+      // Dédup contact (Phase 2) — remplace l'insertion brute
+      await getOrCreateContactForLead({
         email: leadData.email || null,
         mobileNo: leadData.mobileNo || null,
-        phone: leadData.phone || null,
+        firstName: leadData.firstName || null,
+        lastName: leadData.lastName || null,
+        fullName: leadData.fullName,
       });
       created++;
     } catch {
@@ -699,12 +972,14 @@ export async function bulkImportContactsAction(
 // ── Notification actions ───────────────────────────────
 
 export async function markNotificationReadAction(id: string) {
+  await requireUser();
   const { markNotificationRead } = await import("@/lib/queries");
   await markNotificationRead(id);
   revalidatePath("/");
 }
 
 export async function markAllNotificationsReadAction() {
+  await requireUser();
   const { markAllNotificationsRead } = await import("@/lib/queries");
   await markAllNotificationsRead();
   revalidatePath("/");
@@ -719,6 +994,7 @@ export async function saveViewAction(
   searchQuery: string,
   isPublic: boolean
 ) {
+  await requireUser();
   const { createViewSetting } = await import("@/lib/queries");
 
   const filters = searchQuery ? { q: searchQuery } : null;
@@ -738,6 +1014,7 @@ export async function saveViewAction(
 }
 
 export async function deleteViewAction(id: string, routeName: string) {
+  await requireUser();
   const { deleteViewSetting } = await import("@/lib/queries");
   await deleteViewSetting(id);
   revalidatePath(`/${routeName}`);

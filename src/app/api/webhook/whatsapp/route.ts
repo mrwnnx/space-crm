@@ -2,10 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { leads, activities } from "@/db/schema";
 import { eq, ilike } from "drizzle-orm";
+import twilio from "twilio";
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
+
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    if (authToken) {
+      const signature = request.headers.get("X-Twilio-Signature") || "";
+      const params: Record<string, string> = {};
+      for (const [key, val] of formData) {
+        params[key] = String(val);
+      }
+      const isValid = twilio.validateRequest(
+        authToken,
+        signature,
+        request.url,
+        params
+      );
+      if (!isValid) {
+        return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+      }
+    }
     const from = String(formData.get("From") || "");
     const to = String(formData.get("To") || "");
     const body = String(formData.get("Body") || "");

@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getLeadById, getLeadStatuses, getLeadSources, getIndustries, getEmailTemplates } from "@/lib/queries";
+import { getLeadById, getLeadStatuses, getLeadSources, getIndustries, getEmailTemplates, getScheduleForLead } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
+import { PaymentBlock } from "@/components/leads/payment-block";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
 import type { Metadata } from "next";
@@ -36,6 +37,8 @@ export default async function LeadDetailPage({
     getIndustries(),
     getEmailTemplates(),
   ]);
+
+  const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
 
   const sc = lead.status ? statusColor(lead.status.color) : null;
 
@@ -101,10 +104,27 @@ export default async function LeadDetailPage({
               organizationName: lead.organizationName,
               sourceId: lead.sourceId,
               industryId: lead.industryId,
+              intendedPlan: lead.intendedPlan,
             }}
             sources={sources}
             industries={industries}
+            bootcamp={lead.bootcamp}
           />
+
+          {schedule && (
+            <PaymentBlock
+              leadId={lead.id}
+              items={schedule.items.map((e) => ({
+                id: e.id,
+                dueDate: e.dueDate,
+                amount: e.amount,
+                isPaid: e.isPaid,
+                paidAt: e.paidAt,
+              }))}
+              summary={schedule.summary}
+              currency={lead.bootcamp?.currency}
+            />
+          )}
 
           <LinkedTasks
             tasks={lead.tasks}

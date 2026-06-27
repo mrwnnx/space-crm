@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateLeadFieldAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
-import type { LeadSource, Industry } from "@/db/schema";
+import type { LeadSource, Industry, Bootcamp } from "@/db/schema";
 
 type LeadData = {
   email: string | null;
@@ -14,6 +14,7 @@ type LeadData = {
   organizationName: string | null;
   sourceId: string | null;
   industryId: string | null;
+  intendedPlan: string | null;
 };
 
 export function LeadSidePanel({
@@ -21,11 +22,13 @@ export function LeadSidePanel({
   lead,
   sources,
   industries,
+  bootcamp,
 }: {
   leadId: string;
   lead: LeadData;
   sources: LeadSource[];
   industries: Industry[];
+  bootcamp?: Bootcamp | null;
 }) {
   return (
     <div className="flex flex-col gap-0.5 p-4">
@@ -87,6 +90,19 @@ export function LeadSidePanel({
         value={lead.industryId}
         options={industries.map((i) => ({ value: i.id, label: i.name }))}
       />
+
+      {bootcamp && (
+        <EditableSelect
+          leadId={leadId}
+          field="intendedPlan"
+          label="Plan envisagé"
+          value={lead.intendedPlan}
+          options={[
+            ...(bootcamp.priceTotal ? [{ value: "total", label: `Comptant — ${bootcamp.priceTotal} ${bootcamp.currency}` }] : []),
+            ...(bootcamp.monthlyCount && bootcamp.monthlyAmount ? [{ value: "monthly", label: `Facilité — ${bootcamp.monthlyCount}× ${bootcamp.monthlyAmount} ${bootcamp.currency}` }] : []),
+          ]}
+        />
+      )}
     </div>
   );
 }

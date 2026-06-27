@@ -9,6 +9,7 @@ import {
   pgEnum,
   jsonb,
   numeric,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -87,6 +88,42 @@ export const referenceTypeEnum = pgEnum("reference_type", [
   "organization",
 ]);
 
+export const bootcampStatusEnum = pgEnum("bootcamp_status", [
+  "draft", // brouillon
+  "open", // capte les leads (formation à venir)
+  "in_progress", // formation commencée (jour J passé)
+  "completed", // terminée
+  "cancelled", // annulée
+]);
+
+// ── Enums pivot formation-centric (Phase 1) ────────────
+
+export const stageKindEnum = pgEnum("stage_kind", ["normal", "converted", "lost"]);
+
+export const temperatureEnum = pgEnum("temperature", ["hot", "cold"]);
+
+export const paymentPlanEnum = pgEnum("payment_plan", ["total", "monthly"]);
+
+// ── Bootcamps (Formations) ─────────────────────────────
+
+export const bootcamps = pgTable("bootcamps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(), // "bootcamp-dev-janv-2026" (URL webhook)
+  description: text("description"),
+  startDate: date("start_date"), // ⭐ le plus important
+  endDate: date("end_date"),
+  status: bootcampStatusEnum("status").notNull().default("open"),
+  capacity: integer("capacity"), // nb de places
+  // Offre de prix (B1 : "Converti" = inscrit + 1er paiement encaissé)
+  priceTotal: numeric("price_total"), // prix total payé en une fois
+  currency: text("currency").notNull().default("TND"),
+  monthlyCount: integer("monthly_count"), // nb de mensualités (plan mensuel)
+  monthlyAmount: numeric("monthly_amount"), // montant d'une mensualité
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // ── Config / Meta ──────────────────────────────────────
 
 export const leadStatuses = pgTable("lead_statuses", {
@@ -95,7 +132,17 @@ export const leadStatuses = pgTable("lead_statuses", {
   color: text("color").notNull().default("gray"),
   position: integer("position").notNull().default(0),
   isDefault: boolean("is_default").notNull().default(false),
+  bootcampId: uuid("bootcamp_id").references(() => bootcamps.id), // pipeline par formation
+  // Colonnes système (Phase 1) — 2 stages système par bootcamp : "Converti" + "Lost"
+  isSystem: boolean("is_system").notNull().default(false),
+  kind: stageKindEnum("kind").notNull().default("normal"),
 });
+// TODO (backfill kind) — après migration, aucun stage existant ne matche ILIKE '%converti%'
+// (les stages s'appellent "Converted" EN / "Inscrit" FR). Résultat backfill :
+//   - bc 00000000-0000-0000-0000-000000000001 ("Formation par défaut") : "Lost"→lost ✓, "Converted"→normal (restera normal, à nettoyer)
+//   - bc e8211853-4846-462f-84b7-49e8e42696e6 : "Perdu"→lost ✓, aucun converted
+// → Les 2 bootcamps manquent d'un stage kind='converted'. Action : appeler
+//   ensureSystemStages(<bootcampId>) pour semer "Converti"/"Lost", ou renommer "Converted"/"Inscrit".
 
 export const dealStatuses = pgTable("deal_statuses", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -154,6 +201,9 @@ export const contacts = pgTable("contacts", {
   gender: text("gender"),
   image: text("image"),
   organizationId: uuid("organization_id").references(() => organizations.id),
+  // Fix dédup P2 : un contact créé via match mobile seul (pas email) est flagué
+  // pour révision manuelle — on ne fusionne jamais deux humains à tort.
+  possibleDuplicate: boolean("possible_duplicate").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -174,12 +224,21 @@ export const leads = pgTable("leads", {
   jobTitle: text("job_title"),
   organizationName: text("organization_name"),
   organizationId: uuid("organization_id").references(() => organizations.id),
+  bootcampId: uuid("bootcamp_id").references(() => bootcamps.id), // formation de rattachement
+  contactId: uuid("contact_id").references(() => contacts.id), // la personne (dédupliquée) — wiring Phase 2
   statusId: uuid("status_id").references(() => leadStatuses.id),
   sourceId: uuid("source_id").references(() => leadSources.id),
   industryId: uuid("industry_id").references(() => industries.id),
   owner: text("owner"),
   converted: boolean("converted").notNull().default(false),
   lastContactedAt: timestamp("last_contacted_at"),
+  // État pipeline (Phase 1)
+  temperature: temperatureEnum("temperature").notNull().default("cold"),
+  stageEnteredAt: timestamp("stage_entered_at").notNull().defaultNow(), // alimente l'alerte de stagnation
+  convertedAt: timestamp("converted_at"), // date de conversion (B1)
+  rawPayload: jsonb("raw_payload"), // infos brutes du formulaire d'entrée
+  formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead
+  intendedPlan: paymentPlanEnum("intended_plan"), // plan envisagé (noté pendant le pipeline, avant inscription)
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -394,10 +453,103 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── Tags (Phase 1) ─────────────────────────────────────
+
+export const tags = pgTable("tags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  color: text("color").notNull().default("gray"),
+});
+
+export const leadTags = pgTable(
+  "lead_tags",
+  {
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.leadId, t.tagId] })]
+);
+
+// ── Payment Schedules (Phase 1) ────────────────────────
+
+export const paymentSchedules = pgTable("payment_schedules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leadId: uuid("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  plan: paymentPlanEnum("plan").notNull(),
+  dueDate: date("due_date"),
+  amount: numeric("amount"),
+  isPaid: boolean("is_paid").notNull().default(false),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Form Sources (Phase 1) ─────────────────────────────
+// Source d'entrée typée par bootcamp (DISTINCT de lead_sources qui reste la liste de réf.)
+export const formSources = pgTable("form_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bootcampId: uuid("bootcamp_id").references(() => bootcamps.id),
+  name: text("name").notNull(),
+  targetStatusId: uuid("target_status_id").references(() => leadStatuses.id),
+  temperature: temperatureEnum("temperature").default("cold"),
+  defaultTagIds: jsonb("default_tag_ids").default([]),
+  webhookToken: text("webhook_token").notNull().unique(),
+  active: boolean("active").notNull().default(true),
+  fieldMapping: jsonb("field_mapping").notNull().default({}), // { "<champ Elementor>": "<colonne lead whitelistée>" }
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Note Templates (Phase 1) ───────────────────────────
+
+export const noteTemplates = pgTable("note_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  text: text("text").notNull(),
+  position: integer("position").notNull().default(0),
+});
+
+// ── Allowed Emails (pré-déploiement) ────────────────────
+// Liste blanche des emails autorisés à créer un compte.
+// Seul un email présent ici peut passer signup().
+export const allowedEmails = pgTable("allowed_emails", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Stage History (Phase 1) ────────────────────────────
+// Capture structurée des transitions de statut (l'activity status_change restait en texte libre)
+export const stageHistory = pgTable("stage_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leadId: uuid("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  fromStatusId: uuid("from_status_id"),
+  toStatusId: uuid("to_status_id"),
+  changedBy: text("changed_by"),
+  changedAt: timestamp("changed_at").notNull().defaultNow(),
+});
+
 // ── Relations ──────────────────────────────────────────
 
-export const leadStatusesRelations = relations(leadStatuses, ({ many }) => ({
+export const bootcampsRelations = relations(bootcamps, ({ many }) => ({
+  leadStatuses: many(leadStatuses),
   leads: many(leads),
+  formSources: many(formSources),
+}));
+
+export const leadStatusesRelations = relations(leadStatuses, ({ one, many }) => ({
+  bootcamp: one(bootcamps, {
+    fields: [leadStatuses.bootcampId],
+    references: [bootcamps.id],
+  }),
+  leads: many(leads),
+  formSources: many(formSources), // via targetStatusId
 }));
 
 export const dealStatusesRelations = relations(dealStatuses, ({ many }) => ({
@@ -444,9 +596,18 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
     references: [organizations.id],
   }),
   dealContacts: many(dealContacts),
+  leads: many(leads), // via leads.contactId (Phase 1)
 }));
 
 export const leadsRelations = relations(leads, ({ one, many }) => ({
+  bootcamp: one(bootcamps, {
+    fields: [leads.bootcampId],
+    references: [bootcamps.id],
+  }),
+  contact: one(contacts, {
+    fields: [leads.contactId],
+    references: [contacts.id],
+  }),
   status: one(leadStatuses, {
     fields: [leads.statusId],
     references: [leadStatuses.id],
@@ -463,7 +624,14 @@ export const leadsRelations = relations(leads, ({ one, many }) => ({
     fields: [leads.organizationId],
     references: [organizations.id],
   }),
+  formSource: one(formSources, {
+    fields: [leads.formSourceId],
+    references: [formSources.id],
+  }),
   deals: many(deals),
+  leadTags: many(leadTags),
+  paymentSchedules: many(paymentSchedules),
+  stageHistory: many(stageHistory),
 }));
 
 export const dealsRelations = relations(deals, ({ one, many }) => ({
@@ -521,8 +689,53 @@ export const dealProductsRelations = relations(dealProducts, ({ one }) => ({
   }),
 }));
 
+// ── Relations pivot formation-centric (Phase 1) ────────
+
+export const tagsRelations = relations(tags, ({ many }) => ({
+  leadTags: many(leadTags),
+}));
+
+export const leadTagsRelations = relations(leadTags, ({ one }) => ({
+  lead: one(leads, {
+    fields: [leadTags.leadId],
+    references: [leads.id],
+  }),
+  tag: one(tags, {
+    fields: [leadTags.tagId],
+    references: [tags.id],
+  }),
+}));
+
+export const paymentSchedulesRelations = relations(paymentSchedules, ({ one }) => ({
+  lead: one(leads, {
+    fields: [paymentSchedules.leadId],
+    references: [leads.id],
+  }),
+}));
+
+export const formSourcesRelations = relations(formSources, ({ one, many }) => ({
+  bootcamp: one(bootcamps, {
+    fields: [formSources.bootcampId],
+    references: [bootcamps.id],
+  }),
+  targetStatus: one(leadStatuses, {
+    fields: [formSources.targetStatusId],
+    references: [leadStatuses.id],
+  }),
+  leads: many(leads),
+}));
+
+export const stageHistoryRelations = relations(stageHistory, ({ one }) => ({
+  lead: one(leads, {
+    fields: [stageHistory.leadId],
+    references: [leads.id],
+  }),
+}));
+
 // ── Types ──────────────────────────────────────────────
 
+export type Bootcamp = typeof bootcamps.$inferSelect;
+export type NewBootcamp = typeof bootcamps.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 export type Deal = typeof deals.$inferSelect;
@@ -553,3 +766,17 @@ export type LostReason = typeof lostReasons.$inferSelect;
 export type Territory = typeof territories.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+// Types pivot formation-centric (Phase 1)
+export type Tag = typeof tags.$inferSelect;
+export type NewTag = typeof tags.$inferInsert;
+export type LeadTag = typeof leadTags.$inferSelect;
+export type PaymentSchedule = typeof paymentSchedules.$inferSelect;
+export type NewPaymentSchedule = typeof paymentSchedules.$inferInsert;
+export type FormSource = typeof formSources.$inferSelect;
+export type NewFormSource = typeof formSources.$inferInsert;
+export type NoteTemplate = typeof noteTemplates.$inferSelect;
+export type NewNoteTemplate = typeof noteTemplates.$inferInsert;
+export type StageHistory = typeof stageHistory.$inferSelect;
+export type NewStageHistory = typeof stageHistory.$inferInsert;
+export type AllowedEmail = typeof allowedEmails.$inferSelect;
+export type NewAllowedEmail = typeof allowedEmails.$inferInsert;

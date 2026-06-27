@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { updateLeadStatusAction } from "@/app/actions";
 import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
-import type { Lead, LeadStatus, LeadSource, Organization } from "@/db/schema";
+import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
+import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
 
 type StageWithLeads = LeadStatus & {
   leads: (Lead & {
@@ -13,14 +14,41 @@ type StageWithLeads = LeadStatus & {
   })[];
 };
 
-export function LeadsKanban({ statuses }: { statuses: StageWithLeads[] }) {
+export function LeadsKanban({
+  statuses,
+  bootcamp,
+}: {
+  statuses: StageWithLeads[];
+  bootcamp?: Bootcamp;
+}) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Popup d'inscription : lead en cours d'inscription + colonne cible
+  const [enrollLead, setEnrollLead] = useState<Lead | null>(null);
+
+  // Index rapide statusId → status (pour connaître le kind de la colonne cible)
+  const statusMap = new Map(statuses.map((s) => [s.id, s]));
 
   function handleDrop(leadId: string, statusId: string) {
     setDragOverStatus(null);
     setDraggingId(null);
+
+    const targetStatus = statusMap.get(statusId);
+
+    // Drop sur une colonne kind='converted' → ouvre la popup, NE déplace pas.
+    if (targetStatus?.kind === "converted") {
+      // Board par bootcamp → popup d'inscription
+      const lead = statuses
+        .flatMap((s) => s.leads)
+        .find((l) => l.id === leadId);
+      if (lead) {
+        setEnrollLead(lead);
+      }
+      return;
+    }
+
+    // Drop sur toute autre colonne → comportement actuel
     startTransition(() => updateLeadStatusAction(leadId, statusId));
   }
 
@@ -54,6 +82,11 @@ export function LeadsKanban({ statuses }: { statuses: StageWithLeads[] }) {
                   <h2 className="text-sm font-semibold text-foreground">
                     {status.name}
                   </h2>
+                  {status.isSystem && (
+                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground">
+                      système
+                    </span>
+                  )}
                 </div>
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">
                   {status.leads.length}
@@ -81,6 +114,15 @@ export function LeadsKanban({ statuses }: { statuses: StageWithLeads[] }) {
           );
         })}
       </div>
+
+      {/* Popup d'inscription (drag vers colonne converted) */}
+      {enrollLead && bootcamp && (
+        <EnrollLeadDialog
+          lead={enrollLead}
+          bootcamp={bootcamp}
+          onClose={() => setEnrollLead(null)}
+        />
+      )}
     </div>
   );
 }

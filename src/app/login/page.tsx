@@ -1,15 +1,22 @@
 import Link from "next/link";
 import { login, signup } from "./actions";
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  return <LoginContent />;
+  const { error } = await searchParams;
+  return <LoginContent error={error} />;
 }
 
-function LoginContent() {
+function LoginContent({ error }: { error?: string }) {
+  const errorMessage =
+    error === "unauthorized"
+      ? "Inscription non autorisée pour cet email. Contacte l'administrateur."
+      : error === "1"
+        ? "Email ou mot de passe incorrect."
+        : null;
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
@@ -26,6 +33,11 @@ function LoginContent() {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+          {errorMessage && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+              {errorMessage}
+            </div>
+          )}
           <form className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
