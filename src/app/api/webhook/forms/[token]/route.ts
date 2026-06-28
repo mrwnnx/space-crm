@@ -92,6 +92,13 @@ export async function POST(
       }
     }
 
+    // 3.5 Capture le dernier payload BRUT reçu sur le formulaire (aide au mapping).
+    // Indépendant de la dédup lead → reflète exactement ce qu'Elementor envoie.
+    await db
+      .update(formSources)
+      .set({ lastPayload: rawValues, lastReceivedAt: new Date() })
+      .where(eq(formSources.id, formSource.id));
+
     // 4. Mappe via fieldMapping avec whitelist stricte
     const fieldMapping = (formSource.fieldMapping ?? {}) as Record<string, string>;
     const leadData: Record<string, string> = {};

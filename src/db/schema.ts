@@ -504,6 +504,9 @@ export const formSources = pgTable("form_sources", {
   webhookToken: text("webhook_token").notNull().unique(),
   active: boolean("active").notNull().default(true),
   fieldMapping: jsonb("field_mapping").notNull().default({}), // { "<champ Elementor>": "<colonne lead whitelistée>" }
+  // Dernier payload brut reçu (diagnostic mapping) — écrit par le webhook à chaque POST.
+  lastPayload: jsonb("last_payload"),
+  lastReceivedAt: timestamp("last_received_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

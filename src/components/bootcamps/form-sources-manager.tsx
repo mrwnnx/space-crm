@@ -10,11 +10,22 @@ import {
 import type { FormSource } from "@/db/schema";
 
 const WEBHOOK_BASE = "https://space-crm-psi.vercel.app";
-const DEFAULT_MAPPING_JSON = JSON.stringify(
-  { name: "fullName", email: "email", phone: "mobileNo" },
-  null,
-  2
-);
+const DEFAULT_MAPPING: Record<string, string> = {
+  name: "fullName",
+  email: "email",
+  phone: "mobileNo",
+};
+// Colonnes lead whitelistées (doit refléter ALLOWED_LEAD_FIELDS du webhook).
+const LEAD_COLUMNS = [
+  "email",
+  "fullName",
+  "firstName",
+  "lastName",
+  "mobileNo",
+  "phone",
+  "jobTitle",
+  "organizationName",
+];
 
 type StatusOption = { id: string; name: string };
 type TagOption = { id: string; name: string };
@@ -228,9 +239,10 @@ function FormSourceForm({
   onCancel: () => void;
 }) {
   const selectedTags = (fs?.defaultTagIds as string[] | null) ?? [];
-  const mappingValue = fs
-    ? JSON.stringify((fs.fieldMapping as Record<string, string>) ?? {}, null, 2)
-    : DEFAULT_MAPPING_JSON;
+  const initialMapping = fs
+    ? ((fs.fieldMapping as Record<string, string>) ?? {})
+    : DEFAULT_MAPPING;
+  const lastPayload = (fs?.lastPayload as Record<string, string> | null) ?? null;
 
   return (
     <form
@@ -301,15 +313,11 @@ function FormSourceForm({
         )}
       </div>
 
-      <div>
-        <Label>Field mapping (JSON : champ Elementor → colonne lead)</Label>
-        <textarea
-          name="fieldMapping"
-          rows={4}
-          defaultValue={mappingValue}
-          className={`${inputCls} font-mono`}
-        />
-      </div>
+      <MappingEditor
+        initialMapping={initialMapping}
+        lastPayload={lastPayload}
+        lastReceivedAt={fs?.lastReceivedAt ?? null}
+      />
 
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input type="checkbox" name="active" defaultChecked={fs ? fs.active : true} />
@@ -334,6 +342,98 @@ function FormSourceForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// Panneau "Dernière soumission reçue" + éditeur de mapping basé sur les clés réelles.
+function MappingEditor({
+  initialMapping,
+  lastPayload,
+  lastReceivedAt,
+}: {
+  initialMapping: Record<string, string>;
+  lastPayload: Record<string, string> | null;
+  lastReceivedAt: Date | string | null;
+}) {
+  const [mapping, setMapping] = useState<Record<string, string>>(initialMapping);
+
+  // Clés à mapper = celles reçues dans le dernier payload ∪ celles déjà mappées.
+  const keys = Array.from(
+    new Set([...Object.keys(lastPayload ?? {}), ...Object.keys(mapping)])
+  );
+
+  // fieldMapping final envoyé à l'action = entrées non vides uniquement.
+  const cleaned: Record<string, string> = {};
+  for (const [k, v] of Object.entries(mapping)) if (v) cleaned[k] = v;
+
+  return (
+    <div className="space-y-2">
+      {/* Dernière soumission reçue */}
+      <div className="rounded-lg border border-border bg-muted/30 p-2">
+        <p className="mb-1 text-[10px] font-semibold text-muted-foreground">
+          Dernière soumission reçue
+          {lastReceivedAt && (
+            <span className="ml-1 font-normal">
+              · {new Date(lastReceivedAt).toLocaleString("fr-FR")}
+            </span>
+          )}
+        </p>
+        {lastPayload && Object.keys(lastPayload).length > 0 ? (
+          <pre className="max-h-32 overflow-auto rounded bg-background p-2 text-[10px] text-foreground">
+            {JSON.stringify(lastPayload, null, 2)}
+          </pre>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">
+            Aucune soumission reçue. Envoie un test depuis ton formulaire Elementor
+            (ou via curl) pour voir les champs ici.
+          </p>
+        )}
+      </div>
+
+      {/* Mapping par clé réelle */}
+      <Label>Mapping des champs reçus → colonnes lead</Label>
+      {keys.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground">
+          Aucun champ à mapper pour l&apos;instant.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {keys.map((k) => (
+            <div key={k} className="flex items-center gap-2">
+              <code
+                className="flex-1 truncate rounded bg-muted px-1.5 py-1 text-[10px] text-muted-foreground"
+                title={k}
+              >
+                {k}
+                {lastPayload?.[k] !== undefined && (
+                  <span className="ml-1 text-foreground/60">
+                    = {String(lastPayload[k])}
+                  </span>
+                )}
+              </code>
+              <span className="text-muted-foreground">→</span>
+              <select
+                value={mapping[k] ?? ""}
+                onChange={(e) =>
+                  setMapping((m) => ({ ...m, [k]: e.target.value }))
+                }
+                className="rounded-lg border border-border bg-background px-1.5 py-1 text-[10px] outline-none focus:border-ring"
+              >
+                <option value="">— Ignorer —</option>
+                {LEAD_COLUMNS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Valeur transmise à l'action (whitelist re-filtrée côté webhook). */}
+      <input type="hidden" name="fieldMapping" value={JSON.stringify(cleaned)} />
+    </div>
   );
 }
 
