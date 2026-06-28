@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon, Building02Icon } from "@hugeicons/core-free-icons";
@@ -18,7 +18,12 @@ export async function generateMetadata({
   return { title: org ? `${org.name} — Academy CRM` : "Organization" };
 }
 
-export default async function OrganizationDetailPage({
+export default async function OrganizationDetailPage() {
+  // B2B masqué de l'usage quotidien : route débranchée (impl. legacy conservée ci-dessous, chantier séparé).
+  redirect("/leads");
+}
+
+async function OrganizationDetailPageLegacy({
   params,
 }: {
   params: Promise<{ id: string }>;

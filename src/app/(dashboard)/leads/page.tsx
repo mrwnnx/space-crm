@@ -1,4 +1,5 @@
-import { getLeads, getLeadSources, getIndustries, getLeadStatuses, getBootcamps, getViewSettings } from "@/lib/queries";
+import { getLeads, getLeadSources, getLeadStatuses, getBootcamps, getViewSettings } from "@/lib/queries";
+import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { LeadsList } from "@/components/leads/leads-list";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
@@ -14,9 +15,8 @@ export default async function LeadsPage({
 }) {
   const { q, bootcamp, statusId, temperature, converted } = await searchParams;
 
-  const [sources, industries, statuses, bootcamps, savedViews] = await Promise.all([
+  const [sources, statuses, bootcamps, savedViews] = await Promise.all([
     getLeadSources(),
-    getIndustries(),
     getLeadStatuses(),
     getBootcamps(),
     getViewSettings("leads"),
@@ -50,7 +50,13 @@ export default async function LeadsPage({
               currentSearch={q || ""}
             />
             <SearchBar />
-            <NewLeadButton statuses={statuses} sources={sources} industries={industries} />
+            <NewLeadButton
+              sources={sources}
+              bootcamps={bootcamps.map((b) => ({
+                id: b.id,
+                label: b.startDate ? `${b.name} — ${formatDate(b.startDate)}` : b.name,
+              }))}
+            />
           </div>
         }
       />

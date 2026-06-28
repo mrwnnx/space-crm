@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
+import { NewLeadButton } from "@/components/leads/new-lead-button";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +32,10 @@ export default async function BootcampDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [bootcamp, kanbanData] = await Promise.all([
+  const [bootcamp, kanbanData, sources] = await Promise.all([
     getBootcampById(id),
     getLeadsKanban(id),
+    getLeadSources(),
   ]);
 
   if (!bootcamp) notFound();
@@ -72,6 +74,10 @@ export default async function BootcampDetailPage({
             </p>
           )}
         </div>
+        <NewLeadButton
+          sources={sources}
+          lockedBootcamp={{ id: bootcamp.id, name: bootcamp.name }}
+        />
         <BootcampActions bootcamp={bootcamp} />
       </div>
 

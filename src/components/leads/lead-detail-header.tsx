@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
-import { updateLeadStatusAction, convertToDealAction } from "@/app/actions";
+import { updateLeadStatusAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import type { LeadStatus } from "@/db/schema";
 
@@ -28,15 +28,11 @@ export function LeadDetailHeader({
   statusName?: string;
 }) {
   const [statusOpen, setStatusOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   function changeStatus(newStatusId: string) {
     setStatusOpen(false);
     startTransition(() => updateLeadStatusAction(leadId, newStatusId));
-  }
-
-  function convertToDeal() {
-    startTransition(() => convertToDealAction(leadId));
   }
 
   return (
@@ -102,19 +98,10 @@ export function LeadDetailHeader({
           )}
         </div>
 
-        {/* Convert to Deal */}
-        {!converted && (
-          <button
-            onClick={convertToDeal}
-            disabled={isPending}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isPending ? "..." : "Convert to Deal"}
-          </button>
-        )}
+        {/* "Convert to Deal" (B2B) débranché. La vraie conversion = inscription (enrollLeadAction). */}
         {converted && (
           <span className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
-            ✓ Converted
+            ✓ Converti
           </span>
         )}
       </div>

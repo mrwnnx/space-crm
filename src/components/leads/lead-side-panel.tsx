@@ -1,33 +1,36 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateLeadFieldAction } from "@/app/actions";
+import { updateLeadFieldAction, updateLeadContactFieldAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
-import type { LeadSource, Industry, Bootcamp } from "@/db/schema";
+import type { LeadSource, Bootcamp } from "@/db/schema";
 
 type LeadData = {
   email: string | null;
   mobileNo: string | null;
-  phone: string | null;
-  website: string | null;
-  jobTitle: string | null;
-  organizationName: string | null;
   sourceId: string | null;
-  industryId: string | null;
   intendedPlan: string | null;
+  promoCode: string | null;
+};
+
+type ContactData = {
+  whatsapp: string | null;
+  age: number | null;
 };
 
 export function LeadSidePanel({
   leadId,
   lead,
+  contactId,
+  contact,
   sources,
-  industries,
   bootcamp,
 }: {
   leadId: string;
   lead: LeadData;
+  contactId: string | null;
+  contact: ContactData;
   sources: LeadSource[];
-  industries: Industry[];
   bootcamp?: Bootcamp | null;
 }) {
   return (
@@ -36,42 +39,35 @@ export function LeadSidePanel({
         Coordonnées
       </p>
       <EditableField
-        leadId={leadId}
         field="email"
         label="Email"
         value={lead.email}
         type="email"
+        onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
       <EditableField
-        leadId={leadId}
         field="mobileNo"
-        label="Mobile"
-        value={lead.mobileNo}
-      />
-      <EditableField
-        leadId={leadId}
-        field="phone"
         label="Téléphone"
-        value={lead.phone}
+        value={lead.mobileNo}
+        onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
-      <EditableField
-        leadId={leadId}
-        field="website"
-        label="Website"
-        value={lead.website}
-      />
-      <EditableField
-        leadId={leadId}
-        field="jobTitle"
-        label="Job title"
-        value={lead.jobTitle}
-      />
-      <EditableField
-        leadId={leadId}
-        field="organizationName"
-        label="Organisation"
-        value={lead.organizationName}
-      />
+      {contactId && (
+        <>
+          <EditableField
+            field="whatsapp"
+            label="WhatsApp"
+            value={contact.whatsapp}
+            onSave={(f, v) => updateLeadContactFieldAction(leadId, contactId, f, v)}
+          />
+          <EditableField
+            field="age"
+            label="Âge"
+            type="number"
+            value={contact.age != null ? String(contact.age) : null}
+            onSave={(f, v) => updateLeadContactFieldAction(leadId, contactId, f, v)}
+          />
+        </>
+      )}
 
       <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Classification
@@ -83,19 +79,12 @@ export function LeadSidePanel({
         value={lead.sourceId}
         options={sources.map((s) => ({ value: s.id, label: s.name }))}
       />
-      <EditableSelect
-        leadId={leadId}
-        field="industryId"
-        label="Industrie"
-        value={lead.industryId}
-        options={industries.map((i) => ({ value: i.id, label: i.name }))}
-      />
 
       {bootcamp && (
         <EditableSelect
           leadId={leadId}
           field="intendedPlan"
-          label="Plan envisagé"
+          label="Offre envisagée"
           value={lead.intendedPlan}
           options={[
             ...(bootcamp.priceTotal ? [{ value: "total", label: `Comptant — ${bootcamp.priceTotal} ${bootcamp.currency}` }] : []),
@@ -103,31 +92,37 @@ export function LeadSidePanel({
           ]}
         />
       )}
+      <EditableField
+        field="promoCode"
+        label="Code promo"
+        value={lead.promoCode}
+        onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
+      />
     </div>
   );
 }
 
 function EditableField({
-  leadId,
   field,
   label,
   value,
   type = "text",
+  onSave,
 }: {
-  leadId: string;
   field: string;
   label: string;
   value: string | null;
   type?: string;
+  onSave: (field: string, value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value || "");
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   function save() {
     setEditing(false);
     if (val !== (value || "")) {
-      startTransition(() => updateLeadFieldAction(leadId, field, val));
+      startTransition(() => onSave(field, val));
     }
   }
 

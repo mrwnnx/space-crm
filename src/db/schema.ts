@@ -198,6 +198,8 @@ export const contacts = pgTable("contacts", {
   email: text("email"),
   mobileNo: text("mobile_no"),
   phone: text("phone"),
+  whatsapp: text("whatsapp"), // numéro WhatsApp de la personne (suit le contact d'une formation à l'autre)
+  age: integer("age"), // âge de la personne
   gender: text("gender"),
   image: text("image"),
   organizationId: uuid("organization_id").references(() => organizations.id),
@@ -239,6 +241,7 @@ export const leads = pgTable("leads", {
   rawPayload: jsonb("raw_payload"), // infos brutes du formulaire d'entrée
   formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead
   intendedPlan: paymentPlanEnum("intended_plan"), // plan envisagé (noté pendant le pipeline, avant inscription)
+  promoCode: text("promo_code"), // code promo de l'inscription (info du lead, pas de la personne)
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

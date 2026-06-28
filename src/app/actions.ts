@@ -114,41 +114,73 @@ export async function deleteBootcampAction(bootcampId: string) {
 
 export async function createLeadAction(formData: FormData) {
   await requireUser();
-  const fullName = String(formData.get("fullName") || "").trim();
-  if (!fullName) return;
 
+  // Formation OBLIGATOIRE : leads.bootcamp_id est NOT NULL — un lead appartient toujours
+  // à une formation. Sans elle, on n'insère pas (sinon erreur PG 23502).
+  const bootcampId = String(formData.get("bootcampId") || "").trim();
+  if (!bootcampId) {
+    return { error: "Choisis une formation." };
+  }
+
+  // Identité : prénom + nom → fullName (NOT NULL en base).
   const firstName = String(formData.get("firstName") || "").trim() || null;
   const lastName = String(formData.get("lastName") || "").trim() || null;
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  if (!fullName) {
+    return { error: "Le prénom est requis." };
+  }
+
   const email = String(formData.get("email") || "").trim() || null;
   const mobileNo = String(formData.get("mobileNo") || "").trim() || null;
+  // Infos de LA PERSONNE → portées par le contact.
+  const whatsapp = String(formData.get("whatsapp") || "").trim() || null;
+  const ageRaw = String(formData.get("age") || "").trim();
+  const age = ageRaw ? Number.parseInt(ageRaw, 10) : null;
+  // Infos de L'INSCRIPTION → portées par le lead.
+  const promoCode = String(formData.get("promoCode") || "").trim() || null;
+  const intendedPlanRaw = String(formData.get("intendedPlan") || "");
+  const intendedPlan =
+    intendedPlanRaw === "total" || intendedPlanRaw === "monthly"
+      ? intendedPlanRaw
+      : null;
+
+  // Statut : 1ère colonne (plus basse position) du pipeline du bootcamp si non fourni.
+  const { getOrCreateContactForLead, getLeadStatuses } = await import("@/lib/queries");
+  let statusId = String(formData.get("statusId") || "").trim() || null;
+  if (!statusId) {
+    const statuses = await getLeadStatuses(bootcampId); // triés par position asc
+    statusId = statuses[0]?.id ?? null;
+  }
 
   // Dédup contact : on rattache la personne dès la création manuelle (Phase 2).
-  const { getOrCreateContactForLead } = await import("@/lib/queries");
   const contact = await getOrCreateContactForLead({
     email,
     mobileNo,
     firstName,
     lastName,
     fullName,
+    whatsapp,
+    age: age !== null && !Number.isNaN(age) ? age : null,
   });
 
-  const lead = await createLeadQuery({
+  await createLeadQuery({
     fullName,
     firstName,
     lastName,
     email,
     mobileNo,
-    phone: String(formData.get("phone") || "").trim() || null,
-    organizationName: String(formData.get("organizationName") || "").trim() || null,
-    jobTitle: String(formData.get("jobTitle") || "").trim() || null,
-    website: String(formData.get("website") || "").trim() || null,
+    intendedPlan,
+    promoCode,
     sourceId: String(formData.get("sourceId") || "") || null,
-    industryId: String(formData.get("industryId") || "") || null,
+    bootcampId,
+    statusId,
+    stageEnteredAt: new Date(),
     contactId: contact.id,
   });
 
   revalidatePath("/leads");
-  return lead;
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
 }
 
 export async function updateLeadFieldAction(
@@ -164,14 +196,34 @@ export async function updateLeadFieldAction(
     "email",
     "mobileNo",
     "phone",
-    "jobTitle",
-    "website",
-    "organizationName",
     "intendedPlan",
+    "promoCode",
   ];
   if (!allowed.includes(field)) return;
 
   await updateLeadQuery(leadId, { [field]: value || null });
+  revalidatePath(`/leads/${leadId}`);
+}
+
+// Édite un champ porté par le CONTACT lié (whatsapp, âge) depuis la fiche lead,
+// et revalide la page du lead pour refléter le changement.
+export async function updateLeadContactFieldAction(
+  leadId: string,
+  contactId: string,
+  field: string,
+  value: string
+) {
+  await requireUser();
+  const allowed = ["whatsapp", "age"];
+  if (!allowed.includes(field)) return;
+
+  if (field === "age") {
+    const n = value.trim() ? Number.parseInt(value, 10) : null;
+    if (n !== null && Number.isNaN(n)) return;
+    await updateContactQuery(contactId, { age: n });
+  } else {
+    await updateContactQuery(contactId, { whatsapp: value.trim() || null });
+  }
   revalidatePath(`/leads/${leadId}`);
 }
 

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getLeadById, getLeadStatuses, getLeadSources, getIndustries, getEmailTemplates, getScheduleForLead } from "@/lib/queries";
+import { getLeadById, getLeadStatuses, getLeadSources, getEmailTemplates, getScheduleForLead } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
@@ -31,10 +31,9 @@ export default async function LeadDetailPage({
 
   if (!lead) notFound();
 
-  const [statuses, sources, industries, templates] = await Promise.all([
+  const [statuses, sources, templates] = await Promise.all([
     getLeadStatuses(),
     getLeadSources(),
-    getIndustries(),
     getEmailTemplates(),
   ]);
 
@@ -70,7 +69,7 @@ export default async function LeadDetailPage({
             }))}
             leadEmail={lead.email}
             leadMobile={lead.mobileNo}
-            leadWhatsapp={lead.mobileNo}
+            leadWhatsapp={lead.contact?.whatsapp ?? lead.mobileNo}
             templates={templates}
           />
         </div>
@@ -85,9 +84,9 @@ export default async function LeadDetailPage({
               <p className="truncate text-sm font-semibold text-foreground">
                 {lead.fullName}
               </p>
-              {lead.jobTitle && (
+              {lead.email && (
                 <p className="truncate text-xs text-muted-foreground">
-                  {lead.jobTitle}
+                  {lead.email}
                 </p>
               )}
             </div>
@@ -98,16 +97,16 @@ export default async function LeadDetailPage({
             lead={{
               email: lead.email,
               mobileNo: lead.mobileNo,
-              phone: lead.phone,
-              website: lead.website,
-              jobTitle: lead.jobTitle,
-              organizationName: lead.organizationName,
               sourceId: lead.sourceId,
-              industryId: lead.industryId,
               intendedPlan: lead.intendedPlan,
+              promoCode: lead.promoCode,
+            }}
+            contactId={lead.contactId}
+            contact={{
+              whatsapp: lead.contact?.whatsapp ?? null,
+              age: lead.contact?.age ?? null,
             }}
             sources={sources}
-            industries={industries}
             bootcamp={lead.bootcamp}
           />
 

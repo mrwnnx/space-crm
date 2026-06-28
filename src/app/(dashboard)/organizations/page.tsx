@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getOrganizations, getIndustries, getTerritories, getViewSettings } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, TextCell, DateCell } from "@/components/data-table";
@@ -7,7 +8,12 @@ import { SavedViewsDropdown } from "@/components/saved-views-dropdown";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrganizationsPage({
+export default async function OrganizationsPage() {
+  // B2B masqué de l'usage quotidien : route débranchée (impl. legacy conservée ci-dessous, chantier séparé).
+  redirect("/leads");
+}
+
+async function OrganizationsPageLegacy({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string }>;

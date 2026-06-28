@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getDeals, getDealsKanban, getViewSettings } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { DealsList } from "@/components/deals/deals-list";
@@ -8,7 +9,12 @@ import { SavedViewsDropdown } from "@/components/saved-views-dropdown";
 
 export const dynamic = "force-dynamic";
 
-export default async function DealsPage({
+export default async function DealsPage() {
+  // B2B masqué de l'usage quotidien : route débranchée (impl. legacy conservée ci-dessous, chantier séparé).
+  redirect("/leads");
+}
+
+async function DealsPageLegacy({
   searchParams,
 }: {
   searchParams: Promise<{ view?: string; q?: string }>;

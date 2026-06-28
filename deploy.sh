@@ -63,9 +63,9 @@ echo "▶ Build (npx next build)…"
 npx next build
 
 # --- commit + push ---
-echo "▶ Commit + push vers origin/$BRANCH…"
+echo "▶ Commit + push vers origin/${BRANCH}…"
 git add -A
 git commit -m "$MSG"
-git push origin "$BRANCH"
+git push origin "${BRANCH}"
 
-echo "✅ Poussé sur origin/$BRANCH — Vercel va redéployer automatiquement."
+echo "✅ Poussé sur origin/${BRANCH} — Vercel va redéployer automatiquement."

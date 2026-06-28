@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getDealById, getDealStatuses, getLostReasons, getEmailTemplates } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
@@ -20,7 +20,12 @@ export async function generateMetadata({
   return { title: deal ? `Deal — Academy CRM` : "Deal" };
 }
 
-export default async function DealDetailPage({
+export default async function DealDetailPage() {
+  // B2B masqué de l'usage quotidien : route débranchée (impl. legacy conservée ci-dessous, chantier séparé).
+  redirect("/leads");
+}
+
+async function DealDetailPageLegacy({
   params,
 }: {
   params: Promise<{ id: string }>;

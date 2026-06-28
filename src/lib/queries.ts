@@ -1088,6 +1088,8 @@ export async function getOrCreateContactForLead(input: {
   firstName: string | null;
   lastName: string | null;
   fullName: string;
+  whatsapp?: string | null;
+  age?: number | null;
 }) {
   // 1) par email normalisé → match sûr, réutilise
   if (input.email && input.email.trim()) {
@@ -1114,6 +1116,8 @@ export async function getOrCreateContactForLead(input: {
       fullName: input.fullName.trim(),
       email: input.email?.trim() || null,
       mobileNo: input.mobileNo?.trim() || null,
+      whatsapp: input.whatsapp?.trim() || null,
+      age: input.age ?? null,
       possibleDuplicate: !!existingWithMobile,
     });
   }
@@ -1124,6 +1128,8 @@ export async function getOrCreateContactForLead(input: {
     fullName: input.fullName.trim(),
     email: input.email?.trim() || null,
     mobileNo: input.mobileNo?.trim() || null,
+    whatsapp: input.whatsapp?.trim() || null,
+    age: input.age ?? null,
   });
 }
 

@@ -7,9 +7,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Analytics01Icon,
   User02Icon,
-  Briefcase02Icon,
   Contact01Icon,
-  Building02Icon,
   Note02Icon,
   Task01Icon,
   Call02Icon,
@@ -35,9 +33,7 @@ const primaryNav: NavItem[] = [
   { href: "/bootcamps", label: "Formations", icon: GraduationCapIcon },
   { href: "/leads", label: "Leads", icon: User02Icon },
   { href: "/analytics", label: "Analytics", icon: Analytics01Icon },
-  { href: "/deals", label: "Deals", icon: Briefcase02Icon },
   { href: "/contacts", label: "Contacts", icon: Contact01Icon },
-  { href: "/organizations", label: "Organizations", icon: Building02Icon },
 ];
 
 const secondaryNav: NavItem[] = [
