@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createFormSourceAction,
@@ -46,26 +46,34 @@ export function FormSourcesManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const activeCount = formSources.filter((f) => f.active).length;
 
-  async function handleSubmit(formData: FormData) {
-    const res = editingId
-      ? await updateFormSourceAction(editingId, bootcampId, formData)
-      : await createFormSourceAction(bootcampId, formData);
-    if (res && "error" in res && res.error) {
-      setError(res.error);
-      return;
-    }
-    setError(null);
-    setEditingId(null);
-    setCreating(false);
-    router.refresh();
+  // Garde anti-double-submit : ignore toute soumission tant qu'une est en cours.
+  function handleSubmit(formData: FormData) {
+    if (isPending) return;
+    startTransition(async () => {
+      const res = editingId
+        ? await updateFormSourceAction(editingId, bootcampId, formData)
+        : await createFormSourceAction(bootcampId, formData);
+      if (res && "error" in res && res.error) {
+        setError(res.error);
+        return;
+      }
+      setError(null);
+      setEditingId(null);
+      setCreating(false);
+      router.refresh();
+    });
   }
 
-  async function toggleActive(fs: FormSource) {
-    await setFormSourceActiveAction(fs.id, bootcampId, !fs.active);
-    router.refresh();
+  function toggleActive(fs: FormSource) {
+    if (isPending) return;
+    startTransition(async () => {
+      await setFormSourceActiveAction(fs.id, bootcampId, !fs.active);
+      router.refresh();
+    });
   }
 
   function statusName(id: string | null) {
@@ -99,6 +107,7 @@ export function FormSourcesManager({
                 statuses={statuses}
                 tags={tags}
                 error={error}
+                isPending={isPending}
                 onSubmit={handleSubmit}
                 onCancel={() => {
                   setEditingId(null);
@@ -110,6 +119,7 @@ export function FormSourcesManager({
                 key={fs.id}
                 fs={fs}
                 statusName={statusName(fs.targetStatusId)}
+                isPending={isPending}
                 onEdit={() => {
                   setEditingId(fs.id);
                   setCreating(false);
@@ -125,6 +135,7 @@ export function FormSourcesManager({
               statuses={statuses}
               tags={tags}
               error={error}
+              isPending={isPending}
               onSubmit={handleSubmit}
               onCancel={() => {
                 setCreating(false);
@@ -152,11 +163,13 @@ export function FormSourcesManager({
 function FormSourceRow({
   fs,
   statusName,
+  isPending,
   onEdit,
   onToggleActive,
 }: {
   fs: FormSource;
   statusName: string;
+  isPending: boolean;
   onEdit: () => void;
   onToggleActive: () => void;
 }) {
@@ -214,7 +227,8 @@ function FormSourceRow({
         </button>
         <button
           onClick={onToggleActive}
-          className="rounded-lg border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+          disabled={isPending}
+          className="rounded-lg border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted disabled:opacity-50"
         >
           {fs.active ? "Désactiver" : "Réactiver"}
         </button>
@@ -228,6 +242,7 @@ function FormSourceForm({
   statuses,
   tags,
   error,
+  isPending,
   onSubmit,
   onCancel,
 }: {
@@ -235,6 +250,7 @@ function FormSourceForm({
   statuses: StatusOption[];
   tags: TagOption[];
   error: string | null;
+  isPending: boolean;
   onSubmit: (formData: FormData) => void;
   onCancel: () => void;
 }) {
@@ -329,9 +345,10 @@ function FormSourceForm({
       <div className="flex gap-2 pt-1">
         <button
           type="submit"
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          disabled={isPending}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
-          Enregistrer
+          {isPending ? "Enregistrement…" : "Enregistrer"}
         </button>
         <button
           type="button"
