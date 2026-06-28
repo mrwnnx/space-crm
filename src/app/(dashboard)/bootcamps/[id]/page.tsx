@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
+import { FormSourcesManager } from "@/components/bootcamps/form-sources-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +33,13 @@ export default async function BootcampDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [bootcamp, kanbanData, sources] = await Promise.all([
+  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses] = await Promise.all([
     getBootcampById(id),
     getLeadsKanban(id),
     getLeadSources(),
+    getFormSourcesByBootcamp(id),
+    getTags(),
+    getLeadStatuses(id),
   ]);
 
   if (!bootcamp) notFound();
@@ -80,6 +84,13 @@ export default async function BootcampDetailPage({
         />
         <BootcampActions bootcamp={bootcamp} />
       </div>
+
+      <FormSourcesManager
+        bootcampId={bootcamp.id}
+        formSources={formSources}
+        statuses={pipelineStatuses.map((s) => ({ id: s.id, name: s.name }))}
+        tags={tags.map((t) => ({ id: t.id, name: t.name }))}
+      />
 
       {/* Kanban */}
       <div className="flex-1 overflow-hidden">

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition, memo } from "react";
 import Link from "next/link";
-import { updateLeadStatusAction } from "@/app/actions";
+import { updateLeadStatusAction, reorderStagesAction } from "@/app/actions";
 import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
+import { ColumnMenu, AddColumnButton } from "@/components/leads/kanban-column-menu";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
 
 type StageWithLeads = LeadStatus & {
@@ -21,25 +22,53 @@ export function LeadsKanban({
   statuses: StageWithLeads[];
   bootcamp?: Bootcamp;
 }) {
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   // Popup d'inscription : lead en cours d'inscription + colonne cible
   const [enrollLead, setEnrollLead] = useState<Lead | null>(null);
+  // Colonne en cours de déplacement (réorganisation de l'ordre)
+  const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
+
+  // Copie locale OPTIMISTE : le drop met à jour l'UI immédiatement ; le serveur
+  // suit (revalidatePath → nouvelles props → resync via l'effet ci-dessous).
+  const [localStatuses, setLocalStatuses] = useState(statuses);
+  useEffect(() => {
+    setLocalStatuses(statuses);
+  }, [statuses]);
 
   // Index rapide statusId → status (pour connaître le kind de la colonne cible)
-  const statusMap = new Map(statuses.map((s) => [s.id, s]));
+  const statusMap = new Map(localStatuses.map((s) => [s.id, s]));
+
+  // Réordonne : déplace la colonne `draggedId` à la place de `targetId`.
+  function reorderColumns(draggedId: string, targetId: string) {
+    if (!bootcamp || draggedId === targetId) return;
+    const bcId = bootcamp.id;
+    const ids = localStatuses.map((s) => s.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    // Optimiste : réordonne la copie locale tout de suite.
+    setLocalStatuses((prev) => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+    ids.splice(from, 1);
+    ids.splice(to, 0, draggedId);
+    startTransition(() => {
+      void reorderStagesAction(bcId, ids);
+    });
+  }
 
   function handleDrop(leadId: string, statusId: string) {
     setDragOverStatus(null);
-    setDraggingId(null);
 
     const targetStatus = statusMap.get(statusId);
 
     // Drop sur une colonne kind='converted' → ouvre la popup, NE déplace pas.
     if (targetStatus?.kind === "converted") {
-      // Board par bootcamp → popup d'inscription
-      const lead = statuses
+      const lead = localStatuses
         .flatMap((s) => s.leads)
         .find((l) => l.id === leadId);
       if (lead) {
@@ -48,36 +77,74 @@ export function LeadsKanban({
       return;
     }
 
-    // Drop sur toute autre colonne → comportement actuel
+    // Optimiste : déplace la carte tout de suite, puis persiste.
+    setLocalStatuses((prev) => {
+      let moved:
+        | (Lead & { source: LeadSource | null; organization: Organization | null })
+        | null = null;
+      const without = prev.map((s) => {
+        const found = s.leads.find((l) => l.id === leadId);
+        if (found) moved = found;
+        return { ...s, leads: s.leads.filter((l) => l.id !== leadId) };
+      });
+      if (!moved) return prev;
+      return without.map((s) =>
+        s.id === statusId ? { ...s, leads: [moved!, ...s.leads] } : s
+      );
+    });
     startTransition(() => updateLeadStatusAction(leadId, statusId));
   }
 
   return (
     <div className="flex h-full overflow-x-auto p-4">
       <div className="flex h-full gap-3">
-        {statuses.map((status) => {
+        {localStatuses.map((status) => {
           const sc = statusColor(status.color);
           return (
             <div
               key={status.id}
               onDragOver={(e) => {
                 e.preventDefault();
-                setDragOverStatus(status.id);
+                // Guard : ne re-render que si la colonne survolée change (drag fluide).
+                if (dragOverStatus !== status.id) setDragOverStatus(status.id);
               }}
-              onDragLeave={() => setDragOverStatus(null)}
               onDrop={(e) => {
                 e.preventDefault();
+                setDragOverStatus(null);
+                // Drag d'une COLONNE (réorganisation) → priorité, type distinct.
+                const columnId = e.dataTransfer.getData("application/column");
+                if (columnId) {
+                  reorderColumns(columnId, status.id);
+                  setDraggingColumnId(null);
+                  return;
+                }
+                // Sinon : drag d'un lead (carte).
                 const leadId = e.dataTransfer.getData("text/plain");
                 if (leadId) handleDrop(leadId, status.id);
               }}
               className={cn(
                 "flex w-72 shrink-0 flex-col rounded-lg bg-muted/30 transition-colors",
                 dragOverStatus === status.id && "bg-primary/5 ring-2 ring-primary/20",
+                draggingColumnId === status.id && "opacity-50",
                 isPending && "opacity-70"
               )}
             >
               <div className="flex items-center justify-between px-3 py-2.5">
-                <div className="flex items-center gap-2">
+                <div
+                  draggable={!!bootcamp}
+                  onDragStart={(e) => {
+                    if (!bootcamp) return;
+                    e.dataTransfer.setData("application/column", status.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDraggingColumnId(status.id);
+                  }}
+                  onDragEnd={() => setDraggingColumnId(null)}
+                  className={cn(
+                    "flex items-center gap-2",
+                    bootcamp && "cursor-grab active:cursor-grabbing"
+                  )}
+                  title={bootcamp ? "Glisser pour réorganiser" : undefined}
+                >
                   <span className={cn("h-2 w-2 rounded-full", sc.dot)} />
                   <h2 className="text-sm font-semibold text-foreground">
                     {status.name}
@@ -88,20 +155,24 @@ export function LeadsKanban({
                     </span>
                   )}
                 </div>
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">
-                  {status.leads.length}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">
+                    {status.leads.length}
+                  </span>
+                  {bootcamp && (
+                    <ColumnMenu
+                      bootcampId={bootcamp.id}
+                      statusId={status.id}
+                      name={status.name}
+                      kind={status.kind}
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                 {status.leads.map((lead) => (
-                  <KanbanCard
-                    key={lead.id}
-                    lead={lead}
-                    isDragging={draggingId === lead.id}
-                    onDragStart={() => setDraggingId(lead.id)}
-                    onDragEnd={() => setDraggingId(null)}
-                  />
+                  <KanbanCard key={lead.id} lead={lead} />
                 ))}
 
                 {status.leads.length === 0 && (
@@ -113,6 +184,12 @@ export function LeadsKanban({
             </div>
           );
         })}
+
+        {bootcamp && (
+          <div className="self-start">
+            <AddColumnButton bootcampId={bootcamp.id} />
+          </div>
+        )}
       </div>
 
       {/* Popup d'inscription (drag vers colonne converted) */}
@@ -127,35 +204,32 @@ export function LeadsKanban({
   );
 }
 
-function KanbanCard({
+const KanbanCard = memo(function KanbanCard({
   lead,
-  isDragging,
-  onDragStart,
-  onDragEnd,
 }: {
   lead: Lead & {
     source: LeadSource | null;
     organization: Organization | null;
   };
-  isDragging: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
 }) {
+  // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
+  const [dragging, setDragging] = useState(false);
   return (
     <Link
       href={`/leads/${lead.id}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", lead.id);
-        onDragStart();
+        e.dataTransfer.effectAllowed = "move";
+        setDragging(true);
       }}
-      onDragEnd={onDragEnd}
+      onDragEnd={() => setDragging(false)}
       onClick={(e) => {
-        if (isDragging) e.preventDefault();
+        if (dragging) e.preventDefault();
       }}
       className={cn(
         "block rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
-        isDragging && "opacity-40"
+        dragging && "opacity-40"
       )}
     >
       <div className="flex items-start gap-2">
@@ -200,4 +274,4 @@ function KanbanCard({
       </p>
     </Link>
   );
-}
+});

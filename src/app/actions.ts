@@ -110,6 +110,209 @@ export async function deleteBootcampAction(bootcampId: string) {
   revalidatePath("/bootcamps");
 }
 
+// ── Form Sources (formulaires Elementor) actions ───────
+
+// Mapping par défaut champ Elementor → colonne lead whitelistée.
+const DEFAULT_FIELD_MAPPING: Record<string, string> = {
+  name: "fullName",
+  email: "email",
+  phone: "mobileNo",
+};
+
+// Parse + valide le fieldMapping (objet JSON { champ: colonne }). Le webhook
+// re-filtre de toute façon sur sa whitelist ALLOWED_LEAD_FIELDS à la réception.
+function parseFieldMapping(
+  raw: string
+): { ok: true; value: Record<string, string> } | { ok: false } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: DEFAULT_FIELD_MAPPING };
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false };
+    }
+    const value: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) value[String(k)] = String(v);
+    return { ok: true, value };
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function readFormSourceFields(bootcampId: string, formData: FormData) {
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return { error: "Le nom du formulaire est requis." as const };
+
+  const temperature =
+    String(formData.get("temperature") || "cold") === "hot" ? "hot" : "cold";
+  const tagIds = formData.getAll("tagIds").map(String).filter(Boolean);
+  const active = formData.get("active") != null;
+
+  const fm = parseFieldMapping(String(formData.get("fieldMapping") || ""));
+  if (!fm.ok) return { error: "fieldMapping : JSON invalide (objet attendu)." as const };
+
+  let targetStatusId =
+    String(formData.get("targetStatusId") || "").trim() || null;
+  if (!targetStatusId) {
+    const { getLeadStatuses } = await import("@/lib/queries");
+    const statuses = await getLeadStatuses(bootcampId);
+    targetStatusId =
+      statuses.find((s) => s.kind === "normal")?.id ?? statuses[0]?.id ?? null;
+  }
+
+  return {
+    fields: {
+      name,
+      temperature: temperature as "hot" | "cold",
+      defaultTagIds: tagIds,
+      active,
+      fieldMapping: fm.value,
+      targetStatusId,
+    },
+  };
+}
+
+export async function createFormSourceAction(
+  bootcampId: string,
+  formData: FormData
+) {
+  await requireUser();
+  if (!bootcampId) return { error: "Formation requise." };
+
+  const parsed = await readFormSourceFields(bootcampId, formData);
+  if ("error" in parsed) return { error: parsed.error };
+
+  const { createFormSource } = await import("@/lib/queries");
+  await createFormSource({
+    bootcampId,
+    ...parsed.fields,
+    webhookToken: crypto.randomUUID(), // token unique généré automatiquement
+  });
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+export async function updateFormSourceAction(
+  formSourceId: string,
+  bootcampId: string,
+  formData: FormData
+) {
+  await requireUser();
+  const parsed = await readFormSourceFields(bootcampId, formData);
+  if ("error" in parsed) return { error: parsed.error };
+
+  const { updateFormSource } = await import("@/lib/queries");
+  // webhookToken jamais modifié ici (immuable côté UI).
+  await updateFormSource(formSourceId, parsed.fields);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+// Soft delete par défaut : on désactive (active=false) sans supprimer la ligne.
+export async function setFormSourceActiveAction(
+  formSourceId: string,
+  bootcampId: string,
+  active: boolean
+) {
+  await requireUser();
+  const { updateFormSource } = await import("@/lib/queries");
+  await updateFormSource(formSourceId, { active });
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+// ── Désignation kind d'une colonne (Converti / Perdu / Normal) ──
+export async function setStageKindAction(
+  bootcampId: string,
+  statusId: string,
+  kind: string
+) {
+  await requireUser();
+  if (kind !== "normal" && kind !== "converted" && kind !== "lost") {
+    return { error: "Type de colonne invalide." };
+  }
+  const { setStageKind, getLeadStatuses } = await import("@/lib/queries");
+  await setStageKind(bootcampId, statusId, kind);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+
+  // Garde-fou non bloquant : un bootcamp devrait toujours avoir converted + lost.
+  const statuses = await getLeadStatuses(bootcampId);
+  if (!statuses.some((s) => s.kind === "converted")) {
+    return {
+      ok: true,
+      warning:
+        "Aucune colonne « Converti » : plus aucune inscription possible tant que tu n'en désignes pas une.",
+    };
+  }
+  if (!statuses.some((s) => s.kind === "lost")) {
+    return { ok: true, warning: "Aucune colonne « Perdu » désignée." };
+  }
+  return { ok: true };
+}
+
+// ── Colonnes (stages) : créer / renommer / supprimer ───
+
+export async function createStageAction(bootcampId: string, name: string) {
+  await requireUser();
+  if (!bootcampId) return { error: "Formation requise." };
+  const { createStage } = await import("@/lib/queries");
+  await createStage(bootcampId, name.trim() || "Nouvelle colonne");
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+export async function renameStageAction(
+  bootcampId: string,
+  statusId: string,
+  name: string
+) {
+  await requireUser();
+  const clean = name.trim();
+  if (!clean) return { error: "Le nom est requis." };
+  const { renameStage } = await import("@/lib/queries");
+  await renameStage(statusId, clean); // whitelist : name uniquement
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+export async function deleteStageAction(bootcampId: string, statusId: string) {
+  await requireUser();
+  const { getLeadStatusById, countLeadsByStatus, deleteStage } = await import(
+    "@/lib/queries"
+  );
+  const stage = await getLeadStatusById(statusId);
+  if (!stage) return { error: "Colonne introuvable." };
+  // États terminaux jamais supprimables (préserve 1 converted + 1 lost).
+  if (stage.kind === "converted" || stage.kind === "lost") {
+    return { error: "Colonne terminale (Converti/Perdu) : non supprimable." };
+  }
+  // Bloqué si la colonne contient des leads (option A : pas de déplacement auto).
+  const count = await countLeadsByStatus(statusId);
+  if (count > 0) {
+    return {
+      error: `Déplace d'abord les ${count} lead${count > 1 ? "s" : ""} de cette colonne.`,
+    };
+  }
+  await deleteStage(statusId);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+// Réordonne les colonnes selon l'ordre d'ids fourni (positions 0..n).
+export async function reorderStagesAction(
+  bootcampId: string,
+  orderedIds: string[]
+) {
+  await requireUser();
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return { error: "Ordre invalide." };
+  }
+  const { reorderStages } = await import("@/lib/queries");
+  await reorderStages(bootcampId, orderedIds);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
 // ── Lead actions ───────────────────────────────────────
 
 export async function createLeadAction(formData: FormData) {

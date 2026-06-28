@@ -118,14 +118,22 @@ export async function deleteBootcamp(id: string) {
   await db.delete(bootcamps).where(eq(bootcamps.id, id));
 }
 
-// Pipeline modèle : 4 colonnes "normales" pour chaque nouvelle formation.
-// Les 2 colonnes SYSTÈME (Converti / Lost) sont semées par ensureSystemStages
-// (promote-or-create) — pas ici, pour éviter les doublons de kind.
-const DEFAULT_PIPELINE_STAGES = [
-  { name: "Nouveau", color: "blue", position: 0, isDefault: true },
-  { name: "Contacté", color: "yellow", position: 1, isDefault: false },
-  { name: "Intéressé", color: "green", position: 2, isDefault: false },
-  { name: "Inscrit", color: "purple", position: 3, isDefault: false },
+// Pipeline modèle : EXACTEMENT 5 colonnes pour chaque nouvelle formation,
+// dont les 2 colonnes SYSTÈME terminales (Inscrit=converted, Perdu=lost).
+// ensureSystemStages (appelé ensuite par createBootcamp) devient alors un no-op.
+const DEFAULT_PIPELINE_STAGES: {
+  name: string;
+  color: string;
+  position: number;
+  isDefault: boolean;
+  kind: "normal" | "converted" | "lost";
+  isSystem: boolean;
+}[] = [
+  { name: "Nouveau", color: "blue", position: 0, isDefault: true, kind: "normal", isSystem: false },
+  { name: "Contacté", color: "yellow", position: 1, isDefault: false, kind: "normal", isSystem: false },
+  { name: "Intéressé", color: "green", position: 2, isDefault: false, kind: "normal", isSystem: false },
+  { name: "Inscrit", color: "purple", position: 3, isDefault: false, kind: "converted", isSystem: true },
+  { name: "Perdu", color: "red", position: 4, isDefault: false, kind: "lost", isSystem: true },
 ];
 
 export async function cloneDefaultPipeline(bootcampId: string) {
@@ -135,6 +143,48 @@ export async function cloneDefaultPipeline(bootcampId: string) {
       bootcampId,
     }))
   );
+}
+
+// ── Colonnes (stages) : CRUD pour la gestion dans le board ──
+
+export async function getLeadStatusById(id: string) {
+  return db.query.leadStatuses.findFirst({ where: eq(leadStatuses.id, id) });
+}
+
+export async function countLeadsByStatus(statusId: string) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(eq(leads.statusId, statusId));
+  return row?.count ?? 0;
+}
+
+export async function createStage(bootcampId: string, name: string) {
+  const existing = await db.query.leadStatuses.findMany({
+    where: eq(leadStatuses.bootcampId, bootcampId),
+  });
+  const maxPos = existing.reduce((m, s) => Math.max(m, s.position), -1);
+  const [stage] = await db
+    .insert(leadStatuses)
+    .values({
+      bootcampId,
+      name,
+      color: "gray",
+      position: maxPos + 1,
+      isDefault: false,
+      isSystem: false,
+      kind: "normal",
+    })
+    .returning();
+  return stage;
+}
+
+export async function renameStage(statusId: string, name: string) {
+  await db.update(leadStatuses).set({ name }).where(eq(leadStatuses.id, statusId));
+}
+
+export async function deleteStage(statusId: string) {
+  await db.delete(leadStatuses).where(eq(leadStatuses.id, statusId));
 }
 
 // ── Lead Statuses (par bootcamp) ────────────────────────
@@ -1148,6 +1198,53 @@ export async function getConvertedStageForBootcamp(bootcampId: string) {
   return db.query.leadStatuses.findFirst({
     where: and(eq(leadStatuses.bootcampId, bootcampId), eq(leadStatuses.kind, "converted")),
   });
+}
+
+// ── Form Sources (formulaires Elementor par bootcamp) ──
+
+export async function getFormSourcesByBootcamp(bootcampId: string) {
+  return db.query.formSources.findMany({
+    where: eq(formSources.bootcampId, bootcampId),
+    orderBy: [asc(formSources.createdAt)],
+  });
+}
+
+export async function createFormSource(data: typeof formSources.$inferInsert) {
+  const [fs] = await db.insert(formSources).values(data).returning();
+  return fs;
+}
+
+export async function updateFormSource(
+  id: string,
+  data: Partial<typeof formSources.$inferInsert>
+) {
+  const [fs] = await db
+    .update(formSources)
+    .set(data)
+    .where(eq(formSources.id, id))
+    .returning();
+  return fs;
+}
+
+// ── Désignation du kind d'une colonne (unicité par bootcamp) ──
+// Au plus UNE colonne 'converted' et UNE 'lost' par bootcamp : on rétrograde
+// d'abord toute colonne du même kind (y compris la cible si elle l'était déjà),
+// puis on promeut la cible. Idempotent. Ne touche AUCUN lead (option A).
+export async function setStageKind(
+  bootcampId: string,
+  statusId: string,
+  kind: "normal" | "converted" | "lost"
+) {
+  if (kind !== "normal") {
+    await db
+      .update(leadStatuses)
+      .set({ kind: "normal", isSystem: false })
+      .where(and(eq(leadStatuses.bootcampId, bootcampId), eq(leadStatuses.kind, kind)));
+  }
+  await db
+    .update(leadStatuses)
+    .set({ kind, isSystem: kind !== "normal" })
+    .where(and(eq(leadStatuses.id, statusId), eq(leadStatuses.bootcampId, bootcampId)));
 }
 
 // Déplace un lead vers un stage : update statusId + stageEnteredAt ET insère stage_history.
