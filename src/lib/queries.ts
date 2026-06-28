@@ -283,6 +283,8 @@ export async function getLeadsKanban(bootcampId?: string) {
     orderBy: [asc(leadStatuses.position)],
     with: {
       leads: {
+        // N'embarque PAS raw_payload (jsonb, inutile pour le board) — robustesse perf.
+        columns: { rawPayload: false },
         orderBy: [desc(leads.createdAt)],
         with: {
           source: true,

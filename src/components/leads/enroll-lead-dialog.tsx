@@ -12,7 +12,7 @@ export function EnrollLeadDialog({
   bootcamp,
   onClose,
 }: {
-  lead: Lead;
+  lead: Omit<Lead, "rawPayload">; // getLeadsKanban ne charge pas raw_payload
   bootcamp: Bootcamp;
   onClose: () => void;
 }) {

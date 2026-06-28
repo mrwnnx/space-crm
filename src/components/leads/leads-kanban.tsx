@@ -8,8 +8,11 @@ import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
 import { ColumnMenu, AddColumnButton } from "@/components/leads/kanban-column-menu";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
 
+// raw_payload n'est pas chargé par getLeadsKanban (perf) → on l'omet du type.
+type KanbanLead = Omit<Lead, "rawPayload">;
+
 type StageWithLeads = LeadStatus & {
-  leads: (Lead & {
+  leads: (KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
   })[];
@@ -25,7 +28,7 @@ export function LeadsKanban({
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   // Popup d'inscription : lead en cours d'inscription + colonne cible
-  const [enrollLead, setEnrollLead] = useState<Lead | null>(null);
+  const [enrollLead, setEnrollLead] = useState<KanbanLead | null>(null);
   // Colonne en cours de déplacement (réorganisation de l'ordre)
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
 
@@ -80,7 +83,7 @@ export function LeadsKanban({
     // Optimiste : déplace la carte tout de suite, puis persiste.
     setLocalStatuses((prev) => {
       let moved:
-        | (Lead & { source: LeadSource | null; organization: Organization | null })
+        | (KanbanLead & { source: LeadSource | null; organization: Organization | null })
         | null = null;
       const without = prev.map((s) => {
         const found = s.leads.find((l) => l.id === leadId);
@@ -207,7 +210,7 @@ export function LeadsKanban({
 const KanbanCard = memo(function KanbanCard({
   lead,
 }: {
-  lead: Lead & {
+  lead: KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
   };

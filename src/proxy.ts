@@ -29,9 +29,15 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Borne l'appel auth : si Supabase stalle, on n'attend pas le timeout Vercel (300s).
+  // Timeout/erreur → user=null → traité comme non authentifié (redirige /login, le cas sûr).
+  const user = await Promise.race([
+    supabase.auth
+      .getUser()
+      .then(({ data }) => data.user)
+      .catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+  ]);
 
   const isPublic = PUBLIC_ROUTES.includes(pathname);
 
