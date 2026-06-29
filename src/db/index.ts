@@ -11,7 +11,7 @@ const client =
   globalForDb.__pgClient ??
   postgres(connectionString, {
     prepare: false, // requis pour le pooler transaction (Supavisor :6543)
-    max: 5, // dev multiplexe + polling concurrent ; serverless OK (Supavisor multiplexe + idle_timeout)
+    max: 10, // ≥ concurrence d'une requête (la page tire 6 requêtes en //) : sous le pool, le pooler transaction fige les connexions pipelinées → gel. Prouvé : max:5 gèle, max:10 stable.
     idle_timeout: 20, // ferme les idle AVANT que Supavisor les coupe → plus de connexion zombie
     connect_timeout: 10, // échoue vite au lieu de pendre si pas de connexion
     max_lifetime: 60 * 30, // recycle les connexions toutes les 30 min
