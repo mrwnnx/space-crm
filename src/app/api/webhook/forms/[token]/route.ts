@@ -300,12 +300,26 @@ function parsePayload(parsed: unknown): Record<string, string> {
   if (Array.isArray(fields)) {
     const result: Record<string, string> = {};
     for (const f of fields) {
-      const field = f as { key?: unknown; value?: unknown };
-      if (typeof field.key === "string") {
-        const v = field.value;
-        result[field.key] =
-          v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+      const field = f as {
+        key?: unknown;
+        value?: unknown;
+        options?: Array<{ id?: unknown; text?: unknown }>;
+      };
+      if (typeof field.key !== "string") continue;
+      let value = field.value;
+      // Champs à choix (MULTIPLE_CHOICE/dropdown) : value = id(s) d'option.
+      // On résout l'id en son texte via options[] (sinon derivePlan reçoit un UUID).
+      // Fallback : si l'id n'est pas trouvé, on garde la valeur brute (rien ne casse).
+      if (Array.isArray(field.options) && field.options.length > 0) {
+        const idToText = new Map<string, string>();
+        for (const o of field.options) {
+          if (o && o.id != null) idToText.set(String(o.id), String(o.text ?? ""));
+        }
+        const resolve = (x: unknown) => idToText.get(String(x)) ?? String(x);
+        value = Array.isArray(value) ? value.map(resolve) : resolve(value);
       }
+      result[field.key] =
+        value == null ? "" : Array.isArray(value) ? value.join(", ") : String(value);
     }
     return result;
   }
