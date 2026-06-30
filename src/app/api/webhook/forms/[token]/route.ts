@@ -67,7 +67,7 @@ export async function POST(
       }
       try {
         const parsed = JSON.parse(text);
-        rawValues = flattenJson(parsed);
+        rawValues = parsePayload(parsed);
       } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
       }
@@ -244,6 +244,26 @@ export async function POST(
     console.error("[webhook/forms] error:", err instanceof Error ? err.message : "unknown");
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
+}
+
+// Choisit le parseur selon la forme du JSON reçu.
+// Tally envoie { data: { fields: [{ key, label, type, value }] } } → on mappe par `key`
+// stable (insensible à l'ordre des champs). Sinon (Elementor & autres), on aplatit.
+function parsePayload(parsed: unknown): Record<string, string> {
+  const fields = (parsed as { data?: { fields?: unknown } })?.data?.fields;
+  if (Array.isArray(fields)) {
+    const result: Record<string, string> = {};
+    for (const f of fields) {
+      const field = f as { key?: unknown; value?: unknown };
+      if (typeof field.key === "string") {
+        const v = field.value;
+        result[field.key] =
+          v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+      }
+    }
+    return result;
+  }
+  return flattenJson(parsed);
 }
 
 // Aplatit un JSON nested en notation crochet "parent[child]" (format Elementor)
