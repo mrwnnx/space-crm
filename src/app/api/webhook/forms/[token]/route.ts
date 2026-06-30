@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { leads, leadStatuses, formSources } from "@/db/schema";
+import { leads, leadStatuses, formSources, contacts } from "@/db/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
 import {
   getOrCreateContactForLead,
@@ -29,6 +29,21 @@ const ALLOWED_LEAD_FIELDS = [
   "jobTitle",
   "organizationName",
 ] as const;
+
+// Champs étendus hors whitelist lead : vont sur le contact (whatsapp, age)
+// ou sur le lead avec coercition (intendedPlan dérivé d'un texte, promoCode).
+const CONTACT_EXTRA_FIELDS = ["whatsapp", "age"] as const;
+const LEAD_EXTRA_FIELDS = ["intendedPlan", "promoCode"] as const;
+
+// Dérive le plan de paiement (enum total|monthly) depuis le texte d'un champ de choix.
+// Ex Tally : "Paiement total: 1300dt" → total ; "Paiement facilité: 400dt /mois" → monthly.
+function derivePlan(raw?: string): "total" | "monthly" | null {
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+  if (s.includes("total")) return "total";
+  if (s.includes("facilit") || s.includes("mois") || s.includes("/mo")) return "monthly";
+  return null;
+}
 
 export async function POST(
   request: NextRequest,
@@ -102,15 +117,28 @@ export async function POST(
     // 4. Mappe via fieldMapping avec whitelist stricte
     const fieldMapping = (formSource.fieldMapping ?? {}) as Record<string, string>;
     const leadData: Record<string, string> = {};
+    const extra: Record<string, string> = {};
     for (const [incomingKey, targetCol] of Object.entries(fieldMapping)) {
-      if (
-        targetCol &&
-        (ALLOWED_LEAD_FIELDS as readonly string[]).includes(targetCol) &&
-        rawValues[incomingKey] !== undefined
+      const incoming = rawValues[incomingKey];
+      if (!targetCol || incoming === undefined) continue;
+      const val = String(incoming).trim();
+      if ((ALLOWED_LEAD_FIELDS as readonly string[]).includes(targetCol)) {
+        leadData[targetCol] = val;
+      } else if (
+        (CONTACT_EXTRA_FIELDS as readonly string[]).includes(targetCol) ||
+        (LEAD_EXTRA_FIELDS as readonly string[]).includes(targetCol)
       ) {
-        leadData[targetCol] = String(rawValues[incomingKey]).trim();
+        // Garde la 1re valeur non vide (ex. 2 clés Tally "Paiement" → intendedPlan).
+        if (val && !extra[targetCol]) extra[targetCol] = val;
       }
     }
+
+    // Coercition des champs étendus
+    const whatsapp = extra.whatsapp || null;
+    const ageParsed = extra.age ? parseInt(extra.age, 10) : NaN;
+    const age = Number.isFinite(ageParsed) ? ageParsed : null;
+    const intendedPlan = derivePlan(extra.intendedPlan);
+    const promoCode = extra.promoCode || null;
 
     // 5. Compose fullName si absent
     if (!leadData.fullName) {
@@ -126,14 +154,24 @@ export async function POST(
       );
     }
 
-    // 6. Contact dédupliqué
+    // 6. Contact dédupliqué (whatsapp/age posés à la création)
     const contact = await getOrCreateContactForLead({
       email: leadData.email || null,
       mobileNo: leadData.mobileNo || null,
       firstName: leadData.firstName || null,
       lastName: leadData.lastName || null,
       fullName: leadData.fullName || "",
+      whatsapp,
+      age,
     });
+
+    // 6.5 Enrichit un contact EXISTANT si whatsapp/age étaient vides (re-soumission)
+    const contactPatch: { whatsapp?: string; age?: number } = {};
+    if (whatsapp && !contact.whatsapp) contactPatch.whatsapp = whatsapp;
+    if (age !== null && contact.age === null) contactPatch.age = age;
+    if (Object.keys(contactPatch).length > 0) {
+      await db.update(contacts).set(contactPatch).where(eq(contacts.id, contact.id));
+    }
 
     // 7. Upsert lead par (bootcampId, lower(trim(email)))
     const bootcampId = formSource.bootcampId!;
@@ -186,6 +224,8 @@ export async function POST(
           phone: leadData.phone || null,
           jobTitle: leadData.jobTitle || null,
           organizationName: leadData.organizationName || null,
+          intendedPlan: intendedPlan ?? undefined,
+          promoCode: promoCode ?? undefined,
           rawPayload,
           stageEnteredAt: new Date(),
           lastContactedAt: new Date(),
@@ -209,6 +249,11 @@ export async function POST(
         temperatureUpdate.temperature = "hot";
       }
 
+      // Remplit l'offre / code promo seulement s'ils étaient vides (non destructif)
+      const leadExtraUpdate: { intendedPlan?: "total" | "monthly"; promoCode?: string } = {};
+      if (intendedPlan && !existingLead.intendedPlan) leadExtraUpdate.intendedPlan = intendedPlan;
+      if (promoCode && !existingLead.promoCode) leadExtraUpdate.promoCode = promoCode;
+
       await db
         .update(leads)
         .set({
@@ -216,6 +261,7 @@ export async function POST(
           rawPayload: mergedPayload,
           updatedAt: new Date(),
           ...temperatureUpdate,
+          ...leadExtraUpdate,
           // NE déplace PAS statusId (respect du placement manuel)
           // NE PAS écraser formSourceId s'il est déjà set
         })
