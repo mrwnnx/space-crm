@@ -1764,3 +1764,15 @@ export async function getFormSourceById(id: string) {
 export async function setFieldMapping(sourceId: string, fieldMapping: Record<string, string>) {
   await db.update(formSources).set({ fieldMapping }).where(eq(formSources.id, sourceId));
 }
+
+/** Routage d'une source : colonne d'arrivée + tags posés sur chaque lead importé. */
+export async function setFormSourceRouting(
+  sourceId: string,
+  targetStatusId: string | null,
+  defaultTagIds: string[]
+) {
+  await db
+    .update(formSources)
+    .set({ targetStatusId, defaultTagIds })
+    .where(eq(formSources.id, sourceId));
+}

@@ -7,7 +7,11 @@ import {
   unlinkElementorFormAction,
   importElementorNowAction,
   setElementorMappingAction,
+  setElementorRoutingAction,
 } from "@/app/actions";
+
+type Stage = { id: string; name: string; kind: string };
+type Tag = { id: string; name: string };
 
 const MAPPABLE = [
   { value: "", label: "— ignorer —" },
@@ -31,6 +35,8 @@ type LinkedSource = {
   lastSubmissionId: number | null;
   fieldMapping: Record<string, string>;
   lastPayload: Record<string, string> | null;
+  targetStatusId: string | null;
+  defaultTagIds: string[];
 };
 
 type RemoteForm = { id: string; label: string; takenBy: string | null };
@@ -38,9 +44,13 @@ type RemoteForm = { id: string; label: string; takenBy: string | null };
 export function ElementorFormLink({
   bootcampId,
   linked,
+  stages,
+  tags,
 }: {
   bootcampId: string;
   linked: LinkedSource[];
+  stages: Stage[];
+  tags: Tag[];
 }) {
   const [forms, setForms] = useState<RemoteForm[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -82,6 +92,8 @@ export function ElementorFormLink({
               key={s.id}
               source={s}
               bootcampId={bootcampId}
+              stages={stages}
+              tags={tags}
               disabled={isPending}
               onUnlink={() => unlink(s.id)}
               onFeedback={setFeedback}
@@ -135,19 +147,39 @@ export function ElementorFormLink({
 function LinkedRow({
   source,
   bootcampId,
+  stages,
+  tags,
   disabled,
   onUnlink,
   onFeedback,
 }: {
   source: LinkedSource;
   bootcampId: string;
+  stages: Stage[];
+  tags: Tag[];
   disabled: boolean;
   onUnlink: () => void;
   onFeedback: (f: { ok: boolean; message: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mapping, setMapping] = useState<Record<string, string>>(source.fieldMapping ?? {});
+  const [statusId, setStatusId] = useState(source.targetStatusId ?? "");
+  const [tagIds, setTagIds] = useState<string[]>(source.defaultTagIds ?? []);
   const [isPending, startTransition] = useTransition();
+
+  // Un lead importé ne doit jamais atterrir dans une colonne terminale :
+  // l'inscription passe par enrollLeadAction, pas par l'import.
+  const normalStages = stages.filter((s) => s.kind === "normal");
+
+  function saveRouting(nextStatusId: string, nextTagIds: string[]) {
+    setStatusId(nextStatusId);
+    setTagIds(nextTagIds);
+    startTransition(async () => {
+      onFeedback(
+        await setElementorRoutingAction(source.id, bootcampId, nextStatusId || null, nextTagIds)
+      );
+    });
+  }
 
   const payloadKeys = Object.keys(source.lastPayload ?? {});
   const unmapped = payloadKeys.filter((k) => !mapping[k]).length;
@@ -206,6 +238,65 @@ function LinkedRow({
           >
             Délier
           </button>
+        </div>
+      </div>
+
+      {/* Routage : où atterrit le lead, et quels tags il porte */}
+      <div className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Colonne d&apos;arrivée
+          </label>
+          <select
+            value={statusId}
+            onChange={(e) => saveRouting(e.target.value, tagIds)}
+            disabled={disabled || isPending}
+            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none disabled:opacity-50"
+          >
+            <option value="">1ère colonne (défaut)</option>
+            {normalStages.map((st) => (
+              <option key={st.id} value={st.id}>
+                {st.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Tags posés sur chaque lead
+          </label>
+          {tags.length === 0 ? (
+            <p className="py-1.5 text-[11px] text-muted-foreground/60">
+              Aucun tag créé pour l&apos;instant.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {tags.map((t) => {
+                const on = tagIds.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    disabled={disabled || isPending}
+                    onClick={() =>
+                      saveRouting(
+                        statusId,
+                        on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id]
+                      )
+                    }
+                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors disabled:opacity-50 ${
+                      on
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:border-foreground/40"
+                    }`}
+                  >
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

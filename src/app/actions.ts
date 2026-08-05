@@ -1493,3 +1493,34 @@ export async function importElementorNowAction(sourceId: string, bootcampId: str
   }
   return { ok: true, message: `${base}.` };
 }
+
+/** Colonne d'arrivée + tags par défaut d'un formulaire Elementor lié. */
+export async function setElementorRoutingAction(
+  sourceId: string,
+  bootcampId: string,
+  targetStatusId: string | null,
+  tagIds: string[]
+) {
+  await requireUser();
+  const { setFormSourceRouting, getLeadStatuses, getTags } = await import("@/lib/queries");
+
+  // La colonne doit appartenir au pipeline de CETTE formation, et ne peut pas
+  // être terminale : un import ne doit jamais poser un lead directement en
+  // « Inscrit » (l'inscription passe par enrollLeadAction, pas par le webhook).
+  if (targetStatusId) {
+    const stages = await getLeadStatuses(bootcampId);
+    const target = stages.find((s) => s.id === targetStatusId);
+    if (!target) return { ok: false, message: "Colonne inconnue pour cette formation." };
+    if (target.kind !== "normal") {
+      return { ok: false, message: "Une colonne terminale ne peut pas être la colonne d'arrivée." };
+    }
+  }
+
+  // Whitelist des tags : on n'écrit que des ids qui existent réellement.
+  const known = new Set((await getTags()).map((t) => t.id));
+  const clean = tagIds.filter((id) => known.has(id));
+
+  await setFormSourceRouting(sourceId, targetStatusId || null, clean);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true, message: "Routage enregistré." };
+}

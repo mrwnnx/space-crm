@@ -109,7 +109,11 @@ export default async function BootcampDetailPage({
             lastSubmissionId: s.lastSubmissionId,
             fieldMapping: (s.fieldMapping ?? {}) as Record<string, string>,
             lastPayload: (s.lastPayload ?? null) as Record<string, string> | null,
+            targetStatusId: s.targetStatusId,
+            defaultTagIds: (s.defaultTagIds ?? []) as string[],
           }))}
+          stages={pipelineStatuses.map((s) => ({ id: s.id, name: s.name, kind: s.kind }))}
+          tags={tags.map((t) => ({ id: t.id, name: t.name }))}
         />
       </div>
 
