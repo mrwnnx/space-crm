@@ -1,17 +1,31 @@
-import { getEmailTemplates } from "@/lib/queries";
+import { getEmailTemplates, getWpConnectionPublic } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
+import { WpConnectionForm } from "@/components/settings/wp-connection-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const templates = await getEmailTemplates();
+  const wpConnection = await getWpConnectionPublic();
 
   return (
     <>
       <PageHeader title="Settings" subtitle="Configuration du CRM" />
       <div className="flex-1 overflow-y-auto p-5">
         <div className="mx-auto max-w-2xl space-y-8">
+          {/* Connexion au site WordPress */}
+          <section>
+            <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
+              Connexion site — thespace.academy
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Identifiants utilisés pour lire les soumissions de formulaire Elementor du
+              site et les importer comme leads.
+            </p>
+            <WpConnectionForm connection={wpConnection} />
+          </section>
+
           {/* Email Templates section */}
           <section>
             <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">

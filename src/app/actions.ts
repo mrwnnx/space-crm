@@ -1274,3 +1274,53 @@ export async function deleteViewAction(id: string, routeName: string) {
   await deleteViewSetting(id);
   revalidatePath(`/${routeName}`);
 }
+
+// ── Connexion WordPress (thespace.academy) ─────────────
+
+export async function saveWpConnectionAction(formData: FormData) {
+  await requireUser();
+  const { normalizeSiteUrl } = await import("@/lib/wordpress");
+
+  const siteUrl = normalizeSiteUrl(String(formData.get("siteUrl") || ""));
+  const username = String(formData.get("username") || "").trim();
+  // Laissé vide = on conserve le mot de passe déjà en base.
+  const appPassword = String(formData.get("appPassword") || "").trim();
+
+  if (!siteUrl || !username) {
+    return { ok: false, message: "URL du site et nom d'utilisateur obligatoires." };
+  }
+
+  const { saveWpConnection, getWpConnection } = await import("@/lib/queries");
+  const existing = await getWpConnection();
+  if (!appPassword && !existing) {
+    return { ok: false, message: "App Password obligatoire à la première configuration." };
+  }
+
+  try {
+    await saveWpConnection({ siteUrl, username, appPassword: appPassword || undefined });
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Échec de l'enregistrement." };
+  }
+
+  revalidatePath("/settings");
+  return { ok: true, message: "Connexion enregistrée." };
+}
+
+export async function testWpConnectionAction() {
+  await requireUser();
+  const { getWpConnection, recordWpConnectionTest } = await import("@/lib/queries");
+  const { testWpConnection } = await import("@/lib/wordpress");
+
+  const conn = await getWpConnection();
+  if (!conn) return { ok: false, message: "Aucune connexion enregistrée." };
+
+  const result = await testWpConnection({
+    siteUrl: conn.siteUrl,
+    username: conn.username,
+    appPassword: conn.appPassword,
+  });
+
+  await recordWpConnectionTest(result.ok, result.message);
+  revalidatePath("/settings");
+  return result;
+}

@@ -528,6 +528,21 @@ export const allowedEmails = pgTable("allowed_emails", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── Connexion WordPress (thespace.academy) ─────────────
+// Credentials du site WP dont on aspire les soumissions Elementor.
+// Table à ligne unique : `id` est un booléen contraint à true (pas de 2e ligne possible).
+// ⚠️ appPassword est stocké en clair et n'est JAMAIS renvoyé au client (cf. getWpConnectionPublic).
+export const wpConnection = pgTable("wp_connection", {
+  id: boolean("id").primaryKey().default(true),
+  siteUrl: text("site_url").notNull(),
+  username: text("username").notNull(),
+  appPassword: text("app_password").notNull(),
+  lastTestedAt: timestamp("last_tested_at"),
+  lastTestOk: boolean("last_test_ok"),
+  lastTestMessage: text("last_test_message"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // ── Stage History (Phase 1) ────────────────────────────
 // Capture structurée des transitions de statut (l'activity status_change restait en texte libre)
 export const stageHistory = pgTable("stage_history", {
@@ -786,3 +801,5 @@ export type StageHistory = typeof stageHistory.$inferSelect;
 export type NewStageHistory = typeof stageHistory.$inferInsert;
 export type AllowedEmail = typeof allowedEmails.$inferSelect;
 export type NewAllowedEmail = typeof allowedEmails.$inferInsert;
+export type WpConnection = typeof wpConnection.$inferSelect;
+export type NewWpConnection = typeof wpConnection.$inferInsert;

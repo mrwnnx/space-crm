@@ -29,6 +29,7 @@ import {
   formSources,
   noteTemplates,
   stageHistory,
+  wpConnection,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -1607,4 +1608,66 @@ export async function recordStageChange(
     .values({ leadId, fromStatusId, toStatusId, changedBy: changedBy ?? null })
     .returning();
   return row;
+}
+
+// ── Connexion WordPress (thespace.academy) ─────────────
+// Table à ligne unique (id = true). Voir schema.ts.
+
+/** Credentials complets, App Password inclus. SERVEUR UNIQUEMENT. */
+export async function getWpConnection() {
+  const [row] = await db.select().from(wpConnection).limit(1);
+  return row ?? null;
+}
+
+/**
+ * Vue sûre pour l'UI : jamais l'App Password, juste s'il est renseigné.
+ * C'est cette fonction que la page settings doit appeler.
+ */
+export async function getWpConnectionPublic() {
+  const row = await getWpConnection();
+  if (!row) return null;
+  const { appPassword, ...rest } = row;
+  return { ...rest, hasPassword: appPassword.length > 0 };
+}
+
+/**
+ * Upsert de la ligne unique. `appPassword` omis/vide = on garde celui en place
+ * (l'UI n'affiche jamais le mot de passe, elle ne peut donc pas le renvoyer).
+ */
+export async function saveWpConnection(data: {
+  siteUrl: string;
+  username: string;
+  appPassword?: string;
+}) {
+  const existing = await getWpConnection();
+  const appPassword = data.appPassword || existing?.appPassword;
+  if (!appPassword) throw new Error("App Password requis");
+
+  const [row] = await db
+    .insert(wpConnection)
+    .values({
+      id: true,
+      siteUrl: data.siteUrl,
+      username: data.username,
+      appPassword,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: wpConnection.id,
+      set: {
+        siteUrl: data.siteUrl,
+        username: data.username,
+        appPassword,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  return row;
+}
+
+export async function recordWpConnectionTest(ok: boolean, message: string) {
+  await db
+    .update(wpConnection)
+    .set({ lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message })
+    .where(eq(wpConnection.id, true));
 }
