@@ -16,8 +16,23 @@ export type ImportReport = {
   created: number;
   updated: number;
   skipped: number;
+  /** Ids des soumissions consommées sans créer de lead — récupérables en reculant le curseur. */
+  skippedIds: number[];
   error?: string;
 };
+
+/**
+ * Un lead exige au moins un email OU un téléphone. Si AUCUNE clé du mapping ne
+ * vise l'un des deux, chaque soumission sera ignorée — et le curseur avancera
+ * quand même, consommant en silence des inscriptions réelles.
+ *
+ * C'est exactement ce qui a fait disparaître 3 inscriptions le 2026-08-05 :
+ * source liée avec un mapping vide. On refuse donc de démarrer dans ce cas.
+ */
+export function mappingCanIdentify(fieldMapping: unknown): boolean {
+  const targets = Object.values((fieldMapping ?? {}) as Record<string, string>);
+  return targets.includes("email") || targets.includes("mobileNo");
+}
 
 export async function importElementorSource(
   source: typeof formSources.$inferSelect,
@@ -31,10 +46,21 @@ export async function importElementorSource(
     created: 0,
     updated: 0,
     skipped: 0,
+    skippedIds: [],
   };
 
   if (!source.elementorFormId) {
     report.error = "Source sans formulaire Elementor.";
+    return report;
+  }
+
+  // Garde-fou : rien n'est lu ni consommé tant que le mapping ne peut pas
+  // identifier un lead. Le curseur reste intact, les soumissions restent
+  // récupérables une fois le mapping complété.
+  if (!mappingCanIdentify(source.fieldMapping)) {
+    report.error =
+      "Mapping incomplet : aucun champ n'est mappé sur Email ou Téléphone. " +
+      "Import annulé, aucune soumission consommée.";
     return report;
   }
 
@@ -62,8 +88,12 @@ export async function importElementorSource(
         if (result.created) report.created++;
         else report.updated++;
       } else {
-        // Ni email ni téléphone exploitable — typiquement un mapping incomplet.
+        // Le mapping est bon (garde-fou en amont) : c'est CETTE soumission qui
+        // n'a ni email ni téléphone. On avance quand même le curseur, sinon une
+        // seule soumission inexploitable bloquerait la file pour toujours — mais
+        // on remonte son id pour qu'elle soit rejouable.
         report.skipped++;
+        report.skippedIds.push(sub.id);
       }
     } catch (e) {
       report.error = e instanceof Error ? e.message : "Erreur d'import.";

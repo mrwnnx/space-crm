@@ -4,6 +4,9 @@ import { importElementorSource, type ImportReport } from "@/lib/elementor-import
 
 // Import automatique des soumissions Elementor → leads.
 //
+// ⚠️ Plan Hobby = 1 cron/jour max (vercel.json : 0 6 * * *). Pour une fréquence
+// plus élevée, déclencher cette même URL depuis un planificateur externe.
+//
 // ⚠️ Vercel Cron envoie TOUJOURS du GET : ce handler DOIT exporter GET
 // (un POST donnerait un 405 silencieux à chaque déclenchement).
 //

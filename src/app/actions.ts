@@ -1482,8 +1482,14 @@ export async function importElementorNowAction(sourceId: string, bootcampId: str
   revalidatePath(`/bootcamps/${bootcampId}`);
   if (r.error) return { ok: false, message: `${r.error} (${r.created} créé(s) avant l'erreur)` };
   if (r.fetched === 0) return { ok: true, message: "Aucune nouvelle soumission." };
-  return {
-    ok: true,
-    message: `${r.fetched} soumission(s) — ${r.created} lead(s) créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s) (mapping incomplet).`,
-  };
+  const base = `${r.fetched} soumission(s) — ${r.created} lead(s) créé(s), ${r.updated} mis à jour`;
+  if (r.skipped > 0) {
+    return {
+      ok: true,
+      message:
+        `${base}, ${r.skipped} ignorée(s) faute d'email ET de téléphone ` +
+        `(#${r.skippedIds.join(", #")}). Elles restent lisibles côté WordPress.`,
+    };
+  }
+  return { ok: true, message: `${base}.` };
 }

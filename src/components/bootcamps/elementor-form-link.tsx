@@ -151,6 +151,11 @@ function LinkedRow({
 
   const payloadKeys = Object.keys(source.lastPayload ?? {});
   const unmapped = payloadKeys.filter((k) => !mapping[k]).length;
+  // Sans email ni téléphone mappé, aucune soumission ne peut devenir un lead :
+  // l'import refusera de démarrer plutôt que de consommer des inscriptions.
+  const canIdentify =
+    Object.values(mapping).includes("email") ||
+    Object.values(mapping).includes("mobileNo");
 
   function runImport() {
     startTransition(async () => {
@@ -203,6 +208,13 @@ function LinkedRow({
           </button>
         </div>
       </div>
+
+      {!canIdentify && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          ⚠️ Aucun champ mappé sur <strong>Email</strong> ou <strong>Téléphone</strong> —
+          l&apos;import est bloqué (rien n&apos;est consommé). Ouvre « Champs » pour le compléter.
+        </p>
+      )}
 
       {open && (
         <div className="mt-3 space-y-1.5 border-t border-border pt-3">
