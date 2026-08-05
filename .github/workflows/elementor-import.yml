@@ -1,0 +1,81 @@
+name: Import Elementor → CRM
+
+# Le plan Vercel Hobby limite les crons à UNE exécution par jour
+# (vercel.json garde `0 6 * * *` comme filet de sécurité).
+# Ce workflow appelle le même endpoint plus souvent, gratuitement.
+#
+# ⚠️ GitHub ne garantit pas l'heure exacte : un cron `*/15` peut être décalé
+# de plusieurs minutes en période de charge. C'est du « environ toutes les
+# 15 min », pas du temps réel — le bouton « Importer » du CRM reste immédiat.
+#
+# ⚠️ Sur un dépôt public, GitHub désactive les workflows planifiés après
+# 60 jours SANS aucun commit. Un commit suffit à les réarmer.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # permet de le lancer à la main depuis l'onglet Actions
+
+# Deux imports simultanés se disputeraient les connexions DB (gel du pool
+# postgres-js/Supavisor déjà observé) : on empêche tout chevauchement.
+concurrency:
+  group: elementor-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher l'import
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRM_URL: https://space-crm-psi.vercel.app
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Secret CRON_SECRET absent du dépôt."
+            exit 1
+          fi
+
+          BODY=$(mktemp)
+          CODE=$(curl -sS --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o "$BODY" -w "%{http_code}" \
+            "$CRM_URL/api/cron/elementor-import")
+
+          echo "HTTP $CODE"
+          cat "$BODY"
+          echo
+
+          # Un 401/307 ici = panne silencieuse côté CRM : on veut un job ROUGE,
+          # pas un succès trompeur (c'est exactement le piège du webhook Elementor).
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Import en échec (HTTP $CODE)"
+            exit 1
+          fi
+
+          # Remonte le bilan dans le résumé du job, lisible sans ouvrir les logs.
+          python3 - "$BODY" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          t = d.get("totals", {})
+          print(f"### Import Elementor\n")
+          print(f"- Sources traitées : **{d.get('sources', 0)}**")
+          print(f"- Leads créés : **{t.get('created', 0)}** · mis à jour : {t.get('updated', 0)} · ignorés : {t.get('skipped', 0)}\n")
+          for r in d.get("reports", []):
+              err = r.get("error")
+              line = f"- `{r['sourceName']}` → {r['created']} créé(s)"
+              if r.get("skippedIds"):
+                  line += f", ignorées : {', '.join('#'+str(i) for i in r['skippedIds'])}"
+              if err:
+                  line += f"\n  - ⚠️ {err}"
+              print(line)
+          PY
+
+          # Une erreur par source ne casse pas le job (les autres ont pu passer),
+          # mais elle doit être visible dans les annotations.
+          python3 -c "
+          import json,sys
+          d=json.load(open('$BODY'))
+          for r in d.get('reports',[]):
+              if r.get('error'): print(f\"::warning::{r['sourceName']}: {r['error']}\")
+          "
