@@ -2,19 +2,33 @@ import { getEmailTemplates, getWpConnectionPublic } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
 import { WpConnectionForm } from "@/components/settings/wp-connection-form";
+import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
-  const templates = await getEmailTemplates();
-  const wpConnection = await getWpConnectionPublic();
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const current: SettingsTab =
+    tab === "emails" || tab === "providers" ? tab : "site";
+
+  // Une seule requête, celle de l'onglet affiché (le pool DB est dimensionné
+  // sur la concurrence par requête HTTP — cf. gotcha max/pooler).
+  const wpConnection = current === "site" ? await getWpConnectionPublic() : null;
+  const templates = current === "emails" ? await getEmailTemplates() : [];
 
   return (
     <>
       <PageHeader title="Settings" subtitle="Configuration du CRM" />
       <div className="flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-2xl space-y-8">
-          {/* Connexion au site WordPress */}
+        <div className="mx-auto max-w-2xl space-y-6">
+          <SettingsTabs current={current} />
+
+          {current === "site" && (
+          /* Connexion au site WordPress */
           <section>
             <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
               Connexion site — thespace.academy
@@ -25,8 +39,10 @@ export default async function SettingsPage() {
             </p>
             <WpConnectionForm connection={wpConnection} />
           </section>
+          )}
 
-          {/* Email Templates section */}
+          {current === "emails" && (
+          /* Email Templates section */
           <section>
             <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
               Email Templates
@@ -38,8 +54,10 @@ export default async function SettingsPage() {
             </p>
             <EmailTemplatesManager templates={templates} />
           </section>
+          )}
 
-          {/* Messaging providers status */}
+          {current === "providers" && (
+          /* Messaging providers status */
           <section className="rounded-xl border border-border bg-card p-5">
             <h2 className="mb-3 text-sm font-semibold text-foreground font-heading">
               Providers
@@ -58,6 +76,7 @@ export default async function SettingsPage() {
               Configurez les clés dans .env.local pour activer l'envoi.
             </p>
           </section>
+          )}
         </div>
       </div>
     </>
