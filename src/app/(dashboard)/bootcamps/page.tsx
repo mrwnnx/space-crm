@@ -1,4 +1,4 @@
-import { getBootcamps } from "@/lib/queries";
+import { getBootcamps, DEFAULT_BOOTCAMP_ID } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { BootcampCard } from "@/components/bootcamps/bootcamp-card";
 import { NewBootcampButton } from "@/components/bootcamps/new-bootcamp-button";
@@ -28,7 +28,7 @@ export default async function BootcampsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {bootcamps.map((b) => (
-              <BootcampCard key={b.id} {...b} />
+              <BootcampCard key={b.id} {...b} isDefault={b.id === DEFAULT_BOOTCAMP_ID} />
             ))}
           </div>
         )}

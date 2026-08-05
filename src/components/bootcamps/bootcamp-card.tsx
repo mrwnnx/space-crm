@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Calendar03Icon, User02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { cn, formatDate, statusColor } from "@/lib/utils";
+import { BootcampCardMenu } from "@/components/bootcamps/bootcamp-card-menu";
 
 type BootcampCardProps = {
   id: string;
@@ -13,6 +14,12 @@ type BootcampCardProps = {
   status: "draft" | "open" | "in_progress" | "completed" | "cancelled";
   capacity: number | null;
   leadCount: number;
+  currency: string;
+  priceTotal: string | null;
+  monthlyCount: number | null;
+  monthlyAmount: string | null;
+  /** La formation par défaut n'est pas supprimable (les leads orphelins y atterrissent). */
+  isDefault: boolean;
 };
 
 const statusLabels: Record<string, string> = {
@@ -31,23 +38,46 @@ const statusColors: Record<string, string> = {
   cancelled: "red",
 };
 
-export function BootcampCard({
-  id,
-  name,
-  description,
-  startDate,
-  endDate,
-  status,
-  capacity,
-  leadCount,
-}: BootcampCardProps) {
+export function BootcampCard(props: BootcampCardProps) {
+  const {
+    id,
+    name,
+    description,
+    startDate,
+    endDate,
+    status,
+    capacity,
+    leadCount,
+    isDefault,
+  } = props;
+
   return (
-    <Link
-      href={`/bootcamps/${id}`}
-      className="group flex flex-col rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30 hover:shadow-sm"
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
+    // `relative` : le menu est posé par-dessus, en FRÈRE du Link — un clic sur le
+    // menu ne remonte donc pas jusqu'à la navigation.
+    <div className="group relative flex flex-col rounded-xl border border-border bg-card transition-colors hover:border-primary/30 hover:shadow-sm">
+      <div className="absolute right-2 top-2 z-20">
+        <BootcampCardMenu
+          bootcamp={{
+            id,
+            name,
+            slug: props.slug,
+            description,
+            startDate,
+            endDate,
+            status,
+            capacity,
+            currency: props.currency,
+            priceTotal: props.priceTotal,
+            monthlyCount: props.monthlyCount,
+            monthlyAmount: props.monthlyAmount,
+          }}
+          canDelete={!isDefault}
+        />
+      </div>
+
+      <Link href={`/bootcamps/${id}`} className="flex flex-1 flex-col p-4">
+      {/* Header — pr-16 réserve la place du badge + du menu */}
+      <div className="flex items-start justify-between gap-2 pr-16">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground font-heading">
             {name}
@@ -94,6 +124,7 @@ export function BootcampCard({
           className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
         />
       </div>
-    </Link>
+      </Link>
+    </div>
   );
 }
