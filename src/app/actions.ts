@@ -1386,8 +1386,38 @@ export async function linkElementorFormAction(
     return { ok: false, message: e instanceof Error ? e.message : "Site injoignable." };
   }
 
+  // Tire la dernière soumission pour proposer un mapping de départ et afficher
+  // les vraies clés du formulaire dans l'éditeur (sinon mapping à l'aveugle).
+  let seedMapping: Record<string, string> = {};
+  let seedPayload: Record<string, string> | null = null;
+  if (cursor) {
+    try {
+      const { listSubmissionsAfter } = await import("@/lib/wordpress");
+      const { guessFieldMapping } = await import("@/lib/elementor-import");
+      const [sample] = await listSubmissionsAfter(
+        { siteUrl: conn.siteUrl, username: conn.username, appPassword: conn.appPassword },
+        elementorFormId,
+        cursor - 1,
+        1
+      );
+      if (sample) {
+        seedPayload = sample.values;
+        seedMapping = guessFieldMapping(sample.values);
+      }
+    } catch {
+      // Pas bloquant : le lien se fait, le mapping se remplira à la main.
+    }
+  }
+
   try {
-    await linkElementorForm({ bootcampId, elementorFormId, name: label, lastSubmissionId: cursor });
+    await linkElementorForm({
+      bootcampId,
+      elementorFormId,
+      name: label,
+      lastSubmissionId: cursor,
+      fieldMapping: seedMapping,
+      lastPayload: seedPayload,
+    });
   } catch (e) {
     // 23505 = l'index unique partiel a refusé : le formulaire est pris ailleurs.
     const msg = e instanceof Error ? e.message : "";
@@ -1412,4 +1442,48 @@ export async function unlinkElementorFormAction(sourceId: string, bootcampId: st
   await unlinkElementorForm(sourceId);
   revalidatePath(`/bootcamps/${bootcampId}`);
   return { ok: true, message: "Formulaire délié." };
+}
+
+export async function setElementorMappingAction(
+  sourceId: string,
+  bootcampId: string,
+  mapping: Record<string, string>
+) {
+  await requireUser();
+  const { setFieldMapping } = await import("@/lib/queries");
+  // Whitelist : on n'accepte que des colonnes connues (jamais statusId, bootcampId…)
+  const { MAPPABLE_FIELDS } = await import("@/lib/lead-intake");
+  const allowed = new Set<string>(MAPPABLE_FIELDS as readonly string[]);
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(mapping)) {
+    if (v && allowed.has(v)) clean[k] = v;
+  }
+  await setFieldMapping(sourceId, clean);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true, message: "Mapping enregistré." };
+}
+
+/** Import manuel « maintenant » pour une source. */
+export async function importElementorNowAction(sourceId: string, bootcampId: string) {
+  await requireUser();
+  const { getWpConnection, getFormSourceById } = await import("@/lib/queries");
+  const { importElementorSource } = await import("@/lib/elementor-import");
+
+  const [conn, source] = await Promise.all([getWpConnection(), getFormSourceById(sourceId)]);
+  if (!conn) return { ok: false, message: "Connexion au site non configurée." };
+  if (!source) return { ok: false, message: "Source introuvable." };
+
+  const r = await importElementorSource(source, {
+    siteUrl: conn.siteUrl,
+    username: conn.username,
+    appPassword: conn.appPassword,
+  });
+
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  if (r.error) return { ok: false, message: `${r.error} (${r.created} créé(s) avant l'erreur)` };
+  if (r.fetched === 0) return { ok: true, message: "Aucune nouvelle soumission." };
+  return {
+    ok: true,
+    message: `${r.fetched} soumission(s) — ${r.created} lead(s) créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s) (mapping incomplet).`,
+  };
 }

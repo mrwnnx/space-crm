@@ -107,6 +107,8 @@ export default async function BootcampDetailPage({
             name: s.name,
             elementorFormId: s.elementorFormId,
             lastSubmissionId: s.lastSubmissionId,
+            fieldMapping: (s.fieldMapping ?? {}) as Record<string, string>,
+            lastPayload: (s.lastPayload ?? null) as Record<string, string> | null,
           }))}
         />
       </div>

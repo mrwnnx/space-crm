@@ -1706,6 +1706,8 @@ export async function linkElementorForm(args: {
   elementorFormId: string;
   name: string;
   lastSubmissionId: number | null;
+  fieldMapping?: Record<string, string>;
+  lastPayload?: Record<string, string> | null;
 }) {
   // Colonne d'arrivée = 1re colonne normale du pipeline de la formation.
   const normalStages = await db.query.leadStatuses.findMany({
@@ -1725,7 +1727,8 @@ export async function linkElementorForm(args: {
       lastSubmissionId: args.lastSubmissionId,
       targetStatusId: normalStages[0]?.id ?? null,
       webhookToken: crypto.randomUUID(), // non utilisé en pull, mais la colonne est NOT NULL
-      fieldMapping: {},
+      fieldMapping: args.fieldMapping ?? {},
+      lastPayload: args.lastPayload ?? null,
       active: true,
     })
     .returning();
@@ -1745,4 +1748,19 @@ export async function setSubmissionCursor(sourceId: string, lastSubmissionId: nu
     .update(formSources)
     .set({ lastSubmissionId })
     .where(eq(formSources.id, sourceId));
+}
+
+/** Toutes les sources Elementor actives (pour le cron d'import). */
+export async function getActiveElementorSources() {
+  return db.query.formSources.findMany({
+    where: and(eq(formSources.active, true), sql`${formSources.elementorFormId} is not null`),
+  });
+}
+
+export async function getFormSourceById(id: string) {
+  return db.query.formSources.findFirst({ where: eq(formSources.id, id) });
+}
+
+export async function setFieldMapping(sourceId: string, fieldMapping: Record<string, string>) {
+  await db.update(formSources).set({ fieldMapping }).where(eq(formSources.id, sourceId));
 }

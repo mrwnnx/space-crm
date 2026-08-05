@@ -7,7 +7,11 @@ export async function proxy(request: NextRequest) {
   const response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
 
-  if (pathname.startsWith("/api/webhook")) {
+  // Endpoints machine : pas de session cookie, ils portent leur propre auth.
+  // /api/webhook/* → token de form_source ; /api/cron/* → Bearer CRON_SECRET.
+  // Sans cette sortie, le cron Vercel reçoit un 307 vers /login et n'importe
+  // jamais rien — panne totalement silencieuse.
+  if (pathname.startsWith("/api/webhook") || pathname.startsWith("/api/cron")) {
     return response;
   }
 
