@@ -8,6 +8,7 @@ import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
 import { FormSourcesManager } from "@/components/bootcamps/form-sources-manager";
+import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,11 @@ export default async function BootcampDetailPage({
   if (!bootcamp) notFound();
 
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
+
+  // Deux natures de sources : celles liées à un formulaire Elementor (pull par API)
+  // et les webhooks classiques (Tally/Elementor push) gérés par FormSourcesManager.
+  const elementorSources = formSources.filter((s) => s.elementorFormId);
+  const webhookSources = formSources.filter((s) => !s.elementorFormId);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -85,9 +91,29 @@ export default async function BootcampDetailPage({
         <BootcampActions bootcamp={bootcamp} />
       </div>
 
+      {/* Formulaires Elementor du site (pull par API) */}
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Formulaire Elementor — thespace.academy
+        </h2>
+        <p className="mb-3 text-[11px] text-muted-foreground/70">
+          Les soumissions du formulaire lié deviennent des leads de cette formation.
+          Un formulaire ne peut alimenter qu&apos;une seule formation.
+        </p>
+        <ElementorFormLink
+          bootcampId={bootcamp.id}
+          linked={elementorSources.map((s) => ({
+            id: s.id,
+            name: s.name,
+            elementorFormId: s.elementorFormId,
+            lastSubmissionId: s.lastSubmissionId,
+          }))}
+        />
+      </div>
+
       <FormSourcesManager
         bootcampId={bootcamp.id}
-        formSources={formSources}
+        formSources={webhookSources}
         statuses={pipelineStatuses.map((s) => ({ id: s.id, name: s.name }))}
         tags={tags.map((t) => ({ id: t.id, name: t.name }))}
       />

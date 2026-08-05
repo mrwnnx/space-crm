@@ -1324,3 +1324,92 @@ export async function testWpConnectionAction() {
   revalidatePath("/settings");
   return result;
 }
+
+// ── Lien formation ↔ formulaire Elementor ──────────────
+
+/** Liste les formulaires du site + indique lesquels sont déjà pris. */
+export async function listElementorFormsAction() {
+  await requireUser();
+  const { getWpConnection, getLinkedElementorForms } = await import("@/lib/queries");
+  const { listElementorForms } = await import("@/lib/wordpress");
+
+  const conn = await getWpConnection();
+  if (!conn) {
+    return { ok: false as const, message: "Connexion au site non configurée (Settings → Site).", forms: [] };
+  }
+
+  try {
+    const forms = await listElementorForms({
+      siteUrl: conn.siteUrl,
+      username: conn.username,
+      appPassword: conn.appPassword,
+    });
+    const linked = await getLinkedElementorForms();
+    const takenBy = new Map(
+      linked.map((l) => [l.elementorFormId, l.bootcampName ?? "une autre formation"])
+    );
+    return {
+      ok: true as const,
+      message: "",
+      forms: forms.map((f) => ({ ...f, takenBy: takenBy.get(f.id) ?? null })),
+    };
+  } catch (e) {
+    return {
+      ok: false as const,
+      message: e instanceof Error ? e.message : "Lecture des formulaires impossible.",
+      forms: [],
+    };
+  }
+}
+
+export async function linkElementorFormAction(
+  bootcampId: string,
+  elementorFormId: string,
+  label: string
+) {
+  await requireUser();
+  const { getWpConnection, linkElementorForm } = await import("@/lib/queries");
+  const { getLatestSubmissionId } = await import("@/lib/wordpress");
+
+  const conn = await getWpConnection();
+  if (!conn) return { ok: false, message: "Connexion au site non configurée." };
+
+  // Curseur posé sur la dernière soumission existante : l'historique déjà
+  // stocké côté WordPress n'est PAS importé, seulement les suivantes.
+  let cursor: number | null = null;
+  try {
+    cursor = await getLatestSubmissionId(
+      { siteUrl: conn.siteUrl, username: conn.username, appPassword: conn.appPassword },
+      elementorFormId
+    );
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Site injoignable." };
+  }
+
+  try {
+    await linkElementorForm({ bootcampId, elementorFormId, name: label, lastSubmissionId: cursor });
+  } catch (e) {
+    // 23505 = l'index unique partiel a refusé : le formulaire est pris ailleurs.
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("form_sources_elementor_form_active_key")) {
+      return { ok: false, message: "Ce formulaire alimente déjà une autre formation. Déliez-le d'abord." };
+    }
+    return { ok: false, message: msg || "Échec du lien." };
+  }
+
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return {
+    ok: true,
+    message: cursor
+      ? `Lié. Les soumissions à partir de maintenant arriveront ici (historique ignoré, curseur #${cursor}).`
+      : "Lié. Ce formulaire n'a encore aucune soumission.",
+  };
+}
+
+export async function unlinkElementorFormAction(sourceId: string, bootcampId: string) {
+  await requireUser();
+  const { unlinkElementorForm } = await import("@/lib/queries");
+  await unlinkElementorForm(sourceId);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true, message: "Formulaire délié." };
+}

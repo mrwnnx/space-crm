@@ -69,3 +69,99 @@ export async function testWpConnection(creds: WpCredentials): Promise<WpTestResu
     return { ok: false, message: "Réponse illisible (ce n'est pas du JSON)." };
   }
 }
+
+// ── Lecture des formulaires et soumissions ─────────────
+
+async function wpGet(creds: WpCredentials, path: string) {
+  const res = await fetch(`${creds.siteUrl}/wp-json${path}`, {
+    headers: { Authorization: authHeader(creds), Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`WP ${path} → HTTP ${res.status}`);
+  return res.json();
+}
+
+export type ElementorForm = { id: string; label: string };
+
+/** Liste des formulaires ayant au moins une soumission. `id` = "<postId>_<elementId>". */
+export async function listElementorForms(creds: WpCredentials): Promise<ElementorForm[]> {
+  const json = await wpGet(creds, "/elementor/v1/forms");
+  const rows = Array.isArray(json?.data) ? json.data : [];
+  return rows.map((r: { value: string; label: string }) => ({
+    id: String(r.value),
+    label: String(r.label),
+  }));
+}
+
+/** Id de la soumission la plus récente — sert à poser le curseur au moment du lien. */
+export async function getLatestSubmissionId(
+  creds: WpCredentials,
+  formId: string
+): Promise<number | null> {
+  const json = await wpGet(
+    creds,
+    `/elementor/v1/form-submissions?form=${encodeURIComponent(formId)}&per_page=1&order_by=id&order=desc`
+  );
+  const first = Array.isArray(json?.data) ? json.data[0] : null;
+  return first ? Number(first.id) : null;
+}
+
+export type ElementorSubmission = {
+  id: number;
+  createdAt: string;
+  values: Record<string, string>;
+};
+
+/**
+ * Soumissions dont l'id est STRICTEMENT supérieur au curseur, les plus anciennes
+ * d'abord. On pagine en desc et on s'arrête au curseur : en régime normal une
+ * seule page suffit, sans traverser tout l'historique.
+ *
+ * ⚠️ La collection ne renvoie que le champ principal (l'email) — il faut un GET
+ * par soumission pour tous les champs. D'où `maxFetch`, qui borne le travail.
+ */
+export async function listSubmissionsAfter(
+  creds: WpCredentials,
+  formId: string,
+  afterId: number | null,
+  maxFetch = 100
+): Promise<ElementorSubmission[]> {
+  const cursor = afterId ?? 0;
+  const ids: number[] = [];
+  const perPage = 50;
+
+  for (let page = 1; page <= 20; page++) {
+    const json = await wpGet(
+      creds,
+      `/elementor/v1/form-submissions?form=${encodeURIComponent(formId)}&per_page=${perPage}&page=${page}&order_by=id&order=desc`
+    );
+    const rows: { id: number }[] = Array.isArray(json?.data) ? json.data : [];
+    if (rows.length === 0) break;
+
+    let reachedCursor = false;
+    for (const row of rows) {
+      if (Number(row.id) <= cursor) {
+        reachedCursor = true;
+        break;
+      }
+      ids.push(Number(row.id));
+    }
+    if (reachedCursor || rows.length < perPage || ids.length >= maxFetch) break;
+  }
+
+  // Plus ancienne → plus récente, pour que le curseur avance de façon monotone.
+  const ordered = ids.sort((a, b) => a - b).slice(0, maxFetch);
+
+  const out: ElementorSubmission[] = [];
+  for (const id of ordered) {
+    const json = await wpGet(creds, `/elementor/v1/form-submissions/${id}`);
+    const d = json?.data ?? json;
+    const values: Record<string, string> = {};
+    for (const v of Array.isArray(d?.values) ? d.values : []) {
+      if (v?.key != null) values[String(v.key)] = String(v.value ?? "");
+    }
+    out.push({ id, createdAt: String(d?.created_at ?? ""), values });
+  }
+  return out;
+}

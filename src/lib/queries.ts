@@ -1671,3 +1671,78 @@ export async function recordWpConnectionTest(ok: boolean, message: string) {
     .set({ lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message })
     .where(eq(wpConnection.id, true));
 }
+
+// ── Lien formation ↔ formulaire Elementor ──────────────
+// Un formulaire n'alimente qu'UNE formation : garanti par l'index unique
+// partiel `form_sources_elementor_form_active_key` (migration 0009).
+
+export async function getElementorSourcesByBootcamp(bootcampId: string) {
+  return db.query.formSources.findMany({
+    where: and(
+      eq(formSources.bootcampId, bootcampId),
+      eq(formSources.active, true),
+      sql`${formSources.elementorFormId} is not null`
+    ),
+  });
+}
+
+/** Formulaires déjà pris, avec le nom de la formation qui les détient. */
+export async function getLinkedElementorForms() {
+  const rows = await db
+    .select({
+      sourceId: formSources.id,
+      elementorFormId: formSources.elementorFormId,
+      bootcampId: formSources.bootcampId,
+      bootcampName: bootcamps.name,
+    })
+    .from(formSources)
+    .leftJoin(bootcamps, eq(formSources.bootcampId, bootcamps.id))
+    .where(and(eq(formSources.active, true), sql`${formSources.elementorFormId} is not null`));
+  return rows;
+}
+
+export async function linkElementorForm(args: {
+  bootcampId: string;
+  elementorFormId: string;
+  name: string;
+  lastSubmissionId: number | null;
+}) {
+  // Colonne d'arrivée = 1re colonne normale du pipeline de la formation.
+  const normalStages = await db.query.leadStatuses.findMany({
+    where: and(
+      eq(leadStatuses.bootcampId, args.bootcampId),
+      eq(leadStatuses.kind, "normal")
+    ),
+    orderBy: [asc(leadStatuses.position)],
+  });
+
+  const [row] = await db
+    .insert(formSources)
+    .values({
+      bootcampId: args.bootcampId,
+      name: args.name,
+      elementorFormId: args.elementorFormId,
+      lastSubmissionId: args.lastSubmissionId,
+      targetStatusId: normalStages[0]?.id ?? null,
+      webhookToken: crypto.randomUUID(), // non utilisé en pull, mais la colonne est NOT NULL
+      fieldMapping: {},
+      active: true,
+    })
+    .returning();
+  return row;
+}
+
+/** Déliaison = soft (active=false) → libère le formulaire pour une autre formation. */
+export async function unlinkElementorForm(sourceId: string) {
+  await db
+    .update(formSources)
+    .set({ active: false })
+    .where(eq(formSources.id, sourceId));
+}
+
+export async function setSubmissionCursor(sourceId: string, lastSubmissionId: number) {
+  await db
+    .update(formSources)
+    .set({ lastSubmissionId })
+    .where(eq(formSources.id, sourceId));
+}

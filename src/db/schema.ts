@@ -502,6 +502,10 @@ export const formSources = pgTable("form_sources", {
   temperature: temperatureEnum("temperature").default("cold"),
   defaultTagIds: jsonb("default_tag_ids").default([]),
   webhookToken: text("webhook_token").notNull().unique(),
+  // Lien Elementor (pull par API). Un formulaire n'alimente qu'UNE formation :
+  // index unique partiel sur (elementor_form_id) WHERE active — migration 0009.
+  elementorFormId: text("elementor_form_id"), // "<postId>_<elementId>", ex. "8826_4851b85"
+  lastSubmissionId: integer("last_submission_id"), // curseur : dernière soumission importée
   active: boolean("active").notNull().default(true),
   fieldMapping: jsonb("field_mapping").notNull().default({}), // { "<champ Elementor>": "<colonne lead whitelistée>" }
   // Dernier payload brut reçu (diagnostic mapping) — écrit par le webhook à chaque POST.
