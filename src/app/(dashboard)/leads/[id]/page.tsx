@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getLeadById, getLeadStatuses, getLeadSources, getEmailTemplates, getScheduleForLead } from "@/lib/queries";
+import { getLeadById, getLeadStatuses, getLeadSources, getEmailTemplates, getScheduleForLead, getTags, getTagIdsForLead } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
+import { LeadTags } from "@/components/leads/lead-tags";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
@@ -31,10 +32,12 @@ export default async function LeadDetailPage({
 
   if (!lead) notFound();
 
-  const [statuses, sources, templates] = await Promise.all([
+  const [statuses, sources, templates, allTags, leadTagIds] = await Promise.all([
     getLeadStatuses(),
     getLeadSources(),
     getEmailTemplates(),
+    getTags(),
+    getTagIdsForLead(id),
   ]);
 
   const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
@@ -90,6 +93,10 @@ export default async function LeadDetailPage({
                 </p>
               )}
             </div>
+          </div>
+
+          <div className="border-b border-border p-4">
+            <LeadTags leadId={lead.id} allTags={allTags} tagIds={leadTagIds} />
           </div>
 
           <LeadSidePanel

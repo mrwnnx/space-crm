@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 export const SETTINGS_TABS = [
   { id: "site", label: "Site" },
+  { id: "tags", label: "Tags" },
   { id: "emails", label: "Emails" },
   { id: "providers", label: "Providers" },
 ] as const;

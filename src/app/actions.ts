@@ -1524,3 +1524,84 @@ export async function setElementorRoutingAction(
   revalidatePath(`/bootcamps/${bootcampId}`);
   return { ok: true, message: "Routage enregistré." };
 }
+
+// ── Tags ───────────────────────────────────────────────
+
+// Palette alignée sur STATUS_COLORS (src/lib/utils.ts) : un tag ne peut porter
+// qu'une couleur que l'UI sait effectivement rendre.
+const TAG_COLORS = [
+  "gray", "blue", "purple", "green", "dark-green", "red", "orange", "amber",
+];
+
+export async function createTagAction(name: string, color: string) {
+  await requireUser();
+  const clean = name.trim();
+  if (!clean) return { ok: false, message: "Nom requis." };
+  if (clean.length > 40) return { ok: false, message: "40 caractères maximum." };
+  const safeColor = TAG_COLORS.includes(color) ? color : "gray";
+
+  const { createTag } = await import("@/lib/queries");
+  try {
+    await createTag({ name: clean, color: safeColor });
+  } catch (e) {
+    // `tags.name` est UNIQUE : on renvoie un message clair plutôt qu'un crash.
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("tags_name_unique") || msg.includes("duplicate key")) {
+      return { ok: false, message: `Le tag « ${clean} » existe déjà.` };
+    }
+    return { ok: false, message: "Création impossible." };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: `Tag « ${clean} » créé.` };
+}
+
+export async function updateTagAction(id: string, name: string, color: string) {
+  await requireUser();
+  const clean = name.trim();
+  if (!clean) return { ok: false, message: "Nom requis." };
+  const safeColor = TAG_COLORS.includes(color) ? color : "gray";
+
+  const { updateTag } = await import("@/lib/queries");
+  try {
+    await updateTag(id, { name: clean, color: safeColor });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("tags_name_unique") || msg.includes("duplicate key")) {
+      return { ok: false, message: `Le tag « ${clean} » existe déjà.` };
+    }
+    return { ok: false, message: "Modification impossible." };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: "Tag mis à jour." };
+}
+
+export async function deleteTagAction(id: string) {
+  await requireUser();
+  const { deleteTag, getAllFormSources, setFormSourceTagIds } = await import("@/lib/queries");
+
+  // `lead_tags` part en cascade (FK ON DELETE CASCADE). En revanche
+  // `form_sources.default_tag_ids` est un jsonb SANS clé étrangère : rien ne le
+  // nettoie tout seul, un tag supprimé y resterait comme id fantôme.
+  // Fait en JS plutôt qu'en SQL jsonb : lisible, testable, et indépendant des
+  // subtilités de paramétrage entre Drizzle et postgres-js.
+  for (const fs of await getAllFormSources()) {
+    const ids = (fs.defaultTagIds ?? []) as string[];
+    if (ids.includes(id)) {
+      await setFormSourceTagIds(fs.id, ids.filter((x) => x !== id));
+    }
+  }
+
+  await deleteTag(id);
+  revalidatePath("/settings");
+  return { ok: true, message: "Tag supprimé." };
+}
+
+/** Pose ou retire un tag sur un lead. */
+export async function toggleLeadTagAction(leadId: string, tagId: string, on: boolean) {
+  await requireUser();
+  const { attachTagToLead, detachTagFromLead } = await import("@/lib/queries");
+  if (on) await attachTagToLead(leadId, tagId);
+  else await detachTagFromLead(leadId, tagId);
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true, message: "" };
+}

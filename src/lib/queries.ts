@@ -1776,3 +1776,59 @@ export async function setFormSourceRouting(
     .set({ targetStatusId, defaultTagIds })
     .where(eq(formSources.id, sourceId));
 }
+
+// ── Tags : gestion complète ────────────────────────────
+
+/** Tags + nombre de leads qui les portent (pour l'écran de gestion). */
+export async function getTagsWithUsage() {
+  const rows = await db
+    .select({
+      id: tags.id,
+      name: tags.name,
+      color: tags.color,
+      leadCount: sql<number>`count(${leadTags.leadId})::int`,
+    })
+    .from(tags)
+    .leftJoin(leadTags, eq(leadTags.tagId, tags.id))
+    .groupBy(tags.id, tags.name, tags.color)
+    .orderBy(asc(tags.name));
+  return rows;
+}
+
+export async function updateTag(id: string, data: { name?: string; color?: string }) {
+  const [row] = await db.update(tags).set(data).where(eq(tags.id, id)).returning();
+  return row;
+}
+
+/** Supprime le tag ; `lead_tags` part en cascade (ON DELETE CASCADE au schéma). */
+export async function deleteTag(id: string) {
+  await db.delete(tags).where(eq(tags.id, id));
+}
+
+/** Ids des tags portés par un lead. */
+export async function getTagIdsForLead(leadId: string) {
+  const rows = await db
+    .select({ tagId: leadTags.tagId })
+    .from(leadTags)
+    .where(eq(leadTags.leadId, leadId));
+  return rows.map((r) => r.tagId);
+}
+
+/** Tags complets d'un lead (pour l'affichage). */
+export async function getTagsForLead(leadId: string) {
+  return db
+    .select({ id: tags.id, name: tags.name, color: tags.color })
+    .from(leadTags)
+    .innerJoin(tags, eq(tags.id, leadTags.tagId))
+    .where(eq(leadTags.leadId, leadId))
+    .orderBy(asc(tags.name));
+}
+
+/** Toutes les sources, actives ou non — utilisé au nettoyage d'un tag supprimé. */
+export async function getAllFormSources() {
+  return db.query.formSources.findMany();
+}
+
+export async function setFormSourceTagIds(sourceId: string, tagIds: string[]) {
+  await db.update(formSources).set({ defaultTagIds: tagIds }).where(eq(formSources.id, sourceId));
+}

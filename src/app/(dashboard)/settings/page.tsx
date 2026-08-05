@@ -1,8 +1,9 @@
-import { getEmailTemplates, getWpConnectionPublic } from "@/lib/queries";
+import { getEmailTemplates, getWpConnectionPublic, getTagsWithUsage } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
 import { WpConnectionForm } from "@/components/settings/wp-connection-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
+import { TagsManager } from "@/components/settings/tags-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,13 @@ export default async function SettingsPage({
 }) {
   const { tab } = await searchParams;
   const current: SettingsTab =
-    tab === "emails" || tab === "providers" ? tab : "site";
+    tab === "emails" || tab === "providers" || tab === "tags" ? tab : "site";
 
   // Une seule requête, celle de l'onglet affiché (le pool DB est dimensionné
   // sur la concurrence par requête HTTP — cf. gotcha max/pooler).
   const wpConnection = current === "site" ? await getWpConnectionPublic() : null;
   const templates = current === "emails" ? await getEmailTemplates() : [];
+  const tags = current === "tags" ? await getTagsWithUsage() : [];
 
   return (
     <>
@@ -38,6 +40,20 @@ export default async function SettingsPage({
               site et les importer comme leads.
             </p>
             <WpConnectionForm connection={wpConnection} />
+          </section>
+          )}
+
+          {current === "tags" && (
+          <section>
+            <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
+              Tags
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Étiquettes libres posées sur les leads. Elles peuvent être appliquées
+              à la main sur une fiche, ou automatiquement à tout lead venant d&apos;un
+              formulaire lié.
+            </p>
+            <TagsManager tags={tags} />
           </section>
           )}
 
