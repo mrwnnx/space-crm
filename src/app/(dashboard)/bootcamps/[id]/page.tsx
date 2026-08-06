@@ -7,7 +7,6 @@ import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
-import { FormSourcesManager } from "@/components/bootcamps/form-sources-manager";
 import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
 
 export const dynamic = "force-dynamic";
@@ -47,13 +46,14 @@ export default async function BootcampDetailPage({
 
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
 
-  // Deux natures de sources : celles liées à un formulaire Elementor (pull par API)
-  // et les webhooks génériques (push) gérés par FormSourcesManager.
+  // Seules les sources liées à un formulaire Elementor (pull par API) sont
+  // affichées. Les sources webhook (push) n'ont plus d'écran depuis 2026-08-06 :
+  // l'endpoint /api/webhook/forms/[token] existe toujours et fonctionne, mais
+  // aucune source ne s'y crée par l'UI.
   // ⚠️ Délier = soft delete (active=false) : la ligne reste en base pour libérer
   // le formulaire. Sans le filtre `active`, une source déliée continuait de
   // s'afficher comme liée — le même formulaire semblait rattaché à 2 formations.
   const elementorSources = formSources.filter((s) => s.elementorFormId && s.active);
-  const webhookSources = formSources.filter((s) => !s.elementorFormId);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -119,13 +119,6 @@ export default async function BootcampDetailPage({
           tags={tags.map((t) => ({ id: t.id, name: t.name }))}
         />
       </div>
-
-      <FormSourcesManager
-        bootcampId={bootcamp.id}
-        formSources={webhookSources}
-        statuses={pipelineStatuses.map((s) => ({ id: s.id, name: s.name }))}
-        tags={tags.map((t) => ({ id: t.id, name: t.name }))}
-      />
 
       {/* Kanban */}
       <div className="flex-1 overflow-hidden">
