@@ -77,8 +77,12 @@ export default async function LeadDetailPage({
           />
         </div>
 
-        {/* Side panel: Lead info */}
-        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-border bg-card lg:w-80 lg:border-l lg:border-t-0">
+        {/* Panneau infos — à GAUCHE sur desktop.
+            `lg:order-first` plutôt qu'un déplacement dans le DOM : sur mobile
+            (colonne unique) l'activité reste en premier et les infos en dessous,
+            comme avant. La bordure passe de gauche à droite puisque le panneau
+            change de côté. */}
+        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-border bg-card lg:order-first lg:w-80 lg:border-r lg:border-t-0">
           <div className="flex items-center gap-3 border-b border-border p-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
               {initials(lead.fullName)}
