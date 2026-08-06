@@ -120,6 +120,9 @@ export const bootcamps = pgTable("bootcamps", {
   currency: text("currency").notNull().default("TND"),
   monthlyCount: integer("monthly_count"), // nb de mensualités (plan mensuel)
   monthlyAmount: numeric("monthly_amount"), // montant d'une mensualité
+  // NULL = active. Archiver range la formation sans rien détruire, et coupe
+  // l'import de ses formulaires (cf. getActiveElementorSources).
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

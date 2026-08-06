@@ -4,7 +4,11 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
-import { updateBootcampFieldAction, deleteBootcampAction } from "@/app/actions";
+import {
+  updateBootcampFieldAction,
+  deleteBootcampAction,
+  setBootcampArchivedAction,
+} from "@/app/actions";
 
 // Contrôle d'une formation SANS ouvrir sa page : statut, réglages, suppression.
 // Le composant est un frère du <Link> de la carte (pas un enfant) : un clic ici
@@ -23,6 +27,7 @@ type Editable = {
   priceTotal: string | null;
   monthlyCount: number | null;
   monthlyAmount: string | null;
+  archived: boolean;
 };
 
 const STATUSES = [
@@ -60,6 +65,14 @@ export function BootcampCardMenu({
   function setStatus(value: string) {
     startTransition(async () => {
       await updateBootcampFieldAction(bootcamp.id, "status", value);
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  function toggleArchive() {
+    startTransition(async () => {
+      await setBootcampArchivedAction(bootcamp.id, !bootcamp.archived);
       setOpen(false);
       router.refresh();
     });
@@ -141,6 +154,19 @@ export function BootcampCardMenu({
             className="w-full rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-muted"
           >
             Paramétrer…
+          </button>
+
+          <button
+            onClick={toggleArchive}
+            disabled={isPending}
+            title={
+              bootcamp.archived
+                ? "Réafficher cette formation dans la liste"
+                : "Ranger la formation sans rien supprimer — ses formulaires cessent d'importer"
+            }
+            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-muted disabled:opacity-40"
+          >
+            {bootcamp.archived ? "Désarchiver" : "Archiver"}
           </button>
 
           <button

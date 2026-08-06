@@ -20,6 +20,7 @@ type BootcampCardProps = {
   monthlyAmount: string | null;
   /** La formation par défaut n'est pas supprimable (les leads orphelins y atterrissent). */
   isDefault: boolean;
+  archivedAt: Date | null;
 };
 
 const statusLabels: Record<string, string> = {
@@ -49,12 +50,19 @@ export function BootcampCard(props: BootcampCardProps) {
     capacity,
     leadCount,
     isDefault,
+    archivedAt,
   } = props;
+  const archived = archivedAt !== null;
 
   return (
     // `relative` : le menu est posé par-dessus, en FRÈRE du Link — un clic sur le
     // menu ne remonte donc pas jusqu'à la navigation.
-    <div className="group relative flex flex-col rounded-xl border border-border bg-card transition-colors hover:border-primary/30 hover:shadow-sm">
+    <div
+      className={cn(
+        "group relative flex flex-col rounded-xl border bg-card transition-colors hover:border-primary/30 hover:shadow-sm",
+        archived ? "border-dashed border-border opacity-60" : "border-border"
+      )}
+    >
       <div className="absolute right-2 top-2 z-20">
         <BootcampCardMenu
           bootcamp={{
@@ -70,6 +78,7 @@ export function BootcampCard(props: BootcampCardProps) {
             priceTotal: props.priceTotal,
             monthlyCount: props.monthlyCount,
             monthlyAmount: props.monthlyAmount,
+            archived,
           }}
           canDelete={!isDefault}
         />
@@ -80,6 +89,11 @@ export function BootcampCard(props: BootcampCardProps) {
       <div className="flex items-start justify-between gap-2 pr-16">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground font-heading">
+            {archived && (
+              <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                Archivée
+              </span>
+            )}
             {name}
           </h3>
           {description && (

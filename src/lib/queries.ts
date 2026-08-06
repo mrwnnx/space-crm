@@ -42,8 +42,11 @@ export type BootcampWithLeadCount = typeof bootcamps.$inferSelect & {
   leadCount: number;
 };
 
-export async function getBootcamps(): Promise<BootcampWithLeadCount[]> {
+export async function getBootcamps(
+  opts?: { includeArchived?: boolean }
+): Promise<BootcampWithLeadCount[]> {
   const all = await db.query.bootcamps.findMany({
+    where: opts?.includeArchived ? undefined : sql`${bootcamps.archivedAt} is null`,
     orderBy: [desc(bootcamps.createdAt)],
   });
 
@@ -1752,9 +1755,20 @@ export async function setSubmissionCursor(sourceId: string, lastSubmissionId: nu
 
 /** Toutes les sources Elementor actives (pour le cron d'import). */
 export async function getActiveElementorSources() {
-  return db.query.formSources.findMany({
-    where: and(eq(formSources.active, true), sql`${formSources.elementorFormId} is not null`),
-  });
+  // Une formation archivée ne doit plus recevoir de leads : sinon l'import
+  // continuerait de remplir en silence un pipeline que plus personne ne regarde.
+  const rows = await db
+    .select({ source: formSources })
+    .from(formSources)
+    .innerJoin(bootcamps, eq(bootcamps.id, formSources.bootcampId))
+    .where(
+      and(
+        eq(formSources.active, true),
+        sql`${formSources.elementorFormId} is not null`,
+        sql`${bootcamps.archivedAt} is null`
+      )
+    );
+  return rows.map((r) => r.source);
 }
 
 export async function getFormSourceById(id: string) {
@@ -1839,4 +1853,12 @@ export async function markLeadSeen(leadId: string) {
     .update(leads)
     .set({ seenAt: new Date() })
     .where(and(eq(leads.id, leadId), sql`${leads.seenAt} is null`));
+}
+
+/** Archive / désarchive une formation. */
+export async function setBootcampArchived(id: string, archived: boolean) {
+  await db
+    .update(bootcamps)
+    .set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() })
+    .where(eq(bootcamps.id, id));
 }

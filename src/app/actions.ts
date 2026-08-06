@@ -1615,3 +1615,17 @@ export async function markLeadSeenAction(leadId: string) {
   // relancerait un rendu complet pour un simple changement de marqueur.
   // Le board se met à jour à sa prochaine visite.
 }
+
+export async function setBootcampArchivedAction(bootcampId: string, archived: boolean) {
+  await requireUser();
+  const { setBootcampArchived } = await import("@/lib/queries");
+  await setBootcampArchived(bootcampId, archived);
+  revalidatePath("/bootcamps");
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return {
+    ok: true,
+    message: archived
+      ? "Formation archivée. Ses formulaires n'importent plus de leads."
+      : "Formation désarchivée.",
+  };
+}
