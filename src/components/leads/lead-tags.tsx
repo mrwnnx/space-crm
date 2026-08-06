@@ -37,7 +37,7 @@ export function LeadTags({
       {allTags.length === 0 ? (
         <p className="text-[11px] text-muted-foreground/70">
           Aucun tag créé.{" "}
-          <Link href="/settings?tab=tags" className="underline hover:text-foreground">
+          <Link href="/tags" className="underline hover:text-foreground">
             En créer un
           </Link>
         </p>

@@ -18,6 +18,7 @@ import {
   Menu02Icon,
   Cancel01Icon,
   GraduationCapIcon,
+  Tag01Icon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -34,6 +35,7 @@ const primaryNav: NavItem[] = [
   { href: "/leads", label: "Leads", icon: User02Icon },
   { href: "/analytics", label: "Analytics", icon: Analytics01Icon },
   { href: "/contacts", label: "Contacts", icon: Contact01Icon },
+  { href: "/tags", label: "Tags", icon: Tag01Icon },
 ];
 
 const secondaryNav: NavItem[] = [

@@ -1551,7 +1551,7 @@ export async function createTagAction(name: string, color: string) {
     }
     return { ok: false, message: "Création impossible." };
   }
-  revalidatePath("/settings");
+  revalidatePath("/tags");
   return { ok: true, message: `Tag « ${clean} » créé.` };
 }
 
@@ -1571,7 +1571,7 @@ export async function updateTagAction(id: string, name: string, color: string) {
     }
     return { ok: false, message: "Modification impossible." };
   }
-  revalidatePath("/settings");
+  revalidatePath("/tags");
   return { ok: true, message: "Tag mis à jour." };
 }
 
@@ -1592,7 +1592,7 @@ export async function deleteTagAction(id: string) {
   }
 
   await deleteTag(id);
-  revalidatePath("/settings");
+  revalidatePath("/tags");
   return { ok: true, message: "Tag supprimé." };
 }
 
