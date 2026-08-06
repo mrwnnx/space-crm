@@ -1832,3 +1832,11 @@ export async function getAllFormSources() {
 export async function setFormSourceTagIds(sourceId: string, tagIds: string[]) {
   await db.update(formSources).set({ defaultTagIds: tagIds }).where(eq(formSources.id, sourceId));
 }
+
+/** Marque un lead comme vu (1ʳᵉ ouverture de sa fiche). Idempotent. */
+export async function markLeadSeen(leadId: string) {
+  await db
+    .update(leads)
+    .set({ seenAt: new Date() })
+    .where(and(eq(leads.id, leadId), sql`${leads.seenAt} is null`));
+}

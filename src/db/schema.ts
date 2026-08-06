@@ -237,6 +237,8 @@ export const leads = pgTable("leads", {
   // État pipeline (Phase 1)
   temperature: temperatureEnum("temperature").notNull().default("cold"),
   stageEnteredAt: timestamp("stage_entered_at").notNull().defaultNow(), // alimente l'alerte de stagnation
+  // NULL = jamais ouvert par un humain. Posé à la 1ʳᵉ ouverture de la fiche.
+  seenAt: timestamp("seen_at"),
   convertedAt: timestamp("converted_at"), // date de conversion (B1)
   rawPayload: jsonb("raw_payload"), // infos brutes du formulaire d'entrée
   formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead

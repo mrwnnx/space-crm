@@ -1605,3 +1605,13 @@ export async function toggleLeadTagAction(leadId: string, tagId: string, on: boo
   revalidatePath(`/leads/${leadId}`);
   return { ok: true, message: "" };
 }
+
+/** Appelée au montage de la fiche lead : éteint le marqueur « non traité ». */
+export async function markLeadSeenAction(leadId: string) {
+  await requireUser();
+  const { markLeadSeen } = await import("@/lib/queries");
+  await markLeadSeen(leadId);
+  // Pas de revalidatePath ici : la fiche vient d'être rendue, et revalider
+  // relancerait un rendu complet pour un simple changement de marqueur.
+  // Le board se met à jour à sa prochaine visite.
+}

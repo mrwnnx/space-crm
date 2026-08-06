@@ -17,8 +17,7 @@ type StageWithLeads = LeadStatus & {
   leads: (KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
-    // Calculé côté SERVEUR (page formation) : un booléen figé, donc aucun risque
-    // d'écart d'hydratation — contrairement à un calcul d'horloge côté client.
+    // « Non traité » : importé et jamais ouvert. Calculé côté serveur.
     isNew?: boolean;
   })[];
 };
@@ -238,7 +237,8 @@ const KanbanCard = memo(function KanbanCard({
       }}
       className={cn(
         "relative block rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
-        // Lead fraîchement importé : liseré + fond ambré pour le repérer d'un coup d'œil.
+        // Lead importé jamais ouvert : liseré + fond ambré. S'éteint à la
+        // première ouverture de la fiche, pas au bout d'un délai.
         lead.isNew
           ? "border-amber-300 bg-amber-50/60 ring-1 ring-amber-200"
           : "border-border",
@@ -247,7 +247,7 @@ const KanbanCard = memo(function KanbanCard({
     >
       {lead.isNew && (
         <span className="absolute right-2 top-2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-          Nouveau
+          Non traité
         </span>
       )}
       <div className="flex items-start gap-2">

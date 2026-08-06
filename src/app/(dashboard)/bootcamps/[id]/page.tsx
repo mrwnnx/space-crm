@@ -46,16 +46,15 @@ export default async function BootcampDetailPage({
 
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
 
-  // « Nouveau » = arrivé par un import (formSourceId posé) il y a moins de 24 h.
-  // Calculé ICI, côté serveur : la carte reçoit un booléen figé, donc aucun
-  // risque d'écart d'hydratation lié à une horloge client.
-  const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
-  const now = Date.now();
+  // « Non traité » = arrivé par un import et JAMAIS ouvert (seenAt null).
+  // Remplace l'ancienne règle des 24 h, qui s'éteignait toute seule même si
+  // personne n'avait rien fait du lead : le marqueur survit maintenant aux
+  // absences et ne part qu'à l'ouverture de la fiche.
   const kanbanWithFlags = kanbanData.map((stage) => ({
     ...stage,
     leads: stage.leads.map((l) => ({
       ...l,
-      isNew: !!l.formSourceId && now - l.createdAt.getTime() < NEW_LEAD_WINDOW_MS,
+      isNew: !!l.formSourceId && l.seenAt === null,
     })),
   }));
 
