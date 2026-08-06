@@ -96,37 +96,11 @@ export async function POST(
   }
 }
 
-// Choisit le parseur selon la forme du JSON reçu.
-// Tally envoie { data: { fields: [{ key, label, type, value }] } } → on mappe par `key`
-// stable (insensible à l'ordre des champs). Sinon (Elementor & autres), on aplatit.
+// Le webhook accepte du JSON générique : on aplatit en notation crochet
+// "parent[child]" pour que les clés correspondent au fieldMapping configuré.
+// (Le support du format Tally { data: { fields: [] } } a été retiré le
+// 2026-08-06 avec les sources Tally — plus aucun formulaire ne l'utilise.)
 function parsePayload(parsed: unknown): Record<string, string> {
-  const fields = (parsed as { data?: { fields?: unknown } })?.data?.fields;
-  if (Array.isArray(fields)) {
-    const result: Record<string, string> = {};
-    for (const f of fields) {
-      const field = f as {
-        key?: unknown;
-        value?: unknown;
-        options?: Array<{ id?: unknown; text?: unknown }>;
-      };
-      if (typeof field.key !== "string") continue;
-      let value = field.value;
-      // Champs à choix (MULTIPLE_CHOICE/dropdown) : value = id(s) d'option.
-      // On résout l'id en son texte via options[] (sinon derivePlan reçoit un UUID).
-      // Fallback : si l'id n'est pas trouvé, on garde la valeur brute (rien ne casse).
-      if (Array.isArray(field.options) && field.options.length > 0) {
-        const idToText = new Map<string, string>();
-        for (const o of field.options) {
-          if (o && o.id != null) idToText.set(String(o.id), String(o.text ?? ""));
-        }
-        const resolve = (x: unknown) => idToText.get(String(x)) ?? String(x);
-        value = Array.isArray(value) ? value.map(resolve) : resolve(value);
-      }
-      result[field.key] =
-        value == null ? "" : Array.isArray(value) ? value.join(", ") : String(value);
-    }
-    return result;
-  }
   return flattenJson(parsed);
 }
 

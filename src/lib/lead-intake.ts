@@ -11,7 +11,7 @@ import {
 
 // Transformation « payload d'un formulaire → lead ».
 // Extrait de app/api/webhook/forms/[token]/route.ts pour être partagé entre
-// le webhook (push : Tally/Elementor) et l'import Elementor (pull par API).
+// le webhook générique (push) et l'import Elementor (pull par API).
 // Le comportement est identique des deux côtés — c'est tout l'intérêt.
 
 // Whitelist stricte des colonnes lead acceptées depuis le payload.
@@ -40,7 +40,7 @@ export const MAPPABLE_FIELDS = [
 ] as const;
 
 // Dérive le plan de paiement (enum total|monthly) depuis le texte d'un champ de choix.
-// Ex Tally : "Paiement total: 1300dt" → total ; "Paiement facilité: 400dt /mois" → monthly.
+// Ex : "Paiement total: 1300dt" → total ; "Paiement 3 mois = 500 dt par mois" → monthly.
 export function derivePlan(raw?: string): "total" | "monthly" | null {
   if (!raw) return null;
   const s = raw.toLowerCase();
@@ -72,7 +72,7 @@ export async function ingestSubmission(
       (CONTACT_EXTRA_FIELDS as readonly string[]).includes(targetCol) ||
       (LEAD_EXTRA_FIELDS as readonly string[]).includes(targetCol)
     ) {
-      // Garde la 1re valeur non vide (ex. 2 clés Tally "Paiement" → intendedPlan).
+      // Garde la 1re valeur non vide (ex. 2 clés distinctes → intendedPlan).
       if (val && !extra[targetCol]) extra[targetCol] = val;
     }
   }

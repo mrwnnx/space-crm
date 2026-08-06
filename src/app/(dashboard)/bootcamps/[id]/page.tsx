@@ -48,7 +48,7 @@ export default async function BootcampDetailPage({
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
 
   // Deux natures de sources : celles liées à un formulaire Elementor (pull par API)
-  // et les webhooks classiques (Tally/Elementor push) gérés par FormSourcesManager.
+  // et les webhooks génériques (push) gérés par FormSourcesManager.
   const elementorSources = formSources.filter((s) => s.elementorFormId);
   const webhookSources = formSources.filter((s) => !s.elementorFormId);
 
