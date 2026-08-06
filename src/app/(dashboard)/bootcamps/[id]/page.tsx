@@ -46,6 +46,19 @@ export default async function BootcampDetailPage({
 
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
 
+  // « Nouveau » = arrivé par un import (formSourceId posé) il y a moins de 24 h.
+  // Calculé ICI, côté serveur : la carte reçoit un booléen figé, donc aucun
+  // risque d'écart d'hydratation lié à une horloge client.
+  const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const kanbanWithFlags = kanbanData.map((stage) => ({
+    ...stage,
+    leads: stage.leads.map((l) => ({
+      ...l,
+      isNew: !!l.formSourceId && now - l.createdAt.getTime() < NEW_LEAD_WINDOW_MS,
+    })),
+  }));
+
   // Seules les sources liées à un formulaire Elementor (pull par API) sont
   // affichées. Les sources webhook (push) n'ont plus d'écran depuis 2026-08-06 :
   // l'endpoint /api/webhook/forms/[token] existe toujours et fonctionne, mais
@@ -116,7 +129,7 @@ export default async function BootcampDetailPage({
       {/* Kanban */}
       <div className="flex-1 overflow-hidden">
         {kanbanData.length > 0 ? (
-          <LeadsKanban statuses={kanbanData} bootcamp={bootcamp} />
+          <LeadsKanban statuses={kanbanWithFlags} bootcamp={bootcamp} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Aucune colonne dans le pipeline.

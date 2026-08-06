@@ -4,6 +4,8 @@ import { useState, useEffect, useTransition, memo } from "react";
 import Link from "next/link";
 import { updateLeadStatusAction, reorderStagesAction } from "@/app/actions";
 import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
 import { ColumnMenu, AddColumnButton } from "@/components/leads/kanban-column-menu";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
@@ -15,6 +17,9 @@ type StageWithLeads = LeadStatus & {
   leads: (KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
+    // Calculé côté SERVEUR (page formation) : un booléen figé, donc aucun risque
+    // d'écart d'hydratation — contrairement à un calcul d'horloge côté client.
+    isNew?: boolean;
   })[];
 };
 
@@ -213,6 +218,7 @@ const KanbanCard = memo(function KanbanCard({
   lead: KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
+    isNew?: boolean;
   };
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
@@ -231,10 +237,19 @@ const KanbanCard = memo(function KanbanCard({
         if (dragging) e.preventDefault();
       }}
       className={cn(
-        "block rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
+        "relative block rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
+        // Lead fraîchement importé : liseré + fond ambré pour le repérer d'un coup d'œil.
+        lead.isNew
+          ? "border-amber-300 bg-amber-50/60 ring-1 ring-amber-200"
+          : "border-border",
         dragging && "opacity-40"
       )}
     >
+      {lead.isNew && (
+        <span className="absolute right-2 top-2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+          Nouveau
+        </span>
+      )}
       <div className="flex items-start gap-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
           {initials(lead.fullName)}
@@ -253,16 +268,8 @@ const KanbanCard = memo(function KanbanCard({
 
       {(lead.email || lead.mobileNo) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {lead.email && (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {lead.email}
-            </span>
-          )}
-          {lead.mobileNo && (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {lead.mobileNo}
-            </span>
-          )}
+          {lead.email && <CopyChip value={lead.email} />}
+          {lead.mobileNo && <CopyChip value={lead.mobileNo} />}
         </div>
       )}
 
@@ -278,3 +285,59 @@ const KanbanCard = memo(function KanbanCard({
     </Link>
   );
 });
+
+/**
+ * Coordonnée copiable. Le composant vit DANS le <Link> de la carte : sans
+ * preventDefault + stopPropagation, un clic ouvrirait la fiche au lieu de copier.
+ */
+function CopyChip({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // clipboard indisponible (HTTP non sécurisé, permission refusée) :
+      // repli sur une sélection manuelle plutôt qu'un échec muet.
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
+      title={copied ? "Copié" : `Copier ${value}`}
+      className={cn(
+        "group/copy inline-flex max-w-full items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors",
+        copied
+          ? "bg-green-100 text-green-700"
+          : "bg-muted text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+      )}
+    >
+      <span className="truncate">{value}</span>
+      <HugeiconsIcon
+        icon={copied ? Tick02Icon : Copy01Icon}
+        size={12}
+        className={cn(
+          "shrink-0 transition-opacity",
+          copied ? "opacity-100" : "opacity-0 group-hover/copy:opacity-100"
+        )}
+      />
+    </button>
+  );
+}
