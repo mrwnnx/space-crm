@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import {
   listElementorFormsAction,
   linkElementorFormAction,
@@ -52,14 +54,78 @@ export function ElementorFormLink({
   stages: Stage[];
   tags: Tag[];
 }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      {/* Barre compacte : le nom du formulaire connecté et rien d'autre. */}
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Formulaire
+        </span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {linked.length === 0 ? (
+            <span className="text-xs text-muted-foreground/60">Aucun formulaire lié</span>
+          ) : (
+            linked.map((s) => (
+              <span
+                key={s.id}
+                className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
+                title={s.elementorFormId ?? undefined}
+              >
+                {s.name}
+              </span>
+            ))
+          )}
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Configurer les formulaires"
+          title="Configurer les formulaires"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <HugeiconsIcon icon={PencilEdit02Icon} size={15} />
+        </button>
+      </div>
+
+      {open && (
+        <ElementorFormDialog
+          bootcampId={bootcampId}
+          linked={linked}
+          stages={stages}
+          tags={tags}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Tout le paramétrage vit ici : lier / délier, colonne d'arrivée, tags, mapping,
+ * import manuel. La liste des formulaires du site n'est chargée QU'À
+ * l'ouverture — avant, chaque affichage de page formation déclenchait un appel
+ * à l'API WordPress pour rien.
+ */
+function ElementorFormDialog({
+  bootcampId,
+  linked,
+  stages,
+  tags,
+  onClose,
+}: {
+  bootcampId: string;
+  linked: LinkedSource[];
+  stages: Stage[];
+  tags: Tag[];
+  onClose: () => void;
+}) {
   const [forms, setForms] = useState<RemoteForm[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState("");
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  // `reload` sert aussi au bouton « Réessayer ».
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -107,70 +173,96 @@ export function ElementorFormLink({
   }
 
   return (
-    <div className="space-y-3">
-      {linked.length > 0 && (
-        <div className="space-y-2">
-          {linked.map((s) => (
-            <LinkedRow
-              key={s.id}
-              source={s}
-              bootcampId={bootcampId}
-              stages={stages}
-              tags={tags}
-              disabled={isPending}
-              onUnlink={() => unlink(s.id)}
-              onFeedback={setFeedback}
-            />
-          ))}
-        </div>
-      )}
-
-      {loading ? (
-        <p className="text-xs text-muted-foreground">Lecture des formulaires du site…</p>
-      ) : loadError ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2">
-          <p className="text-xs text-red-700">{loadError}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="my-8 w-full max-w-2xl rounded-xl border border-border bg-card p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-start justify-between gap-3">
+          <h2 className="text-sm font-semibold text-foreground font-heading">
+            Formulaires Elementor — thespace.academy
+          </h2>
           <button
-            onClick={() => setReloadKey((k) => k + 1)}
-            className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-100"
+            onClick={onClose}
+            className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
           >
-            Réessayer
+            Fermer
           </button>
         </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/30"
-          >
-            <option value="">Choisir un formulaire Elementor…</option>
-            {forms.map((f) => (
-              <option key={f.id} value={f.id} disabled={!!f.takenBy}>
-                {f.label}
-                {f.takenBy ? ` — déjà lié à ${f.takenBy}` : ""}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={link}
-            disabled={isPending || !selected}
-            className="shrink-0 rounded-lg bg-foreground px-3 py-2 text-xs font-medium text-background disabled:opacity-40"
-          >
-            Lier
-          </button>
-        </div>
-      )}
-
-      {feedback && (
-        <p
-          className={`rounded-lg px-3 py-2 text-xs ${
-            feedback.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-          }`}
-        >
-          {feedback.message}
+        <p className="mb-4 text-[11px] text-muted-foreground/70">
+          Les soumissions du formulaire lié deviennent des leads de cette formation.
+          Un formulaire ne peut alimenter qu&apos;une seule formation.
         </p>
-      )}
+
+        <div className="space-y-3">
+          {linked.length > 0 && (
+            <div className="space-y-2">
+              {linked.map((s) => (
+                <LinkedRow
+                  key={s.id}
+                  source={s}
+                  bootcampId={bootcampId}
+                  stages={stages}
+                  tags={tags}
+                  disabled={isPending}
+                  onUnlink={() => unlink(s.id)}
+                  onFeedback={setFeedback}
+                />
+              ))}
+            </div>
+          )}
+
+          {loading ? (
+            <p className="text-xs text-muted-foreground">Lecture des formulaires du site…</p>
+          ) : loadError ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2">
+              <p className="text-xs text-red-700">{loadError}</p>
+              <button
+                onClick={() => setReloadKey((k) => k + 1)}
+                className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-100"
+              >
+                Réessayer
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/30"
+              >
+                <option value="">Choisir un formulaire Elementor…</option>
+                {forms.map((f) => (
+                  <option key={f.id} value={f.id} disabled={!!f.takenBy}>
+                    {f.label}
+                    {f.takenBy ? ` — déjà lié à ${f.takenBy}` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={link}
+                disabled={isPending || !selected}
+                className="shrink-0 rounded-lg bg-foreground px-3 py-2 text-xs font-medium text-background disabled:opacity-40"
+              >
+                Lier
+              </button>
+            </div>
+          )}
+
+          {feedback && (
+            <p
+              className={`rounded-lg px-3 py-2 text-xs ${
+                feedback.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+              }`}
+            >
+              {feedback.message}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

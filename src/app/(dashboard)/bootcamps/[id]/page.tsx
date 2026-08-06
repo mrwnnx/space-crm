@@ -94,15 +94,8 @@ export default async function BootcampDetailPage({
         <BootcampActions bootcamp={bootcamp} />
       </div>
 
-      {/* Formulaires Elementor du site (pull par API) */}
-      <div className="border-b border-border px-4 py-3">
-        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Formulaire Elementor — thespace.academy
-        </h2>
-        <p className="mb-3 text-[11px] text-muted-foreground/70">
-          Les soumissions du formulaire lié deviennent des leads de cette formation.
-          Un formulaire ne peut alimenter qu&apos;une seule formation.
-        </p>
+      {/* Formulaires Elementor : une seule ligne, tout le reste dans le dialogue */}
+      <div className="border-b border-border px-4 py-2">
         <ElementorFormLink
           bootcampId={bootcamp.id}
           linked={elementorSources.map((s) => ({
