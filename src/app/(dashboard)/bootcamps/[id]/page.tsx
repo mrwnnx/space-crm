@@ -49,7 +49,10 @@ export default async function BootcampDetailPage({
 
   // Deux natures de sources : celles liées à un formulaire Elementor (pull par API)
   // et les webhooks génériques (push) gérés par FormSourcesManager.
-  const elementorSources = formSources.filter((s) => s.elementorFormId);
+  // ⚠️ Délier = soft delete (active=false) : la ligne reste en base pour libérer
+  // le formulaire. Sans le filtre `active`, une source déliée continuait de
+  // s'afficher comme liée — le même formulaire semblait rattaché à 2 formations.
+  const elementorSources = formSources.filter((s) => s.elementorFormId && s.active);
   const webhookSources = formSources.filter((s) => !s.elementorFormId);
 
   return (
