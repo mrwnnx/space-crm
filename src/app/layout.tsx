@@ -32,7 +32,13 @@ export default function RootLayout({
       lang="en"
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable, spaceGroteskHeading.variable)}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* suppressHydrationWarning : les extensions navigateur (ColorZilla, Grammarly…)
+          injectent des attributs sur <body> AVANT que React n'hydrate, ce qui
+          déclenche un faux avertissement de mismatch. Portée limitée aux
+          attributs de ce seul élément — les vrais écarts dans l'arbre restent signalés. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
