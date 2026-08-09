@@ -68,7 +68,7 @@ export default async function BootcampDetailPage({
   const elementorSources = formSources.filter((s) => s.elementorFormId && s.active);
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <Link
