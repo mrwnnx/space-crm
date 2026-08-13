@@ -959,6 +959,10 @@ export async function sendEmailAction(
 
   const result = await sendEmail({ to, subject, html });
 
+  if (!result.ok) {
+    return result;
+  }
+
   await createActivity({
     referenceType,
     referenceId,
