@@ -209,6 +209,12 @@ export const contacts = pgTable("contacts", {
   // Fix dédup P2 : un contact créé via match mobile seul (pas email) est flagué
   // pour révision manuelle — on ne fusionne jamais deux humains à tort.
   possibleDuplicate: boolean("possible_duplicate").notNull().default(false),
+  // Désabonnement global aux campagnes. Les échanges 1-à-1 depuis la fiche
+  // lead restent possibles : ce sont des réponses, pas du marketing.
+  unsubscribedAt: timestamp("unsubscribed_at"),
+  unsubscribeToken: text("unsubscribe_token")
+    .notNull()
+    .$defaultFn(() => crypto.randomUUID()),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -565,6 +571,45 @@ export const stageHistory = pgTable("stage_history", {
   changedAt: timestamp("changed_at").notNull().defaultNow(),
 });
 
+// ── Campagnes email ────────────────────────────────────
+
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  subject: text("subject"),
+  content: text("content").notNull().default(""),
+  // draft | scheduled | sending | sent | failed
+  status: text("status").notNull().default("draft"),
+  targetTagIds: jsonb("target_tag_ids").notNull().default([]),
+  targetEmails: jsonb("target_emails").notNull().default([]),
+  scheduledAt: timestamp("scheduled_at"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Une ligne par destinataire : c'est ce qui permet de reprendre un envoi
+// interrompu sans réexpédier, d'étaler au-delà du quota quotidien, et de
+// savoir qui a réellement reçu quoi. L'index unique (campaign_id, lower(email))
+// porte la garantie anti-doublon côté base, pas côté applicatif.
+export const campaignRecipients = pgTable("campaign_recipients", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  campaignId: uuid("campaign_id")
+    .notNull()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  // SET NULL : supprimer un contact n'efface pas la trace de l'envoi.
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  email: text("email").notNull(),
+  // pending | sent | failed | skipped
+  status: text("status").notNull().default("pending"),
+  resendId: text("resend_id"),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── Relations ──────────────────────────────────────────
 
 export const bootcampsRelations = relations(bootcamps, ({ many }) => ({
@@ -812,3 +857,7 @@ export type AllowedEmail = typeof allowedEmails.$inferSelect;
 export type NewAllowedEmail = typeof allowedEmails.$inferInsert;
 export type WpConnection = typeof wpConnection.$inferSelect;
 export type NewWpConnection = typeof wpConnection.$inferInsert;
+export type Campaign = typeof campaigns.$inferSelect;
+export type NewCampaign = typeof campaigns.$inferInsert;
+export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
+export type NewCampaignRecipient = typeof campaignRecipients.$inferInsert;

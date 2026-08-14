@@ -16,6 +16,7 @@ type LeadData = {
 type ContactData = {
   whatsapp: string | null;
   age: number | null;
+  unsubscribedAt?: Date | null;
 };
 
 export function LeadSidePanel({
@@ -45,6 +46,14 @@ export function LeadSidePanel({
         type="email"
         onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
+      {contact.unsubscribedAt && (
+        // Signalé ici parce que c'est là qu'on écrit à quelqu'un : sans ce
+        // marqueur, on croirait un silence alors que la personne a demandé
+        // à ne plus être contactée.
+        <p className="mb-1 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700">
+          Désabonné des campagnes — les emails 1-à-1 restent possibles
+        </p>
+      )}
       <EditableField
         field="mobileNo"
         label="Téléphone"

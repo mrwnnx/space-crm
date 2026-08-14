@@ -15,6 +15,13 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  // Désabonnement : le destinataire d'une campagne n'a évidemment pas de
+  // compte CRM. Sans cette sortie, le lien de désinscription renverrait vers
+  // /login — un lien mort, donc une obligation légale non remplie.
+  if (pathname.startsWith("/unsubscribe")) {
+    return response;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
