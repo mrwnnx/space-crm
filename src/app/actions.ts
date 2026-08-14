@@ -992,6 +992,10 @@ export async function sendWhatsAppAction(
   const { sendWhatsApp } = await import("@/lib/messaging/whatsapp");
   const result = await sendWhatsApp({ to, body });
 
+  if (!result.ok) {
+    return result;
+  }
+
   await createActivity({
     referenceType,
     referenceId,
@@ -1020,6 +1024,10 @@ export async function sendSMSAction(
   await requireUser();
   const { sendSMS } = await import("@/lib/messaging/sms");
   const result = await sendSMS({ to, body });
+
+  if (!result.ok) {
+    return result;
+  }
 
   await createActivity({
     referenceType,
