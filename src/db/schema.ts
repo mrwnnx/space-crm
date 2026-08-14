@@ -215,6 +215,10 @@ export const contacts = pgTable("contacts", {
   unsubscribeToken: text("unsubscribe_token")
     .notNull()
     .$defaultFn(() => crypto.randomUUID()),
+  // Rebond DUR uniquement (adresse inexistante). Une boîte pleine ou une
+  // absence temporaire n'entre pas ici : on ne bannit pas quelqu'un en congé.
+  bouncedAt: timestamp("bounced_at"),
+  bounceReason: text("bounce_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

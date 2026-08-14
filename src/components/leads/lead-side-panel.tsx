@@ -17,6 +17,8 @@ type ContactData = {
   whatsapp: string | null;
   age: number | null;
   unsubscribedAt?: Date | null;
+  bouncedAt?: Date | null;
+  bounceReason?: string | null;
 };
 
 export function LeadSidePanel({
@@ -46,6 +48,14 @@ export function LeadSidePanel({
         type="email"
         onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
+      {contact.bouncedAt && (
+        // Une adresse morte doit se voir sur la fiche : sinon on relance
+        // quelqu'un qui ne recevra jamais rien.
+        <p className="mb-1 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">
+          Adresse invalide — exclue des campagnes
+          {contact.bounceReason ? ` (${contact.bounceReason})` : ""}
+        </p>
+      )}
       {contact.unsubscribedAt && (
         // Signalé ici parce que c'est là qu'on écrit à quelqu'un : sans ce
         // marqueur, on croirait un silence alors que la personne a demandé

@@ -11,6 +11,7 @@ type Tag = { id: string; name: string; leadCount: number };
 type Stats = {
   matched: number;
   unsubscribed: number;
+  bounced: number;
   noEmail: number;
   duplicates: number;
   unknownEmails: number;
@@ -90,6 +91,7 @@ export function CampaignAudience({
   const excluded = stats
     ? [
         stats.unsubscribed > 0 && `${stats.unsubscribed} désabonné${stats.unsubscribed > 1 ? "s" : ""}`,
+        stats.bounced > 0 && `${stats.bounced} adresse${stats.bounced > 1 ? "s" : ""} invalide${stats.bounced > 1 ? "s" : ""}`,
         stats.noEmail > 0 && `${stats.noEmail} sans adresse`,
         stats.duplicates > 0 && `${stats.duplicates} en double`,
         stats.unknownEmails > 0 && `${stats.unknownEmails} hors CRM`,

@@ -17,6 +17,8 @@ export type AudienceResolution = {
     matched: number;
     /** écartés : désabonnés */
     unsubscribed: number;
+    /** écartés : adresse invalide (rebond dur constaté) */
+    bounced: number;
     /** écartés : aucune adresse email */
     noEmail: number;
     /** écartés : la même adresse apparaissait plusieurs fois */
@@ -52,6 +54,7 @@ export async function resolveCampaignAudience(input: {
   let matched = 0;
   let noEmail = 0;
   let unsubscribed = 0;
+  let bounced = 0;
   let duplicates = 0;
   let unknownEmails = 0;
 
@@ -67,6 +70,7 @@ export async function resolveCampaignAudience(input: {
         fullName: contacts.fullName,
         unsubscribeToken: contacts.unsubscribeToken,
         unsubscribedAt: contacts.unsubscribedAt,
+        bouncedAt: contacts.bouncedAt,
       })
       .from(leadTags)
       .innerJoin(leads, eq(leads.id, leadTags.leadId))
@@ -82,6 +86,12 @@ export async function resolveCampaignAudience(input: {
       }
       if (r.unsubscribedAt) {
         unsubscribed++;
+        continue;
+      }
+      // Réenvoyer vers une adresse morte abîme la réputation du domaine
+      // pour TOUS les autres destinataires.
+      if (r.bouncedAt) {
+        bounced++;
         continue;
       }
       const key = normalize(r.email);
@@ -109,6 +119,7 @@ export async function resolveCampaignAudience(input: {
         fullName: contacts.fullName,
         unsubscribeToken: contacts.unsubscribeToken,
         unsubscribedAt: contacts.unsubscribedAt,
+        bouncedAt: contacts.bouncedAt,
       })
       .from(contacts)
       .where(
@@ -129,6 +140,10 @@ export async function resolveCampaignAudience(input: {
       if (hit) {
         if (hit.unsubscribedAt) {
           unsubscribed++;
+          continue;
+        }
+        if (hit.bouncedAt) {
+          bounced++;
           continue;
         }
         byEmail.set(key, {
@@ -154,6 +169,7 @@ export async function resolveCampaignAudience(input: {
     stats: {
       matched,
       unsubscribed,
+      bounced,
       noEmail,
       duplicates,
       unknownEmails,

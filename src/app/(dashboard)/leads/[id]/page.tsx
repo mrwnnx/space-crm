@@ -120,6 +120,8 @@ export default async function LeadDetailPage({
               whatsapp: lead.contact?.whatsapp ?? null,
               age: lead.contact?.age ?? null,
               unsubscribedAt: lead.contact?.unsubscribedAt ?? null,
+              bouncedAt: lead.contact?.bouncedAt ?? null,
+              bounceReason: lead.contact?.bounceReason ?? null,
             }}
             sources={sources}
             bootcamp={lead.bootcamp}
