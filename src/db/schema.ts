@@ -259,6 +259,8 @@ export const leads = pgTable("leads", {
   promoCode: text("promo_code"), // code promo de l'inscription (info du lead, pas de la personne)
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  // L'utilisateur a tranché sur l'alerte de doublon d'adresse pour ce lead.
+  duplicateDismissedAt: timestamp("duplicate_dismissed_at"),
 });
 
 // ── Deals ──────────────────────────────────────────────

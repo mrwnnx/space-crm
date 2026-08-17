@@ -1649,3 +1649,21 @@ export async function setBootcampArchivedAction(bootcampId: string, archived: bo
       : "Formation désarchivée.",
   };
 }
+
+// ── Doublons d'adresse email entre leads ───────────────
+
+export async function dismissDuplicateAction(leadId: string) {
+  await requireUser();
+  const { dismissDuplicate } = await import("@/lib/duplicates");
+  await dismissDuplicate(leadId);
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true as const };
+}
+
+export async function separateLeadAction(leadId: string) {
+  await requireUser();
+  const { separateLeadFromContact } = await import("@/lib/duplicates");
+  const r = await separateLeadFromContact(leadId);
+  revalidatePath(`/leads/${leadId}`);
+  return r;
+}

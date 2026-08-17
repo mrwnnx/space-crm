@@ -6,6 +6,8 @@ import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
 import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
+import { DuplicateBanner } from "@/components/leads/duplicate-banner";
+import { getDuplicateInfo } from "@/lib/duplicates";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
@@ -44,6 +46,7 @@ export default async function LeadDetailPage({
   ]);
 
   const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
+  const duplicateInfo = await getDuplicateInfo(lead.id);
   const campaignHistory = lead.contactId
     ? await getCampaignsForContact(lead.contactId)
     : [];
@@ -106,6 +109,10 @@ export default async function LeadDetailPage({
               )}
             </div>
           </div>
+
+          {duplicateInfo && (
+            <DuplicateBanner leadId={lead.id} info={duplicateInfo} />
+          )}
 
           <div className="border-b border-border p-4">
             <LeadTags leadId={lead.id} allTags={allTags} tagIds={leadTagIds} />
