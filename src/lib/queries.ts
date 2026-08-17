@@ -1862,3 +1862,58 @@ export async function setBootcampArchived(id: string, archived: boolean) {
     .set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() })
     .where(eq(bootcamps.id, id));
 }
+
+/**
+ * Propage sur le CONTACT l'email modifié depuis une fiche lead.
+ *
+ * Sans ça, `leads.email` affiche la nouvelle adresse pendant que les
+ * campagnes continuent de partir vers l'ancienne — celle du contact —
+ * indéfiniment et sans que rien ne le signale.
+ *
+ * Deux cas, parce qu'un contact peut porter plusieurs leads :
+ *  - un seul lead  → on met à jour le contact, c'est bien la même personne ;
+ *  - plusieurs     → on RATTACHE ce lead à un autre contact (existant ou
+ *    nouveau). Écraser l'email du contact partagé changerait l'adresse des
+ *    autres inscriptions, donc d'autres personnes.
+ */
+export async function syncLeadEmailToContact(
+  leadId: string,
+  email: string | null
+): Promise<{ action: "none" | "updated" | "reattached"; contactId: string | null }> {
+  const lead = await db.query.leads.findFirst({
+    where: eq(leads.id, leadId),
+    columns: { id: true, contactId: true, fullName: true, firstName: true, lastName: true, mobileNo: true },
+  });
+  if (!lead?.contactId) return { action: "none", contactId: null };
+
+  const clean = email?.trim() || null;
+  if (!clean) return { action: "none", contactId: lead.contactId };
+
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(eq(leads.contactId, lead.contactId));
+
+  if (n <= 1) {
+    // Le rebond appartient à l'ADRESSE, pas à la personne : changer d'adresse
+    // doit l'effacer, sinon la nouvelle hérite du rejet de l'ancienne et reste
+    // exclue des campagnes à tort.
+    await updateContact(lead.contactId, {
+      email: clean,
+      bouncedAt: null,
+      bounceReason: null,
+    });
+    return { action: "updated", contactId: lead.contactId };
+  }
+
+  // Contact partagé : ce lead part sur son propre contact.
+  const target = await getOrCreateContactForLead({
+    email: clean,
+    mobileNo: lead.mobileNo,
+    firstName: lead.firstName,
+    lastName: lead.lastName,
+    fullName: lead.fullName,
+  });
+  await db.update(leads).set({ contactId: target.id }).where(eq(leads.id, leadId));
+  return { action: "reattached", contactId: target.id };
+}

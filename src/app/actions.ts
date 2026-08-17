@@ -405,6 +405,14 @@ export async function updateLeadFieldAction(
   if (!allowed.includes(field)) return;
 
   await updateLeadQuery(leadId, { [field]: value || null });
+
+  // L'email doit suivre sur le CONTACT : c'est lui qui sert aux campagnes.
+  // Sans ça, corriger une adresse ici ne change rien à qui reçoit quoi.
+  if (field === "email") {
+    const { syncLeadEmailToContact } = await import("@/lib/queries");
+    await syncLeadEmailToContact(leadId, value || null);
+  }
+
   revalidatePath(`/leads/${leadId}`);
 }
 
