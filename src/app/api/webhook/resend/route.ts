@@ -81,8 +81,38 @@ export async function POST(request: NextRequest) {
   const emailId = String(data.email_id ?? "");
   const to = Array.isArray(data.to) ? String(data.to[0] ?? "") : String(data.to ?? "");
 
-  // Statuts qui nous intéressent. Les autres (delivered, opened…) sont
-  // acquittés sans rien faire : Resend cesse de réessayer.
+  // ── Suivi d'engagement : n'altère PAS le statut d'envoi.
+  //    Une ouverture ou un clic s'ajoute à un email déjà "sent" ; les écraser
+  //    ferait disparaître l'information d'envoi.
+  if (type === "email.delivered" && emailId) {
+    await db
+      .update(campaignRecipients)
+      .set({ deliveredAt: new Date() })
+      .where(eq(campaignRecipients.resendId, emailId));
+    return NextResponse.json({ ok: true, type });
+  }
+
+  if ((type === "email.opened" || type === "email.clicked") && emailId) {
+    const isOpen = type === "email.opened";
+    await db
+      .update(campaignRecipients)
+      .set(
+        isOpen
+          ? {
+              // COALESCE : on garde la PREMIÈRE ouverture, pas la dernière.
+              openedAt: sql`coalesce(${campaignRecipients.openedAt}, now())`,
+              openCount: sql`${campaignRecipients.openCount} + 1`,
+            }
+          : {
+              clickedAt: sql`coalesce(${campaignRecipients.clickedAt}, now())`,
+              clickCount: sql`${campaignRecipients.clickCount} + 1`,
+            }
+      )
+      .where(eq(campaignRecipients.resendId, emailId));
+    return NextResponse.json({ ok: true, type });
+  }
+
+  // ── Incidents : ceux-là changent bien le statut.
   const STATUS: Record<string, string> = {
     "email.bounced": "bounced",
     "email.complained": "complained",

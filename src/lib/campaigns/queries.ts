@@ -14,6 +14,10 @@ export type CampaignRow = {
   /** destinataires réellement matérialisés (0 tant que rien n'est parti) */
   recipientCount: number;
   sentCount: number;
+  bouncedCount: number;
+  failedCount: number;
+  openedCount: number;
+  clickedCount: number;
 };
 
 export async function getCampaigns(): Promise<CampaignRow[]> {
@@ -28,6 +32,10 @@ export async function getCampaigns(): Promise<CampaignRow[]> {
       createdAt: campaigns.createdAt,
       recipientCount: sql<number>`count(${campaignRecipients.id})::int`,
       sentCount: sql<number>`count(*) filter (where ${campaignRecipients.status} = 'sent')::int`,
+      bouncedCount: sql<number>`count(*) filter (where ${campaignRecipients.status} = 'bounced')::int`,
+      failedCount: sql<number>`count(*) filter (where ${campaignRecipients.status} = 'failed')::int`,
+      openedCount: sql<number>`count(*) filter (where ${campaignRecipients.openedAt} is not null)::int`,
+      clickedCount: sql<number>`count(*) filter (where ${campaignRecipients.clickedAt} is not null)::int`,
     })
     .from(campaigns)
     .leftJoin(campaignRecipients, eq(campaignRecipients.campaignId, campaigns.id))

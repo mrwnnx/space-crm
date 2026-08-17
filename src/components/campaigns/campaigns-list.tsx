@@ -148,9 +148,24 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                   )}
                   <p className="truncate text-xs text-muted-foreground">
                     {c.subject || "Sans sujet"}
-                    {c.recipientCount > 0 &&
-                      ` — ${c.sentCount}/${c.recipientCount} envoyés`}
                   </p>
+                  {c.recipientCount > 0 && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {c.sentCount}/{c.recipientCount} envoyés
+                      {c.openedCount > 0 && ` · ${c.openedCount} ouverture${c.openedCount > 1 ? "s" : ""}`}
+                      {c.clickedCount > 0 && ` · ${c.clickedCount} clic${c.clickedCount > 1 ? "s" : ""}`}
+                      {c.bouncedCount > 0 && (
+                        <span className="text-red-600">
+                          {" "}· {c.bouncedCount} rebond{c.bouncedCount > 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {c.failedCount > 0 && (
+                        <span className="text-red-600">
+                          {" "}· {c.failedCount} échec{c.failedCount > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
 
                 <span

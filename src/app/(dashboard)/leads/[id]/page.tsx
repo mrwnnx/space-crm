@@ -9,6 +9,8 @@ import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
+import { LeadCampaignHistory } from "@/components/campaigns/lead-campaign-history";
+import { getCampaignsForContact } from "@/lib/campaigns/analytics";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,9 @@ export default async function LeadDetailPage({
   ]);
 
   const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
+  const campaignHistory = lead.contactId
+    ? await getCampaignsForContact(lead.contactId)
+    : [];
 
   const sc = lead.status ? statusColor(lead.status.color) : null;
 
@@ -141,6 +146,8 @@ export default async function LeadDetailPage({
               currency={lead.bootcamp?.currency}
             />
           )}
+
+          <LeadCampaignHistory rows={campaignHistory} />
 
           <LinkedTasks
             tasks={lead.tasks}

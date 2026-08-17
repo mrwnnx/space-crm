@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { CampaignEditor } from "@/components/campaigns/campaign-editor";
 import { CampaignAudience } from "@/components/campaigns/campaign-audience";
 import { CampaignSend } from "@/components/campaigns/campaign-send";
+import { CampaignStatsPanel } from "@/components/campaigns/campaign-stats";
+import { getCampaignStats } from "@/lib/campaigns/analytics";
 import { resolveCampaignAudience } from "@/lib/campaigns/audience";
 import { getTagsWithUsage } from "@/lib/queries";
 
@@ -22,6 +24,7 @@ export default async function CampaignDetailPage({
 
   const tags = await getTagsWithUsage();
   const recipients = await getCampaignRecipients(campaign.id);
+  const campaignStats = await getCampaignStats(campaign.id);
 
   // Le bouton d'envoi n'est actif que si la campagne est réellement envoyable.
   const { stats } = await resolveCampaignAudience({
@@ -82,6 +85,15 @@ export default async function CampaignDetailPage({
             </div>
 
             <div className="space-y-6">
+              {recipients.length > 0 && (
+                <div>
+                  <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Résultats
+                  </h2>
+                  <CampaignStatsPanel stats={campaignStats} />
+                </div>
+              )}
+
               <div>
                 <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Envoi

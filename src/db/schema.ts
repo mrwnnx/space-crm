@@ -611,6 +611,15 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   resendId: text("resend_id"),
   error: text("error"),
   sentAt: timestamp("sent_at"),
+  // Délivrance réellement constatée par Resend, à distinguer de
+  // « aucun rebond signalé » : un email peut disparaître en silence.
+  deliveredAt: timestamp("delivered_at"),
+  // Première réaction + nombre de fois : une seule des deux perdrait de
+  // l'information (quand a-t-il ouvert / à quel point est-il engagé).
+  openedAt: timestamp("opened_at"),
+  openCount: integer("open_count").notNull().default(0),
+  clickedAt: timestamp("clicked_at"),
+  clickCount: integer("click_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
