@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/db";
 import { campaignRecipients, contacts } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 /**
  * Webhook Resend : apprend au CRM ce qui n'a PAS été délivré.
@@ -122,17 +122,34 @@ export async function POST(request: NextRequest) {
   if (!status) return NextResponse.json({ ok: true, ignored: type });
 
   // 1. Le destinataire de la campagne concernée.
+  const err =
+    type === "email.bounced"
+      ? String(((data.bounce ?? {}) as Record<string, unknown>).message ?? "Rebond")
+      : type;
+
+  let touched = 0;
   if (emailId) {
+    const rows = await db
+      .update(campaignRecipients)
+      .set({ status, error: err })
+      .where(eq(campaignRecipients.resendId, emailId))
+      .returning({ id: campaignRecipients.id });
+    touched = rows.length;
+  }
+
+  // Repli par adresse : un rebond simulé revient en moins de 2 s, parfois
+  // AVANT que l'envoi ait fini d'écrire les `resend_id` de son lot. L'UPDATE
+  // ci-dessus ne trouve alors rien, et l'événement serait perdu en silence.
+  if (touched === 0 && to) {
     await db
       .update(campaignRecipients)
-      .set({
-        status,
-        error:
-          type === "email.bounced"
-            ? String(((data.bounce ?? {}) as Record<string, unknown>).message ?? "Rebond")
-            : type,
-      })
-      .where(eq(campaignRecipients.resendId, emailId));
+      .set({ status, error: err })
+      .where(
+        and(
+          sql`lower(${campaignRecipients.email}) = ${to.toLowerCase()}`,
+          inArray(campaignRecipients.status, ["pending", "sent"])
+        )
+      );
   }
 
   // 2. Le contact : seul un rebond DUR le retire des campagnes futures.

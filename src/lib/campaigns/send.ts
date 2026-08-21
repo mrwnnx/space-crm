@@ -242,10 +242,20 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
 
     const now = new Date();
     for (let i = 0; i < sendable.length; i++) {
+      // `status = 'pending'` dans le WHERE : le webhook Resend peut renvoyer un
+      // rebond en moins de 2 s, donc AVANT que cette boucle n'ait fini de
+      // marquer les 50 destinataires. Sans cette condition, on écrasait
+      // `bounced` par `sent` et l'écran affichait « envoyé » pour un email
+      // rebondi. Invisible en dessous de quelques dizaines d'envois.
       await db
         .update(campaignRecipients)
         .set({ status: "sent", resendId: ids[i] ?? null, sentAt: now })
-        .where(eq(campaignRecipients.id, sendable[i].id));
+        .where(
+          and(
+            eq(campaignRecipients.id, sendable[i].id),
+            eq(campaignRecipients.status, "pending")
+          )
+        );
       sent++;
     }
   }
