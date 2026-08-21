@@ -14,7 +14,7 @@ import { CampaignStatsPanel } from "@/components/campaigns/campaign-stats";
 import { CampaignStatusActions } from "@/components/campaigns/campaign-status-actions";
 import { CampaignAudienceList } from "@/components/campaigns/campaign-audience-list";
 import { CampaignLinks } from "@/components/campaigns/campaign-links";
-import { STATUS_LABEL } from "@/components/campaigns/campaigns-list";
+import { STATUS_LABEL } from "@/components/campaigns/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +78,10 @@ export default async function CampaignDetailPage({
   if (!campaign) notFound();
 
   const isReport = REPORT_STATUSES.includes(campaign.status);
-  const badge = STATUS_LABEL[campaign.status] ?? STATUS_LABEL.draft;
+  const badge = STATUS_LABEL[campaign.status] ?? {
+    text: campaign.status,
+    className: "bg-muted text-muted-foreground",
+  };
 
   // ── Mode RAPPORT ─────────────────────────────────────
   if (isReport) {

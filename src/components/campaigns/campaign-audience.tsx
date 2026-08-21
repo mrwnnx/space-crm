@@ -49,8 +49,10 @@ export function CampaignAudience({
   // Recalcul différé : sans ce délai, chaque frappe dans la zone d'adresses
   // déclencherait une requête.
   useEffect(() => {
-    setLoading(true);
+    // setLoading est DANS le timeout : appelé synchronement à l'entrée de
+    // l'effet, il déclenche un rendu en cascade à chaque frappe.
     const t = setTimeout(async () => {
+      setLoading(true);
       try {
         const r = await previewAudienceAction(tagIds, parseEmails(emailsRaw));
         setStats(r.stats);

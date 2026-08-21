@@ -3,22 +3,13 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { CampaignRow } from "@/lib/campaigns/queries";
+import { STATUS_LABEL } from "./status-labels";
 import {
   createCampaignAction,
   deleteCampaignAction,
   renameCampaignAction,
 } from "@/app/(dashboard)/campaigns/actions";
 
-export const STATUS_LABEL: Record<string, { text: string; className: string }> = {
-  draft: { text: "Brouillon", className: "bg-muted text-muted-foreground" },
-  scheduled: { text: "Programmée", className: "bg-blue-50 text-blue-700" },
-  sending: { text: "Envoi en cours", className: "bg-amber-50 text-amber-700" },
-  paused: { text: "Suspendue", className: "bg-orange-50 text-orange-700" },
-  sent: { text: "Envoyée", className: "bg-green-50 text-green-700" },
-  failed: { text: "Échec", className: "bg-red-50 text-red-700" },
-  cancelled: { text: "Annulée", className: "bg-muted text-muted-foreground line-through" },
-  archived: { text: "Archivée", className: "bg-muted text-muted-foreground" },
-};
 
 export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
   const [creating, setCreating] = useState(false);

@@ -7,12 +7,6 @@ import {
 } from "@/app/(dashboard)/campaigns/actions";
 import type { RecipientRow } from "@/lib/campaigns/queries";
 
-const RECIPIENT_LABEL: Record<string, { text: string; className: string }> = {
-  pending: { text: "En attente", className: "text-muted-foreground" },
-  sent: { text: "Envoyé", className: "text-green-700" },
-  failed: { text: "Échec", className: "text-red-600" },
-  skipped: { text: "Ignoré", className: "text-amber-700" },
-};
 
 export function CampaignSend({
   campaignId,

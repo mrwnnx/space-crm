@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { STATUS_LABEL } from "./campaigns-list";
+import { STATUS_LABEL } from "./status-labels";
 
 /** Ordre d'affichage : le cycle de vie d'une campagne, pas l'ordre alphabétique. */
 const ORDER = [
