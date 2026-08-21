@@ -628,6 +628,19 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Un clic = une ligne. Agréger par URL répond à « quel lien a marché ».
+export const campaignLinkClicks = pgTable("campaign_link_clicks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  campaignId: uuid("campaign_id")
+    .notNull()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  recipientId: uuid("recipient_id").references(() => campaignRecipients.id, {
+    onDelete: "set null",
+  }),
+  url: text("url").notNull(),
+  clickedAt: timestamp("clicked_at").notNull().defaultNow(),
+});
+
 // ── Relations ──────────────────────────────────────────
 
 export const bootcampsRelations = relations(bootcamps, ({ many }) => ({
@@ -879,3 +892,4 @@ export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
 export type NewCampaignRecipient = typeof campaignRecipients.$inferInsert;
+export type CampaignLinkClick = typeof campaignLinkClicks.$inferSelect;

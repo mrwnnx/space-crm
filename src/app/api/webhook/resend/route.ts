@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/db";
-import { campaignRecipients, contacts } from "@/db/schema";
+import { campaignLinkClicks, campaignRecipients, contacts } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 /**
@@ -94,6 +94,29 @@ export async function POST(request: NextRequest) {
 
   if ((type === "email.opened" || type === "email.clicked") && emailId) {
     const isOpen = type === "email.opened";
+
+    // L'URL cliquée n'est portée QUE par cet événement : si on ne la garde
+    // pas ici, on saura qu'il y a eu un clic mais jamais sur quoi.
+    if (!isOpen) {
+      const link = String(
+        ((data.click ?? {}) as Record<string, unknown>).link ?? ""
+      ).trim();
+      if (link) {
+        const [rec] = await db
+          .select({ id: campaignRecipients.id, campaignId: campaignRecipients.campaignId })
+          .from(campaignRecipients)
+          .where(eq(campaignRecipients.resendId, emailId))
+          .limit(1);
+        if (rec) {
+          await db.insert(campaignLinkClicks).values({
+            campaignId: rec.campaignId,
+            recipientId: rec.id,
+            url: link,
+          });
+        }
+      }
+    }
+
     await db
       .update(campaignRecipients)
       .set(

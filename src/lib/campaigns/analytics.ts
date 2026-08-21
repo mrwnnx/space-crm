@@ -145,3 +145,19 @@ export async function getCampaignsForContact(
   `);
   return rows as unknown as LeadCampaignRow[];
 }
+
+export type LinkClickRow = { url: string; clicks: number; people: number };
+
+/** Quel lien a marché — agrégé par URL, avec le nombre de personnes distinctes. */
+export async function getLinkClicks(campaignId: string): Promise<LinkClickRow[]> {
+  const rows = await db.execute<LinkClickRow>(sql`
+    select url,
+           count(*)::int                        as clicks,
+           count(distinct recipient_id)::int    as people
+      from campaign_link_clicks
+     where campaign_id = ${campaignId}
+     group by url
+     order by clicks desc
+  `);
+  return rows as unknown as LinkClickRow[];
+}
