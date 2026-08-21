@@ -130,3 +130,42 @@ export async function retryFailedAction(id: string) {
   revalidatePath(`/campaigns/${id}`);
   return r;
 }
+
+/**
+ * Changement de statut piloté par l'utilisateur.
+ *
+ * Les transitions sont contrôlées : une campagne envoyée ne peut pas
+ * redevenir un brouillon, et une annulée ne repart jamais.
+ */
+export async function setCampaignStatusAction(
+  id: string,
+  next: "paused" | "sending" | "cancelled" | "archived" | "draft"
+) {
+  await requireUser();
+  const existing = await getCampaignById(id);
+  if (!existing) return { ok: false as const, error: "Campagne introuvable" };
+
+  const from = existing.status;
+  const allowed: Record<string, string[]> = {
+    // suspendre : depuis une programmée ou un envoi en cours
+    paused: ["scheduled", "sending"],
+    // reprendre : renvoie dans l'état d'envoi
+    sending: ["paused"],
+    // annuler : tant que ce n'est pas parti en entier
+    cancelled: ["draft", "scheduled", "sending", "paused", "failed"],
+    // archiver : une fois l'histoire terminée
+    archived: ["sent", "cancelled", "failed", "draft"],
+    // désarchiver
+    draft: ["archived"],
+  };
+
+  if (!allowed[next]?.includes(from)) {
+    return { ok: false as const, error: `Transition impossible depuis « ${from} »` };
+  }
+
+  const { setCampaignStatus } = await import("@/lib/campaigns/queries");
+  await setCampaignStatus(id, next);
+  revalidatePath(`/campaigns/${id}`);
+  revalidatePath("/campaigns");
+  return { ok: true as const };
+}

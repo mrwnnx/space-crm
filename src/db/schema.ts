@@ -622,6 +622,9 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   openCount: integer("open_count").notNull().default(0),
   clickedAt: timestamp("clicked_at"),
   clickCount: integer("click_count").notNull().default(0),
+  // Désinscription DÉCLENCHÉE PAR cette campagne. `contacts.unsubscribed_at`
+  // dit que la personne est désabonnée ; ceci dit d'où ça vient.
+  unsubscribedAt: timestamp("unsubscribed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

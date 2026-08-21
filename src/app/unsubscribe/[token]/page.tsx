@@ -5,10 +5,13 @@ export const metadata = { title: "Désabonnement — Space Academy" };
 
 export default async function UnsubscribePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ c?: string }>;
 }) {
   const { token } = await params;
+  const { c: campaignId } = await searchParams;
   const contact = await getContactByUnsubscribeToken(token);
 
   return (
@@ -65,7 +68,7 @@ export default async function UnsubscribePage({
                 des messageries visitent les URL automatiquement, ce qui
                 désabonnerait des gens qui n'ont rien demandé. */}
             <form
-              action={unsubscribeAction.bind(null, token)}
+              action={unsubscribeAction.bind(null, token, campaignId)}
               className="mt-6"
             >
               <button

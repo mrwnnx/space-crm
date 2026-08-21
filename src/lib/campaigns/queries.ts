@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/db";
-import { campaignRecipients, campaigns } from "@/db/schema";
+import { campaignRecipients, campaigns, contacts } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 export type CampaignRow = {
@@ -20,7 +20,28 @@ export type CampaignRow = {
   clickedCount: number;
 };
 
-export async function getCampaigns(): Promise<CampaignRow[]> {
+export async function getCampaigns(filters?: {
+  q?: string;
+  status?: string;
+}): Promise<CampaignRow[]> {
+  const conds = [];
+
+  // Recherche sur le nom ET le sujet : on cherche plus souvent ce que le
+  // destinataire a vu que le nom interne tapé trois semaines plus tôt.
+  if (filters?.q?.trim()) {
+    const like = `%${filters.q.trim().toLowerCase()}%`;
+    conds.push(
+      sql`(lower(${campaigns.name}) like ${like} or lower(coalesce(${campaigns.subject}, '')) like ${like})`
+    );
+  }
+
+  if (filters?.status) {
+    conds.push(eq(campaigns.status, filters.status));
+  } else {
+    // Les archivées sont rangées : elles ne réapparaissent que si on les demande.
+    conds.push(sql`${campaigns.status} <> 'archived'`);
+  }
+
   return db
     .select({
       id: campaigns.id,
@@ -39,8 +60,18 @@ export async function getCampaigns(): Promise<CampaignRow[]> {
     })
     .from(campaigns)
     .leftJoin(campaignRecipients, eq(campaignRecipients.campaignId, campaigns.id))
+    .where(and(...conds))
     .groupBy(campaigns.id)
     .orderBy(desc(campaigns.createdAt));
+}
+
+/** Compte par statut, pour afficher les effectifs dans le filtre. */
+export async function getCampaignStatusCounts(): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ status: campaigns.status, n: sql<number>`count(*)::int` })
+    .from(campaigns)
+    .groupBy(campaigns.status);
+  return Object.fromEntries(rows.map((r) => [r.status, Number(r.n)]));
 }
 
 export async function getCampaignById(id: string) {
@@ -83,9 +114,16 @@ export async function deleteCampaign(id: string) {
 export type RecipientRow = {
   id: string;
   email: string;
+  fullName: string | null;
   status: string;
   error: string | null;
   sentAt: Date | null;
+  deliveredAt: Date | null;
+  openedAt: Date | null;
+  openCount: number;
+  clickedAt: Date | null;
+  clickCount: number;
+  unsubscribedAt: Date | null;
 };
 
 export async function getCampaignRecipients(campaignId: string): Promise<RecipientRow[]> {
@@ -93,11 +131,19 @@ export async function getCampaignRecipients(campaignId: string): Promise<Recipie
     .select({
       id: campaignRecipients.id,
       email: campaignRecipients.email,
+      fullName: contacts.fullName,
       status: campaignRecipients.status,
       error: campaignRecipients.error,
       sentAt: campaignRecipients.sentAt,
+      deliveredAt: campaignRecipients.deliveredAt,
+      openedAt: campaignRecipients.openedAt,
+      openCount: campaignRecipients.openCount,
+      clickedAt: campaignRecipients.clickedAt,
+      clickCount: campaignRecipients.clickCount,
+      unsubscribedAt: campaignRecipients.unsubscribedAt,
     })
     .from(campaignRecipients)
+    .leftJoin(contacts, eq(contacts.id, campaignRecipients.contactId))
     .where(eq(campaignRecipients.campaignId, campaignId))
     .orderBy(campaignRecipients.email);
 }
@@ -126,4 +172,39 @@ export async function reopenCampaignForRetry(id: string) {
     .update(campaigns)
     .set({ status: "sending", sentAt: null, updatedAt: new Date() })
     .where(eq(campaigns.id, id));
+}
+
+/** Statuts d'une campagne. `status` est une colonne texte : rien à migrer. */
+export const CAMPAIGN_STATUSES = [
+  "draft",      // brouillon
+  "scheduled",  // programmée, pas encore partie
+  "sending",    // envoi en cours (ou interrompu, reprenable)
+  "paused",     // suspendue par l'utilisateur — ne repart pas seule
+  "sent",       // terminée
+  "failed",     // échec technique
+  "cancelled",  // abandonnée : ne partira jamais, trace conservée
+  "archived",   // rangée : masquée de la liste par défaut
+] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+/** Un envoi ne peut PLUS repartir depuis ces états. */
+export const TERMINAL_STATUSES: CampaignStatus[] = ["sent", "cancelled", "archived"];
+
+export async function setCampaignStatus(id: string, status: CampaignStatus) {
+  const [row] = await db
+    .update(campaigns)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(campaigns.id, id))
+    .returning();
+  return row;
+}
+
+/** Lecture minimale du statut — appelée entre chaque lot d'envoi. */
+export async function getCampaignStatus(id: string): Promise<string | null> {
+  const [row] = await db
+    .select({ status: campaigns.status })
+    .from(campaigns)
+    .where(eq(campaigns.id, id))
+    .limit(1);
+  return row?.status ?? null;
 }

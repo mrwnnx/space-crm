@@ -7,6 +7,8 @@ import { CampaignEditor } from "@/components/campaigns/campaign-editor";
 import { CampaignAudience } from "@/components/campaigns/campaign-audience";
 import { CampaignSend } from "@/components/campaigns/campaign-send";
 import { CampaignStatsPanel } from "@/components/campaigns/campaign-stats";
+import { CampaignStatusActions } from "@/components/campaigns/campaign-status-actions";
+import { CampaignAudienceList } from "@/components/campaigns/campaign-audience-list";
 import { getCampaignStats } from "@/lib/campaigns/analytics";
 import { resolveCampaignAudience } from "@/lib/campaigns/audience";
 import { getTagsWithUsage } from "@/lib/queries";
@@ -51,12 +53,15 @@ export default async function CampaignDetailPage({
       />
       <div className="flex-1 overflow-y-auto p-5">
         <div className="mx-auto max-w-5xl">
-          <Link
-            href="/campaigns"
-            className="mb-4 inline-block text-xs text-muted-foreground hover:text-foreground"
-          >
-            ← Toutes les campagnes
-          </Link>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <Link
+              href="/campaigns"
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ← Toutes les campagnes
+            </Link>
+            <CampaignStatusActions campaignId={campaign.id} status={campaign.status} />
+          </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-6">
@@ -86,12 +91,21 @@ export default async function CampaignDetailPage({
 
             <div className="space-y-6">
               {recipients.length > 0 && (
-                <div>
-                  <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Résultats
-                  </h2>
-                  <CampaignStatsPanel stats={campaignStats} />
-                </div>
+                <>
+                  <div>
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Performance de la campagne
+                    </h2>
+                    <CampaignStatsPanel stats={campaignStats} />
+                  </div>
+
+                  <div>
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Audience ({recipients.length})
+                    </h2>
+                    <CampaignAudienceList rows={recipients} />
+                  </div>
+                </>
               )}
 
               <div>

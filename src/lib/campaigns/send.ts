@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db";
 import { campaignRecipients, campaigns } from "@/db/schema";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { getCampaignStatus } from "./queries";
 import { resolveCampaignAudience } from "./audience";
 import { renderCampaignHtml, renderCampaignText } from "./template";
 
@@ -118,8 +119,14 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
     .limit(1);
 
   if (!campaign) return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "Campagne introuvable" };
-  if (campaign.status === "sent") {
-    return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "Campagne déjà envoyée" };
+  const REFUSED: Record<string, string> = {
+    sent: "Campagne déjà envoyée",
+    cancelled: "Campagne annulée",
+    archived: "Campagne archivée",
+    paused: "Campagne suspendue — reprenez-la d'abord",
+  };
+  if (REFUSED[campaign.status]) {
+    return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: REFUSED[campaign.status] };
   }
   if (!campaign.subject?.trim()) {
     return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "Sujet manquant" };
@@ -144,7 +151,18 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
   let quotaReached = false;
   const root = baseUrl();
 
+  let pausedMidway = false;
+
   for (;;) {
+    // Relu à chaque tour : sans ça, « suspendre » n'aurait aucun effet avant
+    // la fin de l'envoi — la boucle ne regarderait jamais la décision prise
+    // entre-temps.
+    const live = await getCampaignStatus(campaignId);
+    if (live === "paused" || live === "cancelled") {
+      pausedMidway = true;
+      break;
+    }
+
     const budget = DAILY_LIMIT - (await sentToday());
     if (budget <= 0) {
       quotaReached = true;
@@ -203,7 +221,10 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
     if (sendable.length === 0) continue;
 
     const payload = sendable.map((p) => {
-      const url = `${root}/unsubscribe/${tokenByContact.get(p.contactId!)}`;
+      // `?c=` : sans l'id de campagne, on saurait QUE la personne s'est
+      // désabonnée, jamais À CAUSE DE QUOI — donc « désinscriptions » serait
+      // incalculable par campagne.
+      const url = `${root}/unsubscribe/${tokenByContact.get(p.contactId!)}?c=${campaignId}`;
       return {
         from,
         to: p.email,
@@ -271,16 +292,21 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
     );
   const remaining = rest?.n ?? 0;
 
-  await db
-    .update(campaigns)
-    .set({
-      // Tant qu'il reste des destinataires en attente (quota atteint), la
-      // campagne n'est PAS "sent" : elle reste reprenable.
-      status: remaining > 0 ? "sending" : "sent",
-      sentAt: remaining > 0 ? null : new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(campaigns.id, campaignId));
+  if (!pausedMidway) {
+    await db
+      .update(campaigns)
+      .set({
+        // Tant qu'il reste des destinataires en attente (quota atteint), la
+        // campagne n'est PAS "sent" : elle reste reprenable.
+        status: remaining > 0 ? "sending" : "sent",
+        sentAt: remaining > 0 ? null : new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(campaigns.id, campaignId));
+  }
+  // Si l'utilisateur a suspendu ou annulé pendant l'envoi, son choix prime :
+  // on ne le réécrit pas.
+
 
   return { ok: true, sent, failed, remaining, quotaReached };
 }

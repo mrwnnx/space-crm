@@ -1,5 +1,8 @@
 import type { CampaignStats } from "@/lib/campaigns/analytics";
 
+const pct = (part: number, whole: number) =>
+  whole > 0 ? Math.round((part / whole) * 100) : 0;
+
 function Metric({
   label,
   value,
@@ -37,7 +40,7 @@ export function CampaignStatsPanel({
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Metric
           label="Envoyés"
           value={String(stats.sent)}
@@ -73,6 +76,12 @@ export function CampaignStatsPanel({
           hint={`${stats.clicked} personne${stats.clicked > 1 ? "s" : ""}`}
         />
         <Metric
+          label="Désinscriptions"
+          value={String(stats.unsubscribed)}
+          hint={nothingSent ? undefined : `${pct(stats.unsubscribed, stats.sent)}%`}
+          tone={stats.unsubscribed > 0 ? "bad" : "neutral"}
+        />
+        <Metric
           label="Revenu attribué"
           value={
             stats.revenue > 0
@@ -104,7 +113,9 @@ export function CampaignStatsPanel({
         Le taux d&apos;ouverture est structurellement gonflé&nbsp;: Apple Mail
         précharge les images sans que personne n&apos;ait lu. Le taux de clic,
         lui, est fiable. Le revenu est attribué à la dernière campagne reçue
-        dans les 30&nbsp;jours précédant l&apos;inscription.
+        dans les 30&nbsp;jours précédant l&apos;inscription. Les désinscriptions
+        antérieures au 21&nbsp;août ne sont rattachées à aucune campagne&nbsp;:
+        l&apos;information n&apos;était pas encore captée.
       </p>
     </div>
   );

@@ -17,6 +17,8 @@ export type CampaignStats = {
   failed: number;
   opened: number;
   clicked: number;
+  /** désinscriptions déclenchées PAR cette campagne */
+  unsubscribed: number;
   /** en % des envoyés, arrondi à l'entier */
   openRate: number;
   clickRate: number;
@@ -50,6 +52,7 @@ export async function getCampaignStats(campaignId: string): Promise<CampaignStat
     failed: number;
     opened: number;
     clicked: number;
+    unsubscribed: number;
   }>(sql`
     select
       count(*)::int                                                   as recipients,
@@ -61,7 +64,8 @@ export async function getCampaignStats(campaignId: string): Promise<CampaignStat
       count(*) filter (where status = 'pending')::int                 as pending,
       count(*) filter (where status = 'failed')::int                  as failed,
       count(*) filter (where opened_at is not null)::int              as opened,
-      count(*) filter (where clicked_at is not null)::int             as clicked
+      count(*) filter (where clicked_at is not null)::int             as clicked,
+      count(*) filter (where unsubscribed_at is not null)::int        as unsubscribed
     from campaign_recipients
     where campaign_id = ${campaignId}
   `);
@@ -102,6 +106,7 @@ export async function getCampaignStats(campaignId: string): Promise<CampaignStat
     failed: Number(row?.failed ?? 0),
     opened: Number(row?.opened ?? 0),
     clicked: Number(row?.clicked ?? 0),
+    unsubscribed: Number(row?.unsubscribed ?? 0),
     openRate: pct(Number(row?.opened ?? 0), sent),
     clickRate: pct(Number(row?.clicked ?? 0), sent),
     bounceRate: pct(Number(row?.bounced ?? 0), sent),

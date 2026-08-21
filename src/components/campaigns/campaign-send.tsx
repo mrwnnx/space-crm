@@ -119,51 +119,16 @@ export function CampaignSend({
       {result && <p className="text-xs text-green-700">{result}</p>}
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {recipients.length > 0 && (
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {counts.sent ?? 0} envoyé{(counts.sent ?? 0) > 1 ? "s" : ""}
-              {failedCount > 0 && ` · ${failedCount} en échec`}
-              {counts.skipped ? ` · ${counts.skipped} ignoré${counts.skipped > 1 ? "s" : ""}` : ""}
-              {counts.pending ? ` · ${counts.pending} en attente` : ""}
-            </p>
-            {failedCount > 0 && (
-              <button
-                onClick={() => run(() => retryFailedAction(campaignId))}
-                disabled={isPending}
-                className="text-xs font-medium text-foreground underline hover:no-underline disabled:opacity-50"
-              >
-                Relancer les {failedCount} échec{failedCount > 1 ? "s" : ""}
-              </button>
-            )}
-          </div>
-
-          <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-            {recipients.map((r) => {
-              const badge = RECIPIENT_LABEL[r.status] ?? RECIPIENT_LABEL.pending;
-              return (
-                <li key={r.id} className="flex items-baseline gap-3 px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-xs text-foreground">
-                    {r.email}
-                  </span>
-                  <span className={`shrink-0 text-xs ${badge.className}`}>
-                    {badge.text}
-                  </span>
-                  {r.error && (
-                    <span
-                      className="shrink-0 max-w-[45%] truncate text-xs text-red-600"
-                      title={r.error}
-                    >
-                      {r.error}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      {recipients.length > 0 && failedCount > 0 && (
+        <button
+          onClick={() => run(() => retryFailedAction(campaignId))}
+          disabled={isPending}
+          className="text-xs font-medium text-foreground underline hover:no-underline disabled:opacity-50"
+        >
+          Relancer les {failedCount} échec{failedCount > 1 ? "s" : ""}
+        </button>
       )}
+
     </div>
   );
 }

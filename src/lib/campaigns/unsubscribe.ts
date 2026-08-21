@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db";
-import { contacts } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { campaignRecipients, contacts } from "@/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 
 export type UnsubscribeTarget = {
   id: string;
@@ -28,14 +28,33 @@ export async function getContactByUnsubscribeToken(
 }
 
 /** Idempotent : un second clic ne réécrit pas la date du premier. */
-export async function unsubscribeByToken(token: string): Promise<boolean> {
+export async function unsubscribeByToken(
+  token: string,
+  campaignId?: string | null
+): Promise<boolean> {
   if (!token) return false;
   const rows = await db
     .update(contacts)
     .set({ unsubscribedAt: new Date(), updatedAt: new Date() })
     .where(eq(contacts.unsubscribeToken, token))
     .returning({ id: contacts.id });
-  return rows.length > 0;
+
+  if (rows.length === 0) return false;
+
+  // Attribution à la campagne d'origine, quand elle est connue.
+  if (campaignId) {
+    await db
+      .update(campaignRecipients)
+      .set({ unsubscribedAt: new Date() })
+      .where(
+        and(
+          eq(campaignRecipients.campaignId, campaignId),
+          eq(campaignRecipients.contactId, rows[0].id),
+          isNull(campaignRecipients.unsubscribedAt)
+        )
+      );
+  }
+  return true;
 }
 
 /** Réabonnement, depuis la même page — une erreur de clic doit être réparable. */
