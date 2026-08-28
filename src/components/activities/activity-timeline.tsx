@@ -1,4 +1,4 @@
-import { cn, formatRelative } from "@/lib/utils";
+import { actorInitials, actorLabel, cn, formatRelative, isHumanActor } from "@/lib/utils";
 
 type Activity = {
   id: string;
@@ -7,6 +7,7 @@ type Activity = {
   subject: string | null;
   content: string | null;
   createdAt: string;
+  createdBy?: string | null;
 };
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
@@ -60,6 +61,19 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
                     {formatRelative(activity.createdAt)}
                   </span>
                 </div>
+                {actorLabel(activity.createdBy) && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    {isHumanActor(activity.createdBy) && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary">
+                        {actorInitials(activity.createdBy)}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {isHumanActor(activity.createdBy) ? "par " : ""}
+                      {actorLabel(activity.createdBy)}
+                    </span>
+                  </div>
+                )}
                 {activity.content && (
                   <p className="mt-1 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap">
                     {activity.content}

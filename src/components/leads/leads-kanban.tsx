@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, memo } from "react";
 import Link from "next/link";
 import { updateLeadStatusAction, reorderStagesAction } from "@/app/actions";
-import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
+import { cn, statusColor, initials, formatRelative, actorInitials, actorLabel, isHumanActor } from "@/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
@@ -19,6 +19,8 @@ type StageWithLeads = LeadStatus & {
     organization: Organization | null;
     // « Non traité » : importé et jamais ouvert. Calculé côté serveur.
     isNew?: boolean;
+    // Dernière personne intervenue sur ce lead (email), null si personne.
+    lastActor?: string | null;
   })[];
 };
 
@@ -218,6 +220,7 @@ const KanbanCard = memo(function KanbanCard({
     source: LeadSource | null;
     organization: Organization | null;
     isNew?: boolean;
+    lastActor?: string | null;
   };
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
@@ -279,9 +282,22 @@ const KanbanCard = memo(function KanbanCard({
         </p>
       )}
 
-      <p className="mt-2 text-[10px] text-muted-foreground/60">
-        {formatRelative(lead.createdAt)}
-      </p>
+      <div className="mt-2 flex items-center gap-1.5">
+        <p className="text-[10px] text-muted-foreground/60">
+          {formatRelative(lead.createdAt)}
+        </p>
+        {isHumanActor(lead.lastActor) && (
+          <span
+            className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground/70"
+            title={`Dernière intervention : ${lead.lastActor}`}
+          >
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary">
+              {actorInitials(lead.lastActor)}
+            </span>
+            {actorLabel(lead.lastActor)}
+          </span>
+        )}
+      </div>
     </Link>
   );
 });

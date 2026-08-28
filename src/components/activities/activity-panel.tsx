@@ -24,6 +24,7 @@ type Activity = {
   subject: string | null;
   content: string | null;
   createdAt: string;
+  createdBy?: string | null;
 };
 
 type Channel = "email" | "whatsapp" | "call" | "note" | "comment" | null;
@@ -67,6 +68,7 @@ export function ActivityPanel({
       subject: "Commentaire",
       content: c.content,
       createdAt: c.createdAt,
+      createdBy: c.createdBy,
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 

@@ -247,6 +247,9 @@ export async function ingestSubmission(
     direction: "inbound",
     subject: formSource.name,
     content: leadData.email || leadData.mobileNo || opts?.activityContentFallback || "",
+    // Explicite : un lead arrivé du site reste « Import automatique », même
+    // quand c'est un humain qui a cliqué sur « Importer ».
+    createdBy: "webhook",
   });
 
   return { ok: true, leadId, created };

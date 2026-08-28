@@ -1,4 +1,5 @@
 import "server-only";
+import { currentActor } from "@/lib/auth";
 import { db, type DbExecutor } from "@/db";
 import {
   leads,
@@ -31,7 +32,7 @@ import {
   stageHistory,
   wpConnection,
   allowedEmails,
-} from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
+} from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
 
@@ -298,7 +299,41 @@ export async function getLeadsKanban(bootcampId?: string) {
       },
     },
   });
-  return statuses;
+
+  // Dernière intervention HUMAINE par lead, pour la pastille de la vignette.
+  // Une seule requête pour tout le board, exécutée APRÈS celle des statuts et
+  // pas en parallèle : la page formation en tire déjà 6 de front et le pool
+  // postgres-js est calibré sur cette concurrence (cf. gotcha Supavisor).
+  const leadIds = statuses.flatMap((s) => s.leads.map((l) => l.id));
+  const lastActors = new Map<string, string>();
+  if (leadIds.length > 0) {
+    const rows = await db
+      .selectDistinctOn([activities.referenceId], {
+        leadId: activities.referenceId,
+        actor: activities.createdBy,
+      })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.referenceType, "lead"),
+          inArray(activities.referenceId, leadIds),
+          // Les marqueurs système ("webhook") ne sont pas des intervenants.
+          sql`${activities.createdBy} like '%@%'`
+        )
+      )
+      .orderBy(activities.referenceId, desc(activities.createdAt));
+    for (const r of rows) {
+      if (r.leadId && r.actor) lastActors.set(r.leadId, r.actor);
+    }
+  }
+
+  return statuses.map((stage) => ({
+    ...stage,
+    leads: stage.leads.map((l) => ({
+      ...l,
+      lastActor: lastActors.get(l.id) ?? null,
+    })),
+  }));
 }
 
 // ── Leads: Detail ──────────────────────────────────────
@@ -387,7 +422,16 @@ export async function deleteLead(id: string) {
 // ── Activities ─────────────────────────────────────────
 
 export async function createActivity(data: typeof activities.$inferInsert) {
-  const [activity] = await db.insert(activities).values(data).returning();
+  // Auteur par défaut = le compte connecté. Rempli ICI plutôt qu'aux ~10 points
+  // d'appel : un oubli au prochain point d'appel rendrait l'événement anonyme
+  // sans que rien ne le signale. Un appelant qui précise `createdBy` (l'import
+  // pose "webhook") garde la main.
+  const createdBy =
+    data.createdBy !== undefined ? data.createdBy : await currentActor();
+  const [activity] = await db
+    .insert(activities)
+    .values({ ...data, createdBy })
+    .returning();
   return activity;
 }
 
@@ -813,7 +857,9 @@ export async function getNotesByReference(
 }
 
 export async function createNote(data: typeof notes.$inferInsert) {
-  const [note] = await db.insert(notes).values(data).returning();
+  const createdBy =
+    data.createdBy !== undefined ? data.createdBy : await currentActor();
+  const [note] = await db.insert(notes).values({ ...data, createdBy }).returning();
   return note;
 }
 
@@ -940,7 +986,14 @@ export async function getCommentsByReference(
 }
 
 export async function createComment(data: typeof comments.$inferInsert) {
-  const [comment] = await db.insert(comments).values(data).returning();
+  // Même règle d'attribution que createActivity : un commentaire apparaît dans
+  // le fil du lead, il doit porter son auteur.
+  const createdBy =
+    data.createdBy !== undefined ? data.createdBy : await currentActor();
+  const [comment] = await db
+    .insert(comments)
+    .values({ ...data, createdBy })
+    .returning();
   return comment;
 }
 
@@ -1607,9 +1660,12 @@ export async function recordStageChange(
   changedBy?: string | null,
   exec: DbExecutor = db
 ) {
+  // Même règle que createActivity : l'import passe "webhook", tout le reste
+  // hérite du compte connecté.
+  const actor = changedBy !== undefined ? changedBy : await currentActor();
   const [row] = await exec
     .insert(stageHistory)
-    .values({ leadId, fromStatusId, toStatusId, changedBy: changedBy ?? null })
+    .values({ leadId, fromStatusId, toStatusId, changedBy: actor })
     .returning();
   return row;
 }

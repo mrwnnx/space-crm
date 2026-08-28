@@ -53,3 +53,31 @@ export function formatRelative(date: Date | string | null): string {
   if (days < 30) return `Il y a ${Math.floor(days / 7)}sem`;
   return formatDate(d);
 }
+
+/**
+ * Auteur d'un événement. La colonne `created_by` porte soit l'email d'un
+ * compte, soit un marqueur système ("webhook"). Convention de lecture :
+ * une valeur avec « @ » est une personne, tout le reste est une machine.
+ */
+export function actorLabel(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  if (!raw.includes("@")) return raw === "webhook" ? "Import automatique" : raw;
+  return raw.split("@")[0];
+}
+
+/** Vrai seulement pour un auteur humain (sert à n'afficher que ceux-là). */
+export function isHumanActor(raw: string | null | undefined): boolean {
+  return !!raw && raw.includes("@");
+}
+
+/** Initiales d'un auteur, pour la pastille. */
+export function actorInitials(raw: string | null | undefined): string {
+  const label = actorLabel(raw);
+  if (!label) return "?";
+  return label
+    .split(/[.\-_\s]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
+}
