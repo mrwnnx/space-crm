@@ -30,6 +30,7 @@ import {
   noteTemplates,
   stageHistory,
   wpConnection,
+  allowedEmails,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -1916,4 +1917,27 @@ export async function syncLeadEmailToContact(
   });
   await db.update(leads).set({ contactId: target.id }).where(eq(leads.id, leadId));
   return { action: "reattached", contactId: target.id };
+}
+
+// ── Allowed emails (collaborateurs autorisés à créer un compte) ─
+
+export async function getAllowedEmails() {
+  return db.query.allowedEmails.findMany({
+    orderBy: [desc(allowedEmails.createdAt)],
+  });
+}
+
+export async function getAllowedEmailByAddress(email: string) {
+  return db.query.allowedEmails.findFirst({
+    where: eq(allowedEmails.email, email),
+  });
+}
+
+export async function createAllowedEmail(data: typeof allowedEmails.$inferInsert) {
+  const [row] = await db.insert(allowedEmails).values(data).returning();
+  return row;
+}
+
+export async function deleteAllowedEmail(id: string) {
+  await db.delete(allowedEmails).where(eq(allowedEmails.id, id));
 }

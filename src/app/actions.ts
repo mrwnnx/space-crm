@@ -1147,6 +1147,54 @@ export async function deleteEmailTemplateAction(id: string) {
   revalidatePath("/settings");
 }
 
+// ── Collaborateurs (allowlist d'inscription) ───────────
+
+// Format volontairement permissif : la vraie validation, c'est que le
+// destinataire reçoive le mail. On écarte juste les saisies manifestement fausses.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function inviteCollaboratorAction(
+  formData: FormData
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const note = String(formData.get("note") || "").trim() || null;
+
+  if (!EMAIL_RE.test(email)) {
+    return { ok: false, message: "Adresse email invalide." };
+  }
+
+  const { getAllowedEmailByAddress, createAllowedEmail } = await import("@/lib/queries");
+  const existing = await getAllowedEmailByAddress(email);
+  if (existing) {
+    return { ok: false, message: "Cet email est déjà autorisé." };
+  }
+
+  await createAllowedEmail({ email, note });
+  revalidatePath("/settings");
+
+  const { sendInviteEmail } = await import("@/lib/messaging/invite");
+  const sent = await sendInviteEmail(email);
+  if (!sent.ok) {
+    // L'autorisation est bien enregistrée : on ne la retire pas pour un échec
+    // d'envoi, on dit juste qu'il faut transmettre le lien à la main.
+    return {
+      ok: true,
+      message: `${email} est autorisé, mais l'email n'est pas parti (${sent.error}). Transmets-lui le lien /login à la main.`,
+    };
+  }
+
+  return { ok: true, message: `Invitation envoyée à ${email}.` };
+}
+
+export async function removeAllowedEmailAction(id: string) {
+  await requireUser();
+  const { deleteAllowedEmail } = await import("@/lib/queries");
+  await deleteAllowedEmail(id);
+  revalidatePath("/settings");
+}
+
 // ── Data Import ────────────────────────────────────────
 
 export async function bulkImportLeadsAction(
