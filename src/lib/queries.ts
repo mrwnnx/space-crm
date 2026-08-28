@@ -1705,6 +1705,26 @@ export async function getLinkedElementorForms() {
   return rows;
 }
 
+/**
+ * Dernier mapping non vide déjà saisi pour ce formulaire Elementor, toutes
+ * formations confondues. Délier/relier crée une NOUVELLE ligne form_sources :
+ * sans ça, le mapping fait à la main est silencieusement reperdu (vécu le
+ * 18/08/2026 — 85 leads importés sans téléphone pendant 10 jours).
+ */
+export async function getLastMappingForElementorForm(
+  elementorFormId: string
+): Promise<Record<string, string> | null> {
+  const rows = await db.query.formSources.findMany({
+    where: eq(formSources.elementorFormId, elementorFormId),
+    orderBy: [desc(formSources.createdAt)],
+  });
+  for (const row of rows) {
+    const m = (row.fieldMapping ?? {}) as Record<string, string>;
+    if (Object.values(m).some((v) => v)) return m;
+  }
+  return null;
+}
+
 export async function linkElementorForm(args: {
   bootcampId: string;
   elementorFormId: string;

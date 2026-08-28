@@ -257,6 +257,10 @@ export const leads = pgTable("leads", {
   formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead
   intendedPlan: paymentPlanEnum("intended_plan"), // plan envisagé (noté pendant le pipeline, avant inscription)
   promoCode: text("promo_code"), // code promo de l'inscription (info du lead, pas de la personne)
+  // Réponses de formulaire qui n'entraient dans aucune colonne : elles ne
+  // survivaient que dans rawPayload, donc invisibles dans la fiche.
+  motivation: text("motivation"), // « pourquoi tu veux étudier avec nous » (texte libre)
+  wantsCall: boolean("wants_call"), // « souhaitez-vous être contacté par téléphone »
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   // L'utilisateur a tranché sur l'alerte de doublon d'adresse pour ce lead.

@@ -1470,7 +1470,14 @@ export async function linkElementorFormAction(
       );
       if (sample) {
         seedPayload = sample.values;
-        seedMapping = guessFieldMapping(sample.values);
+        // Le mapping deviné ne reconnaît que les clés lisibles : les
+        // `field_xxxxx` d'Elementor seraient reperdus à chaque re-liaison.
+        // On repart donc du dernier mapping saisi pour CE formulaire, et on
+        // ne devine que les clés qu'il ne couvre pas (champ ajouté depuis).
+        const { getLastMappingForElementorForm } = await import("@/lib/queries");
+        const previous = await getLastMappingForElementorForm(elementorFormId);
+        const guessed = guessFieldMapping(sample.values);
+        seedMapping = previous ? { ...guessed, ...previous } : guessed;
       }
     } catch {
       // Pas bloquant : le lien se fait, le mapping se remplira à la main.

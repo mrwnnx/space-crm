@@ -30,7 +30,7 @@ export const ALLOWED_LEAD_FIELDS = [
 // Champs étendus hors whitelist lead : vont sur le contact (whatsapp, age)
 // ou sur le lead avec coercition (intendedPlan dérivé d'un texte, promoCode).
 export const CONTACT_EXTRA_FIELDS = ["whatsapp", "age"] as const;
-export const LEAD_EXTRA_FIELDS = ["intendedPlan", "promoCode"] as const;
+export const LEAD_EXTRA_FIELDS = ["intendedPlan", "promoCode", "motivation", "wantsCall"] as const;
 
 /** Colonnes proposables dans un éditeur de mapping. */
 export const MAPPABLE_FIELDS = [
@@ -46,6 +46,16 @@ export function derivePlan(raw?: string): "total" | "monthly" | null {
   const s = raw.toLowerCase();
   if (s.includes("total")) return "total";
   if (s.includes("facilit") || s.includes("mois") || s.includes("/mo")) return "monthly";
+  return null;
+}
+
+// Dérive un booléen depuis la réponse d'un champ de choix oui/non.
+// Le formulaire est bilingue (FR + derija) : « OUI » / « نعم » → true.
+export function deriveYesNo(raw?: string): boolean | null {
+  if (!raw) return null;
+  const s = raw.trim().toLowerCase();
+  if (/^(oui|yes|o|y)\b/.test(s) || s.startsWith("نعم") || s.startsWith("إيه") || s.startsWith("ايه")) return true;
+  if (/^(non|no|n)\b/.test(s) || s.startsWith("لا")) return false;
   return null;
 }
 
@@ -83,6 +93,8 @@ export async function ingestSubmission(
   const age = Number.isFinite(ageParsed) ? ageParsed : null;
   const intendedPlan = derivePlan(extra.intendedPlan);
   const promoCode = extra.promoCode || null;
+  const motivation = extra.motivation || null;
+  const wantsCall = deriveYesNo(extra.wantsCall);
 
   // 5. Compose fullName si absent
   if (!leadData.fullName) {
@@ -168,6 +180,8 @@ export async function ingestSubmission(
         organizationName: leadData.organizationName || null,
         intendedPlan: intendedPlan ?? undefined,
         promoCode: promoCode ?? undefined,
+        motivation: motivation ?? undefined,
+        wantsCall: wantsCall ?? undefined,
         rawPayload,
         stageEnteredAt: new Date(),
         lastContactedAt: new Date(),
@@ -194,9 +208,16 @@ export async function ingestSubmission(
     }
 
     // Remplit l'offre / code promo seulement s'ils étaient vides (non destructif)
-    const leadExtraUpdate: { intendedPlan?: "total" | "monthly"; promoCode?: string } = {};
+    const leadExtraUpdate: {
+      intendedPlan?: "total" | "monthly";
+      promoCode?: string;
+      motivation?: string;
+      wantsCall?: boolean;
+    } = {};
     if (intendedPlan && !existingLead.intendedPlan) leadExtraUpdate.intendedPlan = intendedPlan;
     if (promoCode && !existingLead.promoCode) leadExtraUpdate.promoCode = promoCode;
+    if (motivation && !existingLead.motivation) leadExtraUpdate.motivation = motivation;
+    if (wantsCall !== null && existingLead.wantsCall === null) leadExtraUpdate.wantsCall = wantsCall;
 
     await db
       .update(leads)

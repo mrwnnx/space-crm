@@ -126,6 +126,8 @@ export default async function LeadDetailPage({
               sourceId: lead.sourceId,
               intendedPlan: lead.intendedPlan,
               promoCode: lead.promoCode,
+              motivation: lead.motivation,
+              wantsCall: lead.wantsCall,
             }}
             contactId={lead.contactId}
             contact={{

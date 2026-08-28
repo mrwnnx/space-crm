@@ -11,6 +11,8 @@ type LeadData = {
   sourceId: string | null;
   intendedPlan: string | null;
   promoCode: string | null;
+  motivation: string | null;
+  wantsCall: boolean | null;
 };
 
 type ContactData = {
@@ -70,6 +72,20 @@ export function LeadSidePanel({
         value={lead.mobileNo}
         onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
+      {lead.wantsCall !== null && (
+        // Réponse donnée au formulaire : c'est une consigne de la personne,
+        // pas un champ qu'on corrige — d'où la lecture seule.
+        <p
+          className={cn(
+            "mb-1 rounded-md px-2 py-1 text-xs",
+            lead.wantsCall ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"
+          )}
+        >
+          {lead.wantsCall
+            ? "A demandé à être rappelé par téléphone"
+            : "Ne souhaite pas être rappelé par téléphone"}
+        </p>
+      )}
       {contactId && (
         <>
           <EditableField
@@ -117,6 +133,17 @@ export function LeadSidePanel({
         value={lead.promoCode}
         onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
+
+      {lead.motivation && (
+        <>
+          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Motivation
+          </p>
+          <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-2 py-2 text-xs leading-relaxed text-foreground">
+            {lead.motivation}
+          </p>
+        </>
+      )}
     </div>
   );
 }

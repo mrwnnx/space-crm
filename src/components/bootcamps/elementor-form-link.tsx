@@ -28,6 +28,8 @@ const MAPPABLE = [
   { value: "promoCode", label: "Code promo" },
   { value: "jobTitle", label: "Poste" },
   { value: "organizationName", label: "Organisation" },
+  { value: "motivation", label: "Motivation (texte libre)" },
+  { value: "wantsCall", label: "Souhaite être rappelé (oui/non)" },
 ];
 
 type LinkedSource = {
@@ -422,6 +424,15 @@ function LinkedRow({
           )}
         </div>
       </div>
+
+      {canIdentify && unmapped > 0 && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          ⚠️ {unmapped} champ{unmapped > 1 ? "s" : ""} de la dernière soumission
+          {unmapped > 1 ? " ne sont mappés" : " n'est mappé"} sur aucune colonne —{" "}
+          {unmapped > 1 ? "leurs réponses sont perdues" : "sa réponse est perdue"} à chaque
+          import. Ouvre « Champs » pour {unmapped > 1 ? "les" : "le"} rattacher.
+        </p>
+      )}
 
       {!canIdentify && (
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
