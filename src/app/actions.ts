@@ -461,6 +461,11 @@ export async function updateLeadStatusAction(
   // Capture structurée de la transition (Phase 1) — à côté du createActivity existant.
   await recordStageChange(leadId, oldStatusId, lead?.statusId ?? statusId);
 
+  // Automatisations « entrée dans la colonne ». Attendu, jamais en tâche de
+  // fond : une promesse non attendue est tuée au retour en serverless.
+  const { runStatusAutomations } = await import("@/lib/automations");
+  await runStatusAutomations(leadId, lead?.statusId ?? statusId);
+
   const { createNotification } = await import("@/lib/queries");
   await createNotification({
     type: "lead_status_change",
@@ -637,6 +642,14 @@ export async function enrollLeadAction(
       await markFirstEcheancePaid(leadId, tx);
     }
   });
+
+  // 8.5 Automatisations de la colonne d'arrivée. APRÈS la transaction : avant,
+  // le nouveau statut n'est pas encore visible depuis une autre connexion.
+  {
+    const { getLeadStatusId } = await import("@/lib/queries");
+    const { runStatusAutomations } = await import("@/lib/automations");
+    await runStatusAutomations(leadId, await getLeadStatusId(leadId));
+  }
 
   // 9. revalidate
   revalidatePath("/leads");
@@ -1193,6 +1206,54 @@ export async function removeAllowedEmailAction(id: string) {
   const { deleteAllowedEmail } = await import("@/lib/queries");
   await deleteAllowedEmail(id);
   revalidatePath("/settings");
+}
+
+// ── Automatisations ────────────────────────────────────
+
+export async function createAutomationAction(
+  bootcampId: string,
+  statusId: string,
+  emailTemplateId: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+  if (!statusId || !emailTemplateId) {
+    return { ok: false, message: "Colonne et modèle d'email obligatoires." };
+  }
+
+  const { getEmailTemplateById, createAutomation } = await import("@/lib/queries");
+
+  // L'objet fait partie de l'email : un modèle sans objet enverrait un message
+  // sans titre. On bloque à la création plutôt que de le découvrir au 1er envoi.
+  const template = await getEmailTemplateById(emailTemplateId);
+  if (!template) return { ok: false, message: "Modèle d'email introuvable." };
+  if (!template.subject?.trim()) {
+    return {
+      ok: false,
+      message: `Le modèle « ${template.name} » n'a pas d'objet. Ajoute-lui un objet dans Settings → Emails.`,
+    };
+  }
+
+  await createAutomation({ bootcampId, statusId, emailTemplateId });
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true, message: "Automatisation créée." };
+}
+
+export async function setAutomationActiveAction(
+  id: string,
+  active: boolean,
+  bootcampId: string
+) {
+  await requireUser();
+  const { setAutomationActive } = await import("@/lib/queries");
+  await setAutomationActive(id, active);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+}
+
+export async function deleteAutomationAction(id: string, bootcampId: string) {
+  await requireUser();
+  const { deleteAutomation } = await import("@/lib/queries");
+  await deleteAutomation(id);
+  revalidatePath(`/bootcamps/${bootcampId}`);
 }
 
 // ── Data Import ────────────────────────────────────────

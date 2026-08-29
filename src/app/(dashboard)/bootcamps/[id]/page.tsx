@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
 import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
+import { AutomationsManager } from "@/components/bootcamps/automations-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +34,22 @@ export default async function BootcampDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses] = await Promise.all([
-    getBootcampById(id),
-    getLeadsKanban(id),
-    getLeadSources(),
-    getFormSourcesByBootcamp(id),
-    getTags(),
-    getLeadStatuses(id),
-  ]);
+  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, automationData] =
+    await Promise.all([
+      getBootcampById(id),
+      getLeadsKanban(id),
+      getLeadSources(),
+      getFormSourcesByBootcamp(id),
+      getTags(),
+      getLeadStatuses(id),
+      // Les deux requêtes des automatisations tiennent dans UNE branche, en
+      // séquence : la page en ouvre déjà 6 de front et le pool postgres-js est
+      // calibré sur cette concurrence (gel Supavisor documenté).
+      (async () => ({
+        automations: await getAutomationsByBootcamp(id),
+        templates: await getEmailTemplates(),
+      }))(),
+    ]);
 
   if (!bootcamp) notFound();
 
@@ -122,6 +131,20 @@ export default async function BootcampDetailPage({
           }))}
           stages={pipelineStatuses.map((s) => ({ id: s.id, name: s.name, kind: s.kind }))}
           tags={tags.map((t) => ({ id: t.id, name: t.name }))}
+        />
+      </div>
+
+      {/* Automatisations : entrée dans une colonne → email */}
+      <div className="border-b border-border px-4 py-2">
+        <AutomationsManager
+          bootcampId={bootcamp.id}
+          automations={automationData.automations}
+          stages={pipelineStatuses.map((s) => ({ id: s.id, name: s.name, kind: s.kind }))}
+          templates={automationData.templates.map((t) => ({
+            id: t.id,
+            name: t.name,
+            subject: t.subject,
+          }))}
         />
       </div>
 

@@ -32,6 +32,8 @@ import {
   stageHistory,
   wpConnection,
   allowedEmails,
+  automations,
+  automationRuns,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -2016,4 +2018,117 @@ export async function createAllowedEmail(data: typeof allowedEmails.$inferInsert
 
 export async function deleteAllowedEmail(id: string) {
   await db.delete(allowedEmails).where(eq(allowedEmails.id, id));
+}
+
+// ── Automatisations ────────────────────────────────────
+
+export type AutomationRow = {
+  id: string;
+  statusId: string;
+  statusName: string | null;
+  templateId: string;
+  templateName: string | null;
+  templateHasSubject: boolean;
+  active: boolean;
+  createdAt: Date;
+  sent: number;
+  skipped: number;
+  failed: number;
+};
+
+export async function getAutomationsByBootcamp(
+  bootcampId: string
+): Promise<AutomationRow[]> {
+  const rows = await db
+    .select({
+      id: automations.id,
+      statusId: automations.statusId,
+      statusName: leadStatuses.name,
+      templateId: automations.emailTemplateId,
+      templateName: emailTemplates.name,
+      templateSubject: emailTemplates.subject,
+      active: automations.active,
+      createdAt: automations.createdAt,
+    })
+    .from(automations)
+    .leftJoin(leadStatuses, eq(leadStatuses.id, automations.statusId))
+    .leftJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
+    .where(eq(automations.bootcampId, bootcampId))
+    .orderBy(desc(automations.createdAt));
+
+  if (rows.length === 0) return [];
+
+  // Compteurs en UNE requête agrégée : une par automatisation ferait N requêtes
+  // sur une page qui en tire déjà plusieurs (pool postgres-js dimensionné).
+  const counts = await db
+    .select({
+      automationId: automationRuns.automationId,
+      status: automationRuns.status,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(automationRuns)
+    .where(
+      inArray(
+        automationRuns.automationId,
+        rows.map((r) => r.id)
+      )
+    )
+    .groupBy(automationRuns.automationId, automationRuns.status);
+
+  return rows.map((r) => {
+    const mine = counts.filter((c) => c.automationId === r.id);
+    const n = (k: string) => mine.find((c) => c.status === k)?.n ?? 0;
+    return {
+      id: r.id,
+      statusId: r.statusId,
+      statusName: r.statusName,
+      templateId: r.templateId,
+      templateName: r.templateName,
+      templateHasSubject: !!r.templateSubject?.trim(),
+      active: r.active,
+      createdAt: r.createdAt,
+      sent: n("sent"),
+      skipped: n("skipped"),
+      failed: n("failed"),
+    };
+  });
+}
+
+export async function createAutomation(data: typeof automations.$inferInsert) {
+  const createdBy =
+    data.createdBy !== undefined ? data.createdBy : await currentActor();
+  const [row] = await db
+    .insert(automations)
+    .values({ ...data, createdBy })
+    .returning();
+  return row;
+}
+
+export async function setAutomationActive(id: string, active: boolean) {
+  await db.update(automations).set({ active }).where(eq(automations.id, id));
+}
+
+export async function deleteAutomation(id: string) {
+  await db.delete(automations).where(eq(automations.id, id));
+}
+
+/** Dernières exécutions, pour voir ce qui est réellement parti (et ce qui a échoué). */
+export async function getAutomationRuns(bootcampId: string, limit = 20) {
+  return db
+    .select({
+      id: automationRuns.id,
+      status: automationRuns.status,
+      reason: automationRuns.reason,
+      createdAt: automationRuns.createdAt,
+      leadId: automationRuns.leadId,
+      leadName: leads.fullName,
+      statusName: leadStatuses.name,
+    })
+    .from(automationRuns)
+    .innerJoin(automations, eq(automations.id, automationRuns.automationId))
+    .leftJoin(leads, eq(leads.id, automationRuns.leadId))
+    .leftJoin(leadStatuses, eq(leadStatuses.id, automations.statusId))
+    .where(eq(automations.bootcampId, bootcampId))
+    .orderBy(desc(automationRuns.createdAt))
+    .limit(limit);
 }

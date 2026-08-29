@@ -888,6 +888,56 @@ export type NoteTemplate = typeof noteTemplates.$inferSelect;
 export type NewNoteTemplate = typeof noteTemplates.$inferInsert;
 export type StageHistory = typeof stageHistory.$inferSelect;
 export type NewStageHistory = typeof stageHistory.$inferInsert;
+// ── Automatisations ────────────────────────────────────
+// Déclencheur unique pour l'instant : « le lead entre dans cette colonne ».
+// Les trois chemins d'entrée (glisser-déposer, popup d'inscription, import)
+// appellent le même runner — sinon une automatisation marcherait depuis le
+// kanban et resterait muette sur les leads venus du site.
+
+export const automationRunStatusEnum = pgEnum("automation_run_status", [
+  "sent",
+  "skipped",
+  "failed",
+]);
+
+export const automations = pgTable("automations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bootcampId: uuid("bootcamp_id")
+    .notNull()
+    .references(() => bootcamps.id, { onDelete: "cascade" }),
+  // Colonne déclencheuse. Supprimer la colonne supprime l'automatisation :
+  // une règle qui pointe vers une colonne disparue ne se déclencherait jamais.
+  statusId: uuid("status_id")
+    .notNull()
+    .references(() => leadStatuses.id, { onDelete: "cascade" }),
+  emailTemplateId: uuid("email_template_id")
+    .notNull()
+    .references(() => emailTemplates.id),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Journal de TOUTES les tentatives, y compris ignorées et échouées.
+// C'est ce qui rend le volume visible : sans lui, un envoi refusé par Resend
+// (plafond du plan gratuit) disparaîtrait sans trace.
+export const automationRuns = pgTable("automation_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  automationId: uuid("automation_id")
+    .notNull()
+    .references(() => automations.id, { onDelete: "cascade" }),
+  leadId: uuid("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  status: automationRunStatusEnum("status").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type Automation = typeof automations.$inferSelect;
+export type NewAutomation = typeof automations.$inferInsert;
+export type AutomationRun = typeof automationRuns.$inferSelect;
+
 export type AllowedEmail = typeof allowedEmails.$inferSelect;
 export type NewAllowedEmail = typeof allowedEmails.$inferInsert;
 export type WpConnection = typeof wpConnection.$inferSelect;

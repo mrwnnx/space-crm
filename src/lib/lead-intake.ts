@@ -191,6 +191,13 @@ export async function ingestSubmission(
     created = true;
 
     await recordStageChange(leadId, null, targetStatusId, "webhook");
+
+    // Un lead déposé par l'import entre bien dans une colonne : il déclenche
+    // les mêmes automatisations qu'un déplacement à la main.
+    // ⚠️ Uniquement à la CRÉATION — une re-soumission ne redéplace pas le lead
+    // (statusId n'est jamais réécrit plus bas), donc pas de doublon d'email.
+    const { runStatusAutomations } = await import("@/lib/automations");
+    await runStatusAutomations(leadId, targetStatusId);
   } else {
     // UPDATE non destructif
     leadId = existingLead.id;
