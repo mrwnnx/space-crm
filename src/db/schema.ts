@@ -912,9 +912,11 @@ export type EmailBranding = typeof emailBranding.$inferSelect;
 // kanban et resterait muette sur les leads venus du site.
 
 export const automationRunStatusEnum = pgEnum("automation_run_status", [
+  "pending", // en file d'attente, échéance pas encore atteinte
   "sent",
   "skipped",
   "failed",
+  "cancelled", // le lead a quitté la colonne avant l'échéance
 ]);
 
 export const automations = pgTable("automations", {
@@ -930,6 +932,9 @@ export const automations = pgTable("automations", {
   emailTemplateId: uuid("email_template_id")
     .notNull()
     .references(() => emailTemplates.id),
+  // 0 = envoi immédiat à l'entrée dans la colonne. Sinon l'envoi passe par la
+  // file d'attente, vidée toutes les ~15 min : la précision est au quart d'heure.
+  delayMinutes: integer("delay_minutes").notNull().default(0),
   active: boolean("active").notNull().default(true),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -948,6 +953,8 @@ export const automationRuns = pgTable("automation_runs", {
     .references(() => leads.id, { onDelete: "cascade" }),
   status: automationRunStatusEnum("status").notNull(),
   reason: text("reason"),
+  // Échéance d'un envoi différé. NULL = envoi immédiat.
+  scheduledAt: timestamp("scheduled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

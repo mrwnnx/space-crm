@@ -1289,7 +1289,8 @@ export async function saveEmailBrandingAction(
 export async function createAutomationAction(
   bootcampId: string,
   statusId: string,
-  emailTemplateId: string
+  emailTemplateId: string,
+  delayMinutes = 0
 ): Promise<{ ok: boolean; message: string }> {
   await requireUser();
   if (!statusId || !emailTemplateId) {
@@ -1309,9 +1310,20 @@ export async function createAutomationAction(
     };
   }
 
-  await createAutomation({ bootcampId, statusId, emailTemplateId });
+  // Plafond à 30 jours : au-delà, le contexte du lead n'a plus rien à voir avec
+  // le moment où il est entré dans la colonne.
+  const delay = Number.isFinite(delayMinutes)
+    ? Math.min(Math.max(Math.trunc(delayMinutes), 0), 43200)
+    : 0;
+
+  await createAutomation({ bootcampId, statusId, emailTemplateId, delayMinutes: delay });
   revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true, message: "Automatisation créée." };
+  return {
+    ok: true,
+    message: delay > 0
+      ? "Automatisation créée. L'envoi est différé : la file part toutes les ~15 min."
+      : "Automatisation créée.",
+  };
 }
 
 export async function setAutomationActiveAction(

@@ -1,7 +1,9 @@
 import "server-only";
 import { db } from "@/db";
-import { automations, automationRuns } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { automations, automationRuns, leads } from "@/db/schema";
+import { and, eq, lte } from "drizzle-orm";
+
+type RunStatus = "pending" | "sent" | "skipped" | "failed" | "cancelled";
 
 /**
  * Déclencheur « le lead entre dans cette colonne ».
@@ -10,12 +12,11 @@ import { and, eq } from "drizzle-orm";
  * d'inscription, import du site) : une règle qui ne marcherait que depuis le
  * kanban resterait muette sur les ~50 leads/semaine venus du formulaire.
  *
- * ⚠️ Ne jette JAMAIS. Un email refusé ne doit faire échouer ni le déplacement
- * du lead ni l'import — l'échec part au journal (`automation_runs`).
+ * Délai 0 → envoi immédiat. Délai > 0 → mise en file d'attente, vidée par
+ * /api/cron/automations.
  *
- * ⚠️ L'envoi est ATTENDU, jamais lancé en tâche de fond : en serverless une
- * promesse non attendue est tuée au retour de la fonction (table vide, zéro
- * erreur).
+ * ⚠️ Ne jette JAMAIS : un email refusé ne doit faire échouer ni le déplacement
+ * du lead ni l'import.
  */
 export async function runStatusAutomations(
   leadId: string,
@@ -29,80 +30,150 @@ export async function runStatusAutomations(
     });
     if (rules.length === 0) return;
 
-    const { getLeadById, getEmailTemplateById, createActivity } = await import("@/lib/queries");
-    const lead = await getLeadById(leadId);
-    if (!lead) return;
-
     for (const rule of rules) {
-      const log = (status: "sent" | "skipped" | "failed", reason?: string) =>
-        db.insert(automationRuns).values({
+      if (rule.delayMinutes > 0) {
+        // Rien n'est envoyé maintenant : on pose l'échéance, le cron s'en charge.
+        await db.insert(automationRuns).values({
           automationId: rule.id,
           leadId,
-          status,
-          reason: reason ?? null,
+          status: "pending",
+          scheduledAt: new Date(Date.now() + rule.delayMinutes * 60_000),
         });
-
-      // ── Garde-fous. Repris des campagnes : on n'écrit jamais à quelqu'un
-      // qui s'est désabonné ni à une adresse morte.
-      if (!lead.email) {
-        await log("skipped", "Aucune adresse email sur le lead");
         continue;
       }
-      if (lead.contact?.unsubscribedAt) {
-        await log("skipped", "Contact désabonné");
-        continue;
-      }
-      if (lead.contact?.bouncedAt) {
-        await log("skipped", "Adresse en rebond");
-        continue;
-      }
-
-      const template = await getEmailTemplateById(rule.emailTemplateId);
-      if (!template) {
-        await log("failed", "Modèle d'email introuvable");
-        continue;
-      }
-      if (!template.subject?.trim()) {
-        // L'objet fait partie de l'email : sans lui on enverrait un message
-        // sans titre. On refuse plutôt que d'inventer.
-        await log("skipped", "Le modèle n'a pas d'objet");
-        continue;
-      }
-
-      const vars = buildVariables(lead);
-      const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
-      const { renderEmailTemplate } = await import("@/lib/messaging/markdown");
-      const { getEmailBranding } = await import("@/lib/queries");
-      const branding = await getEmailBranding();
-      // L'objet est du texte brut : substitution simple, sans échappement HTML
-      // (sinon une esperluette s'afficherait « &amp; » dans la boîte de réception).
-      const subject = renderTemplate(template.subject, vars);
-      const html = renderEmailTemplate(template.content, vars, branding ?? undefined);
-
-      const res = await sendEmail({ to: lead.email, subject, html });
-
-      if (!res.ok) {
-        await log("failed", res.error ?? "Échec d'envoi");
-        continue;
-      }
-
-      await log("sent");
-
-      // Visible dans le fil du lead, attribué à la machine et pas à un humain
-      // (cf. convention : une valeur sans « @ » est un acteur système).
-      await createActivity({
-        referenceType: "lead",
-        referenceId: leadId,
-        type: "email",
-        direction: "outbound",
-        subject,
-        content: `Envoi automatique — modèle « ${template.name} »`,
-        createdBy: "automation",
-      });
+      await executeRule(rule, leadId);
     }
   } catch {
     // Le déplacement du lead et l'import priment sur l'automatisation.
   }
+}
+
+/**
+ * Vide la file : envoie les automatisations dont l'échéance est passée.
+ *
+ * ⚠️ Les garde-fous sont évalués À L'ÉCHÉANCE, pas au moment du déclenchement :
+ * entre les deux, le lead a pu se désabonner, changer d'adresse, ou quitter la
+ * colonne. Un envoi programmé hier ne doit pas ignorer ce qui s'est passé depuis.
+ */
+export async function processDueAutomations(): Promise<{
+  sent: number;
+  cancelled: number;
+  failed: number;
+  skipped: number;
+}> {
+  const report = { sent: 0, cancelled: 0, failed: 0, skipped: 0 };
+
+  const due = await db.query.automationRuns.findMany({
+    where: and(
+      eq(automationRuns.status, "pending"),
+      lte(automationRuns.scheduledAt, new Date())
+    ),
+    limit: 100, // plafond par passage : une file accumulée ne part jamais d'un bloc
+  });
+
+  for (const run of due) {
+    const rule = await db.query.automations.findFirst({
+      where: eq(automations.id, run.automationId),
+    });
+
+    if (!rule || !rule.active) {
+      await closeRun(run.id, "cancelled", "Automatisation supprimée ou désactivée");
+      report.cancelled++;
+      continue;
+    }
+
+    // Le lead est-il TOUJOURS dans la colonne déclencheuse ?
+    const lead = await db.query.leads.findFirst({
+      where: eq(leads.id, run.leadId),
+      columns: { id: true, statusId: true },
+    });
+    if (!lead) {
+      await closeRun(run.id, "cancelled", "Lead supprimé");
+      report.cancelled++;
+      continue;
+    }
+    if (lead.statusId !== rule.statusId) {
+      await closeRun(run.id, "cancelled", "Le lead a quitté la colonne avant l'échéance");
+      report.cancelled++;
+      continue;
+    }
+
+    const status = await executeRule(rule, run.leadId, run.id);
+    if (status === "sent") report.sent++;
+    else if (status === "failed") report.failed++;
+    else report.skipped++;
+  }
+
+  return report;
+}
+
+async function closeRun(runId: string, status: RunStatus, reason: string) {
+  await db
+    .update(automationRuns)
+    .set({ status, reason })
+    .where(eq(automationRuns.id, runId));
+}
+
+/**
+ * Garde-fous + envoi + journal + trace dans le fil du lead.
+ * `runId` fourni = on met à jour la ligne en attente au lieu d'en créer une.
+ */
+async function executeRule(
+  rule: typeof automations.$inferSelect,
+  leadId: string,
+  runId?: string
+): Promise<RunStatus> {
+  const { getLeadById, getEmailTemplateById, createActivity, getEmailBranding } =
+    await import("@/lib/queries");
+
+  const log = async (status: RunStatus, reason?: string) => {
+    if (runId) await closeRun(runId, status, reason ?? "");
+    else
+      await db
+        .insert(automationRuns)
+        .values({ automationId: rule.id, leadId, status, reason: reason ?? null });
+    return status;
+  };
+
+  const lead = await getLeadById(leadId);
+  if (!lead) return log("cancelled", "Lead introuvable");
+
+  // Garde-fous repris des campagnes : on n'écrit jamais à quelqu'un qui s'est
+  // désabonné ni à une adresse morte.
+  if (!lead.email) return log("skipped", "Aucune adresse email sur le lead");
+  if (lead.contact?.unsubscribedAt) return log("skipped", "Contact désabonné");
+  if (lead.contact?.bouncedAt) return log("skipped", "Adresse en rebond");
+
+  const template = await getEmailTemplateById(rule.emailTemplateId);
+  if (!template) return log("failed", "Modèle d'email introuvable");
+  if (!template.subject?.trim()) return log("skipped", "Le modèle n'a pas d'objet");
+
+  const vars = buildVariables(lead);
+  const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
+  const { renderEmailTemplate } = await import("@/lib/messaging/markdown");
+  const branding = await getEmailBranding();
+
+  // L'objet est du texte brut : substitution simple, sans échappement HTML.
+  const subject = renderTemplate(template.subject, vars);
+  const html = renderEmailTemplate(template.content, vars, branding ?? undefined);
+
+  const res = await sendEmail({ to: lead.email, subject, html });
+  if (!res.ok) return log("failed", res.error ?? "Échec d'envoi");
+
+  await log("sent");
+
+  // Visible dans le fil du lead, attribué à la machine et pas à un humain.
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "email",
+    direction: "outbound",
+    subject,
+    content: `Envoi automatique — modèle « ${template.name} »`,
+    createdBy: "automation",
+  });
+
+  return "sent";
 }
 
 type LeadForVars = {

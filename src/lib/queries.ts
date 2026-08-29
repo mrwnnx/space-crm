@@ -2031,10 +2031,13 @@ export type AutomationRow = {
   templateName: string | null;
   templateHasSubject: boolean;
   active: boolean;
+  delayMinutes: number;
   createdAt: Date;
   sent: number;
   skipped: number;
   failed: number;
+  pending: number;
+  cancelled: number;
 };
 
 export async function getAutomationsByBootcamp(
@@ -2049,6 +2052,7 @@ export async function getAutomationsByBootcamp(
       templateName: emailTemplates.name,
       templateSubject: emailTemplates.subject,
       active: automations.active,
+      delayMinutes: automations.delayMinutes,
       createdAt: automations.createdAt,
     })
     .from(automations)
@@ -2087,10 +2091,13 @@ export async function getAutomationsByBootcamp(
       templateName: r.templateName,
       templateHasSubject: !!r.templateSubject?.trim(),
       active: r.active,
+      delayMinutes: r.delayMinutes,
       createdAt: r.createdAt,
       sent: n("sent"),
       skipped: n("skipped"),
       failed: n("failed"),
+      pending: n("pending"),
+      cancelled: n("cancelled"),
     };
   });
 }

@@ -13,6 +13,23 @@ type Template = { id: string; name: string; subject: string | null };
 
 const VARIABLES = ["firstName", "lastName", "fullName", "email", "formation", "offre"];
 
+// Délais proposés en HEURES et en JOURS, jamais en minutes : la file part
+// toutes les ~15 min et GitHub ne garantit pas la minute exacte. Proposer
+// « 5 minutes » serait une promesse qu'on ne tient pas.
+const DELAYS = [
+  { value: 0, label: "immédiatement" },
+  { value: 60, label: "1 heure après" },
+  { value: 180, label: "3 heures après" },
+  { value: 1440, label: "1 jour après" },
+  { value: 2880, label: "2 jours après" },
+  { value: 4320, label: "3 jours après" },
+  { value: 10080, label: "7 jours après" },
+];
+
+function delayLabel(minutes: number) {
+  return DELAYS.find((d) => d.value === minutes)?.label ?? `${minutes} min après`;
+}
+
 export function AutomationsManager({
   bootcampId,
   automations,
@@ -27,17 +44,19 @@ export function AutomationsManager({
   const [open, setOpen] = useState(false);
   const [statusId, setStatusId] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [delay, setDelay] = useState(0);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function create(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      const res = await createAutomationAction(bootcampId, statusId, templateId);
+      const res = await createAutomationAction(bootcampId, statusId, templateId, delay);
       setFeedback(res);
       if (res.ok) {
         setStatusId("");
         setTemplateId("");
+        setDelay(0);
         setOpen(false);
       }
     });
@@ -71,10 +90,17 @@ export function AutomationsManager({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs text-foreground">
                   <strong>{a.statusName ?? "colonne supprimée"}</strong> → {a.templateName}
+                  <span className="text-muted-foreground"> · {delayLabel(a.delayMinutes)}</span>
                 </p>
                 <p className="text-[10px] text-muted-foreground">
+                  {a.pending > 0 && (
+                    <span className="text-foreground">
+                      {a.pending} en attente ·{" "}
+                    </span>
+                  )}
                   {a.sent} envoyé{a.sent > 1 ? "s" : ""}
                   {a.skipped > 0 && ` · ${a.skipped} ignoré${a.skipped > 1 ? "s" : ""}`}
+                  {a.cancelled > 0 && ` · ${a.cancelled} annulé${a.cancelled > 1 ? "s" : ""}`}
                   {a.failed > 0 && (
                     <span className="text-red-600"> · {a.failed} en échec</span>
                   )}
@@ -152,6 +178,22 @@ export function AutomationsManager({
                 ))}
               </select>
             </label>
+            <label className="flex-1 min-w-[130px]">
+              <span className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                envoyé
+              </span>
+              <select
+                value={delay}
+                onChange={(e) => setDelay(Number(e.target.value))}
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              >
+                {DELAYS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="submit"
               disabled={isPending}
@@ -160,6 +202,10 @@ export function AutomationsManager({
               {isPending ? "…" : "Créer"}
             </button>
           </div>
+          <p className="text-[10px] text-muted-foreground/70">
+            Un envoi différé part avec une précision d&apos;environ 15 minutes, et
+            est <strong>annulé</strong> si le lead a quitté la colonne entre-temps.
+          </p>
           <p className="text-[10px] text-muted-foreground/70">
             Variables utilisables dans l&apos;objet et le corps du modèle :{" "}
             {VARIABLES.map((v) => (
