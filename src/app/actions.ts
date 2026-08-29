@@ -967,18 +967,21 @@ export async function sendEmailAction(
 ) {
   await requireUser();
   const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
-  const { renderEmailTemplate, markdownToEmailHtml } = await import(
+  const { renderEmailTemplate, markdownToEmailHtml, wrapWithBranding } = await import(
     "@/lib/messaging/markdown"
   );
+  const { getEmailBranding } = await import("@/lib/queries");
+  const branding = (await getEmailBranding()) ?? undefined;
 
   // Sans modèle, le message tapé était injecté BRUT dans le corps HTML : ses
-  // retours à la ligne disparaissaient. Il passe maintenant par le même rendu.
-  let html = markdownToEmailHtml(content);
+  // retours à la ligne disparaissaient. Il passe maintenant par le même rendu,
+  // habillage compris — un envoi 1-à-1 porte le logo comme les autres.
+  let html = wrapWithBranding(markdownToEmailHtml(content, branding), branding);
   if (templateId) {
     const { getEmailTemplateById } = await import("@/lib/queries");
     const tpl = await getEmailTemplateById(templateId);
     if (tpl) {
-      html = renderEmailTemplate(tpl.content, { subject, content });
+      html = renderEmailTemplate(tpl.content, { subject, content }, branding);
       // Objet = texte brut, pas de HTML : substitution simple.
       subject = renderTemplate(tpl.subject || subject, { subject });
     }
@@ -1234,6 +1237,34 @@ export async function removeAllowedEmailAction(id: string) {
   const { deleteAllowedEmail } = await import("@/lib/queries");
   await deleteAllowedEmail(id);
   revalidatePath("/settings");
+}
+
+// ── Habillage des emails ───────────────────────────────
+
+export async function saveEmailBrandingAction(
+  formData: FormData
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+
+  const logoUrl = String(formData.get("logoUrl") || "").trim() || null;
+  const footerText = String(formData.get("footerText") || "").trim() || null;
+  const accentColor = String(formData.get("accentColor") || "").trim() || "#1a1a1a";
+  const width = parseInt(String(formData.get("logoWidth") || "150"), 10);
+  const logoWidth = Number.isFinite(width) && width > 0 ? Math.min(width, 560) : 150;
+
+  // Un client mail n'a pas de session : une URL relative ou en http afficherait
+  // une image cassée chez le destinataire, sans que rien ne le signale ici.
+  if (logoUrl && !/^https:\/\//i.test(logoUrl)) {
+    return { ok: false, message: "L'URL du logo doit être absolue et en https://" };
+  }
+  if (!/^#[0-9a-f]{6}$/i.test(accentColor)) {
+    return { ok: false, message: "Couleur invalide (format attendu : #1a1a1a)." };
+  }
+
+  const { saveEmailBranding } = await import("@/lib/queries");
+  await saveEmailBranding({ logoUrl, logoWidth, footerText, accentColor });
+  revalidatePath("/settings");
+  return { ok: true, message: "Habillage enregistré." };
 }
 
 // ── Automatisations ────────────────────────────────────

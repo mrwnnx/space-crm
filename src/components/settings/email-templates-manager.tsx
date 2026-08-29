@@ -6,7 +6,7 @@ import {
   updateEmailTemplateAction,
   deleteEmailTemplateAction,
 } from "@/app/actions";
-import type { EmailTemplate } from "@/db/schema";
+import type { EmailTemplate, EmailBranding } from "@/db/schema";
 import { renderEmailTemplate } from "@/lib/messaging/markdown";
 
 // Valeurs d'exemple pour l'aperçu : voir « Sana » plutôt que « {{firstName}} »
@@ -28,8 +28,10 @@ const LABEL = "mb-1 block text-xs font-medium text-muted-foreground";
 
 export function EmailTemplatesManager({
   templates,
+  branding,
 }: {
   templates: EmailTemplate[];
+  branding: EmailBranding | null;
 }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -66,6 +68,7 @@ export function EmailTemplatesManager({
               <TemplateEditor
                 key={tpl.id}
                 template={tpl}
+                branding={branding}
                 onClose={() => setEditing(null)}
               />
             ) : (
@@ -167,9 +170,11 @@ export function EmailTemplatesManager({
  */
 function TemplateEditor({
   template,
+  branding,
   onClose,
 }: {
   template: EmailTemplate;
+  branding: EmailBranding | null;
   onClose: () => void;
 }) {
   const [name, setName] = useState(template.name);
@@ -216,10 +221,12 @@ function TemplateEditor({
       </div>
       <div>
         <label className={LABEL}>
-          Contenu * — Markdown : <code className="rounded bg-muted px-1">**gras**</code>,{" "}
+          Contenu * — <code className="rounded bg-muted px-1">**gras**</code>,{" "}
           <code className="rounded bg-muted px-1">- liste</code>,{" "}
           <code className="rounded bg-muted px-1">[lien](url)</code>,{" "}
-          <code className="rounded bg-muted px-1">## titre</code>
+          <code className="rounded bg-muted px-1">## titre</code>,{" "}
+          <code className="rounded bg-muted px-1">![image](url)</code>, bouton :{" "}
+          <code className="rounded bg-muted px-1">[[Texte]](url)</code>
         </label>
         <div className="grid gap-3 md:grid-cols-2">
           <textarea
@@ -238,7 +245,9 @@ function TemplateEditor({
               style={{ maxHeight: 380 }}
               // Contenu écrit par un membre de l'équipe, rendu par le MÊME
               // convertisseur que l'envoi : ce qu'on voit ici est ce qui part.
-              dangerouslySetInnerHTML={{ __html: renderEmailTemplate(content, SAMPLE) }}
+              dangerouslySetInnerHTML={{
+                __html: renderEmailTemplate(content, SAMPLE, branding ?? undefined),
+              }}
             />
           </div>
         </div>

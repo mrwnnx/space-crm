@@ -34,6 +34,7 @@ import {
   allowedEmails,
   automations,
   automationRuns,
+  emailBranding,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -2131,4 +2132,29 @@ export async function getAutomationRuns(bootcampId: string, limit = 20) {
     .where(eq(automations.bootcampId, bootcampId))
     .orderBy(desc(automationRuns.createdAt))
     .limit(limit);
+}
+
+// ── Habillage des emails ───────────────────────────────
+
+/** Ligne unique. Absente = habillage vide (ni logo ni pied de page). */
+export async function getEmailBranding() {
+  const row = await db.query.emailBranding.findFirst();
+  return row ?? null;
+}
+
+export async function saveEmailBranding(data: {
+  logoUrl: string | null;
+  logoWidth: number;
+  footerText: string | null;
+  accentColor: string;
+}) {
+  const existing = await db.query.emailBranding.findFirst();
+  if (existing) {
+    await db
+      .update(emailBranding)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(emailBranding.id, true));
+    return;
+  }
+  await db.insert(emailBranding).values({ id: true, ...data });
 }

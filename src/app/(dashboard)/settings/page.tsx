@@ -1,8 +1,9 @@
-import { getAllowedEmails, getEmailTemplates, getWpConnectionPublic } from "@/lib/queries";
+import { getAllowedEmails, getEmailTemplates, getWpConnectionPublic, getEmailBranding } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
 import { WpConnectionForm } from "@/components/settings/wp-connection-form";
 import { TeamManager } from "@/components/settings/team-manager";
+import { EmailBrandingForm } from "@/components/settings/email-branding-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +15,19 @@ export default async function SettingsPage({
 }) {
   const { tab } = await searchParams;
   const current: SettingsTab =
-    tab === "emails" || tab === "providers" || tab === "team" ? tab : "site";
+    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding"
+      ? tab
+      : "site";
 
   // Une seule requête, celle de l'onglet affiché (le pool DB est dimensionné
   // sur la concurrence par requête HTTP — cf. gotcha max/pooler).
   const wpConnection = current === "site" ? await getWpConnectionPublic() : null;
+  // L'aperçu d'un modèle doit montrer l'email TEL QU'IL PARTIRA, habillage
+  // compris — sinon on valide une mise en page qu'on ne verra jamais.
   const templates = current === "emails" ? await getEmailTemplates() : [];
+  const templateBranding = current === "emails" ? await getEmailBranding() : null;
   const allowed = current === "team" ? await getAllowedEmails() : [];
+  const branding = current === "branding" ? await getEmailBranding() : null;
 
   return (
     <>
@@ -54,7 +61,22 @@ export default async function SettingsPage({
               <code className="rounded bg-muted px-1 text-[10px]">{`{{subject}}`}</code>,{" "}
               <code className="rounded bg-muted px-1 text-[10px]">{`{{content}}`}</code>
             </p>
-            <EmailTemplatesManager templates={templates} />
+            <EmailTemplatesManager templates={templates} branding={templateBranding} />
+          </section>
+          )}
+
+          {current === "branding" && (
+          /* Enveloppe commune à tous les emails */
+          <section>
+            <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
+              Habillage des emails
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              En-tête et pied de page appliqués à <strong>tous</strong> les envois :
+              automatisations et emails écrits depuis une fiche lead. Les modèles ne
+              contiennent que le message.
+            </p>
+            <EmailBrandingForm branding={branding} />
           </section>
           )}
 

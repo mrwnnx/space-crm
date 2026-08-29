@@ -888,6 +888,23 @@ export type NoteTemplate = typeof noteTemplates.$inferSelect;
 export type NewNoteTemplate = typeof noteTemplates.$inferInsert;
 export type StageHistory = typeof stageHistory.$inferSelect;
 export type NewStageHistory = typeof stageHistory.$inferInsert;
+// ── Habillage des emails ───────────────────────────────
+// Enveloppe commune à TOUS les envois (en-tête + pied de page). Table à ligne
+// unique, même motif que wp_connection : `id` est un booléen contraint à true.
+
+export const emailBranding = pgTable("email_branding", {
+  id: boolean("id").primaryKey().default(true),
+  // URL absolue et PUBLIQUE : un client mail n'a pas de session.
+  logoUrl: text("logo_url"),
+  logoWidth: integer("logo_width").notNull().default(150),
+  footerText: text("footer_text"),
+  // Couleur des boutons.
+  accentColor: text("accent_color").notNull().default("#1a1a1a"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type EmailBranding = typeof emailBranding.$inferSelect;
+
 // ── Automatisations ────────────────────────────────────
 // Déclencheur unique pour l'instant : « le lead entre dans cette colonne ».
 // Les trois chemins d'entrée (glisser-déposer, popup d'inscription, import)
