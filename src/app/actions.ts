@@ -1153,6 +1153,28 @@ export async function createEmailTemplateAction(formData: FormData) {
   revalidatePath("/settings");
 }
 
+export async function updateEmailTemplateAction(
+  id: string,
+  formData: FormData
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+  const name = String(formData.get("name") || "").trim();
+  const content = String(formData.get("content") || "").trim();
+  if (!name || !content) {
+    return { ok: false, message: "Nom et contenu obligatoires." };
+  }
+
+  const { updateEmailTemplate } = await import("@/lib/queries");
+  await updateEmailTemplate(id, {
+    name,
+    subject: String(formData.get("subject") || "").trim() || null,
+    content,
+  });
+
+  revalidatePath("/settings");
+  return { ok: true, message: "Modèle enregistré." };
+}
+
 export async function deleteEmailTemplateAction(id: string) {
   await requireUser();
   const { deleteEmailTemplate } = await import("@/lib/queries");
