@@ -1239,6 +1239,23 @@ export async function removeAllowedEmailAction(id: string) {
   revalidatePath("/settings");
 }
 
+// ── Images des emails ──────────────────────────────────
+
+export async function uploadEmailImageAction(
+  formData: FormData
+): Promise<{ ok: boolean; url?: string; message: string }> {
+  await requireUser();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "Aucun fichier." };
+  }
+
+  const { uploadEmailImage } = await import("@/lib/messaging/upload");
+  const res = await uploadEmailImage(file);
+  if (!res.ok) return { ok: false, message: res.message };
+  return { ok: true, url: res.url, message: res.warning ?? "Image envoyée." };
+}
+
 // ── Habillage des emails ───────────────────────────────
 
 export async function saveEmailBrandingAction(

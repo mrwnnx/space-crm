@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   createEmailTemplateAction,
   updateEmailTemplateAction,
@@ -8,6 +8,7 @@ import {
 } from "@/app/actions";
 import type { EmailTemplate, EmailBranding } from "@/db/schema";
 import { renderEmailTemplate } from "@/lib/messaging/markdown";
+import { ImageUploadButton } from "@/components/settings/image-upload-button";
 
 // Valeurs d'exemple pour l'aperçu : voir « Sana » plutôt que « {{firstName}} »
 // est la seule façon de juger si la phrase tombe juste.
@@ -182,6 +183,20 @@ function TemplateEditor({
   const [content, setContent] = useState(template.content);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Insère le Markdown de l'image LÀ où est le curseur, pas en fin de texte. */
+  function insertImage(url: string) {
+    const md = `![](${url})`;
+    const el = areaRef.current;
+    if (!el) {
+      setContent((c) => `${c}\n\n${md}`);
+      return;
+    }
+    const start = el.selectionStart ?? content.length;
+    const end = el.selectionEnd ?? start;
+    setContent(content.slice(0, start) + md + content.slice(end));
+  }
 
   function save(e: React.FormEvent) {
     e.preventDefault();
@@ -229,13 +244,22 @@ function TemplateEditor({
           <code className="rounded bg-muted px-1">[[Texte]](url)</code>
         </label>
         <div className="grid gap-3 md:grid-cols-2">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            required
-            rows={18}
-            className={`font-mono text-xs resize-y ${FIELD}`}
-          />
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <ImageUploadButton onUploaded={insertImage} />
+              <span className="text-[10px] text-muted-foreground/70">
+                le fichier est hébergé et son lien inséré au curseur
+              </span>
+            </div>
+            <textarea
+              ref={areaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              required
+              rows={18}
+              className={`font-mono text-xs resize-y ${FIELD}`}
+            />
+          </div>
           <div className="rounded-lg border border-border bg-white p-4">
             <p className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">
               Aperçu — variables remplacées par des exemples

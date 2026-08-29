@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { saveEmailBrandingAction } from "@/app/actions";
 import { renderEmailTemplate } from "@/lib/messaging/markdown";
 import type { EmailBranding } from "@/db/schema";
+import { ImageUploadButton } from "@/components/settings/image-upload-button";
 
 const FIELD =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
@@ -56,6 +57,9 @@ export function EmailBrandingForm({ branding }: { branding: EmailBranding | null
             placeholder="https://thespace.academy/wp-content/uploads/logo.png"
             className={FIELD}
           />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <ImageUploadButton label="Téléverser un logo" onUploaded={setLogoUrl} />
+          </div>
           <p className="mt-1 text-[10px] text-muted-foreground/70">
             ⚠️ Évite le <strong>WebP</strong> : Outlook ne l&apos;affiche pas. L&apos;URL doit
             être publique — un client mail n&apos;a pas de session.
