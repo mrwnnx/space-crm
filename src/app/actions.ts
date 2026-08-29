@@ -967,13 +967,19 @@ export async function sendEmailAction(
 ) {
   await requireUser();
   const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
+  const { renderEmailTemplate, markdownToEmailHtml } = await import(
+    "@/lib/messaging/markdown"
+  );
 
-  let html = content;
+  // Sans modèle, le message tapé était injecté BRUT dans le corps HTML : ses
+  // retours à la ligne disparaissaient. Il passe maintenant par le même rendu.
+  let html = markdownToEmailHtml(content);
   if (templateId) {
     const { getEmailTemplateById } = await import("@/lib/queries");
     const tpl = await getEmailTemplateById(templateId);
     if (tpl) {
-      html = renderTemplate(tpl.content, { subject, content });
+      html = renderEmailTemplate(tpl.content, { subject, content });
+      // Objet = texte brut, pas de HTML : substitution simple.
       subject = renderTemplate(tpl.subject || subject, { subject });
     }
   }

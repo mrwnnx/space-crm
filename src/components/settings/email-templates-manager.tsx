@@ -7,6 +7,20 @@ import {
   deleteEmailTemplateAction,
 } from "@/app/actions";
 import type { EmailTemplate } from "@/db/schema";
+import { renderEmailTemplate } from "@/lib/messaging/markdown";
+
+// Valeurs d'exemple pour l'aperçu : voir « Sana » plutôt que « {{firstName}} »
+// est la seule façon de juger si la phrase tombe juste.
+const SAMPLE: Record<string, string> = {
+  firstName: "Sana",
+  lastName: "Amri",
+  fullName: "Sana Amri",
+  email: "sana.amri@gmail.com",
+  formation: "Bootcamp september 2026",
+  offre: "3× 500 TND",
+  subject: "Objet du message",
+  content: "Le message tapé dans la fiche du lead.",
+};
 
 const FIELD =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
@@ -201,14 +215,33 @@ function TemplateEditor({
         />
       </div>
       <div>
-        <label className={LABEL}>Contenu *</label>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          required
-          rows={14}
-          className={`font-mono text-xs resize-y ${FIELD}`}
-        />
+        <label className={LABEL}>
+          Contenu * — Markdown : <code className="rounded bg-muted px-1">**gras**</code>,{" "}
+          <code className="rounded bg-muted px-1">- liste</code>,{" "}
+          <code className="rounded bg-muted px-1">[lien](url)</code>,{" "}
+          <code className="rounded bg-muted px-1">## titre</code>
+        </label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            required
+            rows={18}
+            className={`font-mono text-xs resize-y ${FIELD}`}
+          />
+          <div className="rounded-lg border border-border bg-white p-4">
+            <p className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Aperçu — variables remplacées par des exemples
+            </p>
+            <div
+              className="overflow-y-auto"
+              style={{ maxHeight: 380 }}
+              // Contenu écrit par un membre de l'équipe, rendu par le MÊME
+              // convertisseur que l'envoi : ce qu'on voit ici est ce qui part.
+              dangerouslySetInnerHTML={{ __html: renderEmailTemplate(content, SAMPLE) }}
+            />
+          </div>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <button

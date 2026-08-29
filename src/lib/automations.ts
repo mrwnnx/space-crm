@@ -71,8 +71,11 @@ export async function runStatusAutomations(
 
       const vars = buildVariables(lead);
       const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
+      const { renderEmailTemplate } = await import("@/lib/messaging/markdown");
+      // L'objet est du texte brut : substitution simple, sans échappement HTML
+      // (sinon une esperluette s'afficherait « &amp; » dans la boîte de réception).
       const subject = renderTemplate(template.subject, vars);
-      const html = renderTemplate(template.content, vars);
+      const html = renderEmailTemplate(template.content, vars);
 
       const res = await sendEmail({ to: lead.email, subject, html });
 
