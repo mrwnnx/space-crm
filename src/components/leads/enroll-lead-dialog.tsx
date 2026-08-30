@@ -35,10 +35,31 @@ export function EnrollLeadDialog({
   });
   const [firstPaymentReceived, setFirstPaymentReceived] = useState(true);
 
+  // Montants pre-remplis au tarif de la formation : le cas courant reste un
+  // clic. Ils sont modifiables parce qu'un prix se negocie.
+  const [totalAmount, setTotalAmount] = useState(bootcamp.priceTotal ?? "");
+  const [monthlyAmount, setMonthlyAmount] = useState(bootcamp.monthlyAmount ?? "");
+  const [monthlyCount, setMonthlyCount] = useState(String(bootcamp.monthlyCount ?? 3));
+
+  const num = (v: string) => Number(String(v).replace(",", "."));
+  const negotiatedTotal =
+    plan === "total" ? num(totalAmount) : num(monthlyAmount) * Number(monthlyCount);
+  const listPrice =
+    plan === "total"
+      ? num(bootcamp.priceTotal ?? "0")
+      : num(bootcamp.monthlyAmount ?? "0") * Number(bootcamp.monthlyCount ?? 0);
+  const gap = Number.isFinite(negotiatedTotal) && listPrice > 0 ? negotiatedTotal - listPrice : 0;
+
   function handleConfirm() {
     setError(null);
     startTransition(async () => {
-      const result = (await enrollLeadAction(lead.id, { plan, firstPaymentReceived })) as EnrollResult;
+      const result = (await enrollLeadAction(lead.id, {
+        plan,
+        firstPaymentReceived,
+        totalAmount: plan === "total" ? totalAmount : undefined,
+        monthlyAmount: plan === "monthly" ? monthlyAmount : undefined,
+        monthlyCount: plan === "monthly" ? Number(monthlyCount) : undefined,
+      })) as EnrollResult;
       if ("error" in result) {
         setError(result.error);
       } else {
@@ -103,6 +124,71 @@ export function EnrollLeadDialog({
                   </label>
                 ))}
               </div>
+            </div>
+
+            {/* Montants réels — négociés ou non */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Montant réellement convenu
+              </p>
+              {plan === "total" ? (
+                <label className="block">
+                  <span className="mb-1 block text-[10px] text-muted-foreground">
+                    Montant total ({bootcamp.currency})
+                  </span>
+                  <input
+                    value={totalAmount}
+                    onChange={(e) => setTotalAmount(e.target.value)}
+                    inputMode="decimal"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  />
+                </label>
+              ) : (
+                <div className="flex items-end gap-2">
+                  <label className="w-24">
+                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                      Mensualités
+                    </span>
+                    <input
+                      value={monthlyCount}
+                      onChange={(e) => setMonthlyCount(e.target.value)}
+                      type="number"
+                      min={1}
+                      max={24}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                    />
+                  </label>
+                  <span className="pb-2.5 text-sm text-muted-foreground">×</span>
+                  <label className="flex-1">
+                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                      Montant par mois ({bootcamp.currency})
+                    </span>
+                    <input
+                      value={monthlyAmount}
+                      onChange={(e) => setMonthlyAmount(e.target.value)}
+                      inputMode="decimal"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                    />
+                  </label>
+                </div>
+              )}
+
+              <p className="mt-2 text-xs text-foreground">
+                Total :{" "}
+                <strong>
+                  {Number.isFinite(negotiatedTotal)
+                    ? negotiatedTotal.toLocaleString("fr-FR")
+                    : "—"}{" "}
+                  {bootcamp.currency}
+                </strong>
+                {gap !== 0 && Number.isFinite(gap) && (
+                  <span className={gap < 0 ? "text-amber-700" : "text-green-700"}>
+                    {" "}
+                    ({gap < 0 ? "remise" : "supplément"} de{" "}
+                    {Math.abs(gap).toLocaleString("fr-FR")} {bootcamp.currency})
+                  </span>
+                )}
+              </p>
             </div>
 
             {/* 1er paiement encaissé */}

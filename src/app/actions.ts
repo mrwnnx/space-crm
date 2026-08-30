@@ -578,9 +578,38 @@ export async function convertToDealAction(leadId: string) {
 // convertToDealAction qui reste intacte pour le sous-système B2B legacy).
 export async function enrollLeadAction(
   leadId: string,
-  input: { plan: "total" | "monthly"; firstPaymentReceived: boolean }
+  input: {
+    plan: "total" | "monthly";
+    firstPaymentReceived: boolean;
+    // Montants NÉGOCIÉS. Absents → tarif de la formation.
+    totalAmount?: string;
+    monthlyCount?: number;
+    monthlyAmount?: string;
+  }
 ) {
   await requireUser();
+
+  // Un montant saisi à la main doit être un nombre strictement positif : un zéro
+  // ou une virgule égarée produirait un échéancier faux, découvert au moment de
+  // réclamer l'argent.
+  const money = (raw?: string) => {
+    if (raw === undefined || raw === "") return undefined;
+    const n = Number(String(raw).replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n.toFixed(2) : null;
+  };
+  const totalAmount = money(input.totalAmount);
+  const monthlyAmount = money(input.monthlyAmount);
+  if (totalAmount === null || monthlyAmount === null) {
+    return { error: "Montant invalide (nombre strictement positif attendu)." };
+  }
+  let monthlyCount: number | undefined;
+  if (input.monthlyCount !== undefined) {
+    const c = Math.trunc(input.monthlyCount);
+    if (!Number.isFinite(c) || c < 1 || c > 24) {
+      return { error: "Nombre de mensualités invalide (entre 1 et 24)." };
+    }
+    monthlyCount = c;
+  }
 
   const {
     getLeadById,
@@ -635,7 +664,11 @@ export async function enrollLeadAction(
       .where(eqOp(leadsTable.id, leadId));
 
     // 7. Génère l'échéancier (logique dueDate centralisée dans le helper)
-    await generateScheduleForLead(leadId, input.plan, tx);
+    await generateScheduleForLead(leadId, input.plan, tx, {
+      totalAmount,
+      monthlyCount,
+      monthlyAmount,
+    });
 
     // 8. 1er paiement encaissé → marque la première échéance
     if (input.firstPaymentReceived) {

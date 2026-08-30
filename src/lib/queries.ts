@@ -1364,10 +1364,17 @@ export async function detachTagFromLead(leadId: string, tagId: string) {
 // Génère les échéances depuis l'offre prix du bootcamp du lead.
 // 'total' → 1 échéance (amount=priceTotal) ; 'monthly' → monthlyCount échéances (amount=monthlyAmount).
 // exec = db par défaut ; passer un tx Drizzle pour exécuter dans une transaction.
+/**
+ * `overrides` = montants NÉGOCIÉS pour ce lead. Absents → tarif de la formation.
+ * Ils atterrissent dans payment_schedules.amount, d'où le chiffre d'affaires est
+ * calculé (sum(amount) where is_paid) : une remise remonte donc juste dans les
+ * rapports, sans colonne supplémentaire.
+ */
 export async function generateScheduleForLead(
   leadId: string,
   plan: "total" | "monthly",
-  exec: DbExecutor = db
+  exec: DbExecutor = db,
+  overrides?: { totalAmount?: string; monthlyCount?: number; monthlyAmount?: string }
 ) {
   const lead = await exec.query.leads.findFirst({
     where: eq(leads.id, leadId),
@@ -1377,25 +1384,28 @@ export async function generateScheduleForLead(
   const b = lead.bootcamp;
 
   if (plan === "total") {
-    if (!b.priceTotal) return [];
+    const amount = overrides?.totalAmount ?? b.priceTotal;
+    if (!amount) return [];
     const today = new Date();
     await exec.insert(paymentSchedules).values({
       leadId,
       plan: "total",
-      amount: b.priceTotal,
+      amount,
       dueDate: today.toISOString().slice(0, 10), // dû le jour J (inscription)
     });
   } else {
-    if (!b.monthlyCount || !b.monthlyAmount) return [];
+    const count = overrides?.monthlyCount ?? b.monthlyCount;
+    const monthly = overrides?.monthlyAmount ?? b.monthlyAmount;
+    if (!count || !monthly) return [];
     const rows: { leadId: string; plan: "monthly"; amount: string; dueDate: string }[] = [];
     const base = new Date();
-    for (let i = 0; i < b.monthlyCount; i++) {
+    for (let i = 0; i < count; i++) {
       // Échéance 1 (i=0) = acompte, dû le jour de l'inscription.
       // Échéances 2..N (i=1..N-1) = 1er du mois, à partir du mois suivant l'inscription.
       const d = i === 0
         ? base
         : new Date(base.getFullYear(), base.getMonth() + i + 1, 1);
-      rows.push({ leadId, plan: "monthly", amount: b.monthlyAmount, dueDate: d.toISOString().slice(0, 10) });
+      rows.push({ leadId, plan: "monthly", amount: monthly, dueDate: d.toISOString().slice(0, 10) });
     }
     await exec.insert(paymentSchedules).values(rows);
   }
