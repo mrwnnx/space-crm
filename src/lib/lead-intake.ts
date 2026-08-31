@@ -40,12 +40,20 @@ export const MAPPABLE_FIELDS = [
 ] as const;
 
 // Dérive le plan de paiement (enum total|monthly) depuis le texte d'un champ de choix.
-// Ex : "Paiement total: 1300dt" → total ; "Paiement 3 mois = 500 dt par mois" → monthly.
+//
+// ⚠️ Ne chercher QUE le mot « total » a coûté cher : l'option réelle du
+// formulaire est « Payer maintenant = 1299 dt », qui ne le contient pas. Les 17
+// leads prêts à payer comptant — les meilleurs — sont restés sans offre, ce qui
+// s'est propagé aux emails, à la file du jour et à la qualification IA.
+// Le libellé d'un formulaire change ; la liste ci-dessous doit rester large.
 export function derivePlan(raw?: string): "total" | "monthly" | null {
   if (!raw) return null;
   const s = raw.toLowerCase();
-  if (s.includes("total")) return "total";
-  if (s.includes("facilit") || s.includes("mois") || s.includes("/mo")) return "monthly";
+  // Le mensuel d'abord : ses marqueurs sont plus spécifiques.
+  if (/facilit|mois|mensuel|tranche|\/mo\b/.test(s)) return "monthly";
+  if (/total|maintenant|comptant|cash|une seule fois|intégral|integral/.test(s)) {
+    return "total";
+  }
   return null;
 }
 
