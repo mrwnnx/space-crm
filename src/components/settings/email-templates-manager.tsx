@@ -9,6 +9,7 @@ import {
 import type { EmailTemplate, EmailBranding } from "@/db/schema";
 import { renderEmailTemplate } from "@/lib/messaging/markdown";
 import { ImageUploadButton } from "@/components/settings/image-upload-button";
+import { SendTestButton } from "@/components/settings/send-test-button";
 
 // Valeurs d'exemple pour l'aperçu : voir « Sana » plutôt que « {{firstName}} »
 // est la seule façon de juger si la phrase tombe juste.
@@ -30,9 +31,12 @@ const LABEL = "mb-1 block text-xs font-medium text-muted-foreground";
 export function EmailTemplatesManager({
   templates,
   branding,
+  testEmail,
 }: {
   templates: EmailTemplate[];
   branding: EmailBranding | null;
+  /** Adresse du compte connecté : pré-remplie pour tester en un clic. */
+  testEmail: string;
 }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -70,6 +74,7 @@ export function EmailTemplatesManager({
                 key={tpl.id}
                 template={tpl}
                 branding={branding}
+                testEmail={testEmail}
                 onClose={() => setEditing(null)}
               />
             ) : (
@@ -152,13 +157,17 @@ export function EmailTemplatesManager({
               className={`resize-none ${FIELD}`}
             />
           </div>
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isPending ? "Création..." : "Créer le template"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {isPending ? "Création..." : "Créer le template"}
+            </button>
+            {/* Tester AVANT d'enregistrer : le test porte sur ce qui est saisi. */}
+            <SendTestButton subject={subject} content={content} defaultTo={testEmail} />
+          </div>
         </form>
       </div>
     </div>
@@ -172,10 +181,12 @@ export function EmailTemplatesManager({
 function TemplateEditor({
   template,
   branding,
+  testEmail,
   onClose,
 }: {
   template: EmailTemplate;
   branding: EmailBranding | null;
+  testEmail: string;
   onClose: () => void;
 }) {
   const [name, setName] = useState(template.name);
@@ -292,6 +303,14 @@ function TemplateEditor({
           Annuler
         </button>
         {error && <span className="text-xs text-red-600">{error}</span>}
+      </div>
+
+      <div className="border-t border-border pt-3">
+        <p className="mb-1.5 text-[10px] text-muted-foreground/70">
+          Le test part avec l&apos;habillage réel et des valeurs d&apos;exemple
+          ({`{{firstName}}`} → « Sana ») : tu reçois ce qu&apos;un lead recevrait.
+        </p>
+        <SendTestButton subject={subject} content={content} defaultTo={testEmail} />
       </div>
     </form>
   );

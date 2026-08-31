@@ -1,4 +1,5 @@
 import { getAllowedEmails, getEmailTemplates, getWpConnectionPublic, getEmailBranding } from "@/lib/queries";
+import { currentActor } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
 import { WpConnectionForm } from "@/components/settings/wp-connection-form";
@@ -26,6 +27,8 @@ export default async function SettingsPage({
   // compris — sinon on valide une mise en page qu'on ne verra jamais.
   const templates = current === "emails" ? await getEmailTemplates() : [];
   const templateBranding = current === "emails" ? await getEmailBranding() : null;
+  // Adresse du compte connecté : pré-remplit le champ « envoyer un test ».
+  const testEmail = current === "emails" ? ((await currentActor()) ?? "") : "";
   const allowed = current === "team" ? await getAllowedEmails() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
 
@@ -61,7 +64,11 @@ export default async function SettingsPage({
               <code className="rounded bg-muted px-1 text-[10px]">{`{{subject}}`}</code>,{" "}
               <code className="rounded bg-muted px-1 text-[10px]">{`{{content}}`}</code>
             </p>
-            <EmailTemplatesManager templates={templates} branding={templateBranding} />
+            <EmailTemplatesManager
+              templates={templates}
+              branding={templateBranding}
+              testEmail={testEmail}
+            />
           </section>
           )}
 

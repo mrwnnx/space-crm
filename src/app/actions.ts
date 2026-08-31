@@ -1272,6 +1272,56 @@ export async function removeAllowedEmailAction(id: string) {
   revalidatePath("/settings");
 }
 
+// ── Test d'un modèle d'email ───────────────────────────
+
+/** Valeurs d'exemple : identiques à celles de l'aperçu, pour que le mail reçu
+ *  corresponde à ce qui est affiché à l'écran. */
+const TEST_VARIABLES: Record<string, string> = {
+  firstName: "Sana",
+  lastName: "Amri",
+  fullName: "Sana Amri",
+  email: "sana.amri@gmail.com",
+  formation: "Bootcamp september 2026",
+  offre: "3× 500 TND",
+  subject: "Objet du message",
+  content: "Le message tapé dans la fiche du lead.",
+};
+
+export async function sendTestEmailAction(
+  to: string,
+  subject: string,
+  content: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+
+  const address = to.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    return { ok: false, message: "Adresse email invalide." };
+  }
+  if (!subject.trim()) {
+    return { ok: false, message: "Le modèle n'a pas d'objet — ajoute-le avant de tester." };
+  }
+  if (!content.trim()) {
+    return { ok: false, message: "Le contenu est vide." };
+  }
+
+  const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
+  const { renderEmailTemplate } = await import("@/lib/messaging/markdown");
+  const { getEmailBranding } = await import("@/lib/queries");
+  const branding = await getEmailBranding();
+
+  // Rendu STRICTEMENT identique à un envoi réel : même convertisseur, même
+  // habillage. Un test qui passerait par un autre chemin ne prouverait rien.
+  const res = await sendEmail({
+    to: address,
+    subject: renderTemplate(subject, TEST_VARIABLES),
+    html: renderEmailTemplate(content, TEST_VARIABLES, branding ?? undefined),
+  });
+
+  if (!res.ok) return { ok: false, message: res.error ?? "Échec d'envoi." };
+  return { ok: true, message: `Test envoyé à ${address}.` };
+}
+
 // ── Images des emails ──────────────────────────────────
 
 export async function uploadEmailImageAction(
