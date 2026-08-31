@@ -21,6 +21,8 @@ type StageWithLeads = LeadStatus & {
     isNew?: boolean;
     // Dernière personne intervenue sur ce lead (email), null si personne.
     lastActor?: string | null;
+    // Lecture IA de ce que le lead a écrit lui-même.
+    insight?: { summary: string; intent: string; objection: string | null } | null;
   })[];
 };
 
@@ -213,6 +215,20 @@ export function LeadsKanban({
   );
 }
 
+// Intention lue par l'IA dans ce que le lead a écrit.
+const INTENT_LABEL: Record<string, string> = {
+  serieux: "sérieux",
+  curieux: "curieux",
+  hors_cible: "hors cible",
+  indetermine: "à qualifier",
+};
+const INTENT_STYLE: Record<string, string> = {
+  serieux: "bg-green-100 text-green-800",
+  curieux: "bg-amber-100 text-amber-800",
+  hors_cible: "bg-gray-100 text-gray-600",
+  indetermine: "bg-gray-100 text-gray-500",
+};
+
 const KanbanCard = memo(function KanbanCard({
   lead,
 }: {
@@ -221,6 +237,7 @@ const KanbanCard = memo(function KanbanCard({
     organization: Organization | null;
     isNew?: boolean;
     lastActor?: string | null;
+    insight?: { summary: string; intent: string; objection: string | null } | null;
   };
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
@@ -268,6 +285,27 @@ const KanbanCard = memo(function KanbanCard({
           )}
         </div>
       </div>
+
+      {lead.insight && (
+        <div className="mt-2">
+          <span
+            className={cn(
+              "inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+              INTENT_STYLE[lead.insight.intent] ?? INTENT_STYLE.indetermine
+            )}
+          >
+            {INTENT_LABEL[lead.insight.intent] ?? lead.insight.intent}
+          </span>
+          <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+            {lead.insight.summary}
+          </p>
+          {lead.insight.objection && (
+            <p className="mt-0.5 text-[10px] text-amber-700">
+              Frein : {lead.insight.objection}
+            </p>
+          )}
+        </div>
+      )}
 
       {(lead.email || lead.mobileNo) && (
         <div className="mt-2 flex flex-wrap gap-1.5">

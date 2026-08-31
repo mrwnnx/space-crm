@@ -35,6 +35,7 @@ import {
   automations,
   automationRuns,
   emailBranding,
+  leadInsights,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -2174,4 +2175,51 @@ export async function saveEmailBranding(data: {
     return;
   }
   await db.insert(emailBranding).values({ id: true, ...data });
+}
+
+// ── Lecture IA des leads ───────────────────────────────
+
+/** Leads d'une formation encore jamais analysés, les plus récents d'abord. */
+export async function getLeadsToAnalyze(bootcampId: string, limit: number) {
+  return db.query.leads.findMany({
+    where: and(
+      eq(leads.bootcampId, bootcampId),
+      sql`not exists (select 1 from lead_insights li where li.lead_id = ${leads.id})`
+    ),
+    orderBy: [desc(leads.createdAt)],
+    limit,
+    with: { bootcamp: true, contact: true },
+  });
+}
+
+export async function countLeadsToAnalyze(bootcampId: string) {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(
+      and(
+        eq(leads.bootcampId, bootcampId),
+        sql`not exists (select 1 from lead_insights li where li.lead_id = ${leads.id})`
+      )
+    );
+  return row?.n ?? 0;
+}
+
+export async function getLeadInsight(leadId: string) {
+  return db.query.leadInsights.findFirst({ where: eq(leadInsights.leadId, leadId) });
+}
+
+/** Insights de tous les leads d'une formation, indexés par leadId. */
+export async function getInsightsByBootcamp(bootcampId: string) {
+  const rows = await db
+    .select({
+      leadId: leadInsights.leadId,
+      summary: leadInsights.summary,
+      intent: leadInsights.intent,
+      objection: leadInsights.objection,
+    })
+    .from(leadInsights)
+    .innerJoin(leads, eq(leads.id, leadInsights.leadId))
+    .where(eq(leads.bootcampId, bootcampId));
+  return new Map(rows.map((r) => [r.leadId, r]));
 }

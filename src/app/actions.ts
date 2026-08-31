@@ -1408,6 +1408,71 @@ export async function saveEmailBrandingAction(
   return { ok: true, message: "Habillage enregistré." };
 }
 
+// ── Lecture IA des leads ───────────────────────────────
+
+/**
+ * Analyse un LOT de leads, pas tous : une fonction serverless a une durée
+ * limitée. L'interface rappelle l'action tant qu'il en reste, ce qui donne
+ * aussi une progression visible plutôt qu'une attente muette.
+ */
+export async function analyzeLeadsAction(
+  bootcampId: string,
+  limit = 6
+): Promise<{
+  ok: boolean;
+  analysed: number;
+  unchanged: number;
+  errors: number;
+  remaining: number;
+  message?: string;
+}> {
+  await requireUser();
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      ok: false,
+      analysed: 0,
+      unchanged: 0,
+      errors: 0,
+      remaining: 0,
+      message: "Clé ANTHROPIC_API_KEY absente — ajoute-la dans les variables d'environnement.",
+    };
+  }
+
+  const { getLeadsToAnalyze, countLeadsToAnalyze } = await import("@/lib/queries");
+  const { analyzeLead } = await import("@/lib/ai/lead-insights");
+
+  const batch = await getLeadsToAnalyze(bootcampId, Math.min(Math.max(limit, 1), 10));
+  let analysed = 0;
+  let unchanged = 0;
+  let errors = 0;
+  let lastError: string | undefined;
+
+  // Séquentiel : en parallèle, N appels tiendraient N connexions DB ouvertes
+  // pendant toute la latence du modèle — le pool se figerait (gel Supavisor).
+  for (const lead of batch) {
+    const res = await analyzeLead(lead);
+    if (res.outcome === "analysé") analysed++;
+    else if (res.outcome === "inchangé") unchanged++;
+    else {
+      errors++;
+      lastError = res.error;
+    }
+  }
+
+  const remaining = await countLeadsToAnalyze(bootcampId);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+
+  return {
+    ok: errors === 0,
+    analysed,
+    unchanged,
+    errors,
+    remaining,
+    message: lastError,
+  };
+}
+
 // ── Automatisations ────────────────────────────────────
 
 export async function createAutomationAction(

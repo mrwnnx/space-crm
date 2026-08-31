@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
 import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
 import { AutomationsManager } from "@/components/bootcamps/automations-manager";
+import { AnalyzeLeadsButton } from "@/components/bootcamps/analyze-leads-button";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function BootcampDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, automationData] =
+  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, automationData, aiData] =
     await Promise.all([
       getBootcampById(id),
       getLeadsKanban(id),
@@ -48,6 +49,11 @@ export default async function BootcampDetailPage({
       (async () => ({
         automations: await getAutomationsByBootcamp(id),
         templates: await getEmailTemplates(),
+      }))(),
+      // Même principe : deux requêtes dans UNE branche, pas deux de plus en front.
+      (async () => ({
+        pending: await countLeadsToAnalyze(id),
+        insights: await getInsightsByBootcamp(id),
       }))(),
     ]);
 
@@ -64,6 +70,7 @@ export default async function BootcampDetailPage({
     leads: stage.leads.map((l) => ({
       ...l,
       isNew: !!l.formSourceId && l.seenAt === null,
+      insight: aiData.insights.get(l.id) ?? null,
     })),
   }));
 
@@ -136,6 +143,9 @@ export default async function BootcampDetailPage({
 
       {/* Automatisations : entrée dans une colonne → email */}
       <div className="border-b border-border px-4 py-2">
+        <div className="mb-2">
+          <AnalyzeLeadsButton bootcampId={bootcamp.id} pending={aiData.pending} />
+        </div>
         <AutomationsManager
           bootcampId={bootcamp.id}
           automations={automationData.automations}

@@ -912,6 +912,35 @@ export const emailBranding = pgTable("email_branding", {
 
 export type EmailBranding = typeof emailBranding.$inferSelect;
 
+// ── Lecture IA d'un lead ───────────────────────────────
+// Ce que le lead a ÉCRIT lui-même (motivation, situation, âge, pack) est la
+// seule matière riche du CRM : 2 activités humaines pour 188 leads. C'est donc
+// là que l'IA travaille, pas sur un historique qui n'existe pas.
+
+export const leadIntentEnum = pgEnum("lead_intent", [
+  "serieux", // prêt à s'engager, motivation claire
+  "curieux", // intéressé mais vague ou hésitant
+  "hors_cible", // ne correspond pas à la formation
+  "indetermine", // pas assez d'éléments pour trancher
+]);
+
+export const leadInsights = pgTable("lead_insights", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leadId: uuid("lead_id")
+    .notNull()
+    .unique()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  summary: text("summary").notNull(),
+  intent: leadIntentEnum("intent").notNull(),
+  objection: text("objection"),
+  // Empreinte de ce qui a été analysé : si rien n'a changé, on ne repaie pas.
+  sourceHash: text("source_hash").notNull(),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type LeadInsight = typeof leadInsights.$inferSelect;
+
 // ── Automatisations ────────────────────────────────────
 // Déclencheur unique pour l'instant : « le lead entre dans cette colonne ».
 // Les trois chemins d'entrée (glisser-déposer, popup d'inscription, import)
