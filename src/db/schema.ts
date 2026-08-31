@@ -912,6 +912,19 @@ export const emailBranding = pgTable("email_branding", {
 
 export type EmailBranding = typeof emailBranding.$inferSelect;
 
+// ── Digest quotidien ───────────────────────────────────
+// Une ligne par jour d'envoi. La contrainte d'unicité sur la date EST la
+// garantie d'idempotence : le cron peut taper toutes les 15 min sans risque
+// d'envoyer deux fois.
+
+export const digestRuns = pgTable("digest_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sentOn: date("sent_on").notNull().unique(),
+  recipients: integer("recipients").notNull().default(0),
+  leadsListed: integer("leads_listed").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── Lecture IA d'un lead ───────────────────────────────
 // Ce que le lead a ÉCRIT lui-même (motivation, situation, âge, pack) est la
 // seule matière riche du CRM : 2 activités humaines pour 188 leads. C'est donc

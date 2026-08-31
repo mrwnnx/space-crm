@@ -110,3 +110,27 @@ jobs:
           print(f"- Envoyés : **{d.get('sent', 0)}** · annulés : {d.get('cancelled', 0)}"
                 f" · ignorés : {d.get('skipped', 0)} · échecs : {d.get('failed', 0)}")
           PY
+
+      # Digest quotidien. Appelé au même rythme que le reste : c'est l'ENDPOINT
+      # qui décide s'il doit envoyer (après 7 h à Tunis, une seule fois par
+      # jour). L'idempotence vient d'une contrainte d'unicité en base, pas de
+      # l'horaire — GitHub ne garantit pas la minute d'un cron.
+      - name: Digest quotidien
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRM_URL: https://space-crm-psi.vercel.app
+        run: |
+          BODY=$(mktemp)
+          CODE=$(curl -sS --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o "$BODY" -w "%{http_code}" \
+            "$CRM_URL/api/cron/daily-digest")
+
+          echo "HTTP $CODE"
+          cat "$BODY"
+
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Le digest a répondu $CODE."
+            exit 1
+          fi
