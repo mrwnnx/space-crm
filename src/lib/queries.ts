@@ -2223,3 +2223,121 @@ export async function getInsightsByBootcamp(bootcampId: string) {
     .where(eq(leads.bootcampId, bootcampId));
   return new Map(rows.map((r) => [r.leadId, r]));
 }
+
+// ── File d'appels du jour ──────────────────────────────
+
+export type QueueLead = {
+  id: string;
+  fullName: string | null;
+  mobileNo: string | null;
+  email: string | null;
+  bootcampName: string;
+  statusName: string;
+  stageDays: number;
+  seen: boolean;
+  intendedPlan: string | null;
+  intent: string | null;
+  summary: string | null;
+  objection: string | null;
+  lastCallAt: Date | null;
+  lastCallStatus: string | null;
+  score: number;
+  reasons: string[];
+};
+
+/**
+ * Qui rappeler, et dans quel ordre.
+ *
+ * Le score est volontairement une FORMULE LISIBLE, pas un modèle : chaque lead
+ * affiche les raisons de sa place. Un tri qu'on ne peut pas expliquer ne sera
+ * pas suivi.
+ */
+export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
+  const rows = await db.execute<{
+    id: string;
+    full_name: string | null;
+    mobile_no: string | null;
+    email: string | null;
+    bootcamp_name: string;
+    status_name: string;
+    stage_days: number;
+    seen: boolean;
+    intended_plan: string | null;
+    intent: string | null;
+    summary: string | null;
+    objection: string | null;
+    last_call_at: Date | null;
+    last_call_status: string | null;
+  }>(sql`
+    select l.id, l.full_name, l.mobile_no, l.email,
+           b.name as bootcamp_name, ls.name as status_name,
+           extract(epoch from (now() - coalesce(l.stage_entered_at, l.created_at)))/86400 as stage_days,
+           (l.seen_at is not null) as seen,
+           l.intended_plan::text as intended_plan,
+           li.intent::text as intent, li.summary, li.objection,
+           c.created_at as last_call_at, c.status::text as last_call_status
+    from leads l
+    join bootcamps b on b.id = l.bootcamp_id and b.archived_at is null
+    join lead_statuses ls on ls.id = l.status_id and ls.kind = 'normal'
+    left join lead_insights li on li.lead_id = l.id
+    left join lateral (
+      select cl.created_at, cl.status
+      from call_logs cl
+      where cl.reference_type = 'lead' and cl.reference_id = l.id
+      order by cl.created_at desc limit 1
+    ) c on true
+    where l.mobile_no is not null
+  `);
+
+  const scored = rows.map((r) => {
+    const reasons: string[] = [];
+    let score = 0;
+
+    if (r.intent === "serieux") { score += 50; reasons.push("profil sérieux"); }
+    else if (r.intent === "curieux") { score += 25; reasons.push("curieux"); }
+    else if (r.intent === "hors_cible") { score -= 100; reasons.push("hors cible"); }
+    else if (r.intent) { score += 5; }
+
+    if (!r.last_call_at) { score += 30; reasons.push("jamais appelé"); }
+
+    // Rappeler quelqu'un le lendemain d'un appel est contre-productif.
+    const daysSinceCall = r.last_call_at
+      ? (Date.now() - new Date(r.last_call_at).getTime()) / 86400000
+      : null;
+    if (daysSinceCall !== null && daysSinceCall < 3) {
+      score -= 60;
+      reasons.push("appelé récemment");
+    } else if (r.last_call_status === "no_answer") {
+      score += 20;
+      reasons.push("n'avait pas répondu");
+    }
+
+    const days = Math.round(Number(r.stage_days) || 0);
+    score += Math.min(days, 20);
+    if (days >= 5) reasons.push(`${days} j sans bouger`);
+
+    if (r.intended_plan) { score += 10; reasons.push("a choisi une formule"); }
+    if (!r.seen) { score += 5; }
+
+    return {
+      id: r.id,
+      fullName: r.full_name,
+      mobileNo: r.mobile_no,
+      email: r.email,
+      bootcampName: r.bootcamp_name,
+      statusName: r.status_name,
+      stageDays: days,
+      seen: r.seen,
+      intendedPlan: r.intended_plan,
+      intent: r.intent,
+      summary: r.summary,
+      objection: r.objection,
+      lastCallAt: r.last_call_at,
+      lastCallStatus: r.last_call_status,
+      score,
+      reasons,
+    };
+  });
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+}

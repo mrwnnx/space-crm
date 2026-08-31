@@ -31,6 +31,7 @@ type NavItem = {
 };
 
 const primaryNav: NavItem[] = [
+  { href: "/aujourdhui", label: "Aujourd'hui", icon: Call02Icon },
   { href: "/dashboard", label: "Dashboard", icon: Analytics01Icon },
   { href: "/bootcamps", label: "Formations", icon: GraduationCapIcon },
   { href: "/leads", label: "Leads", icon: User02Icon },

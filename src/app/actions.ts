@@ -1408,6 +1408,60 @@ export async function saveEmailBrandingAction(
   return { ok: true, message: "Habillage enregistré." };
 }
 
+// ── Appel en un clic ───────────────────────────────────
+
+/**
+ * Journalise un appel en UN clic. Sans ça, la file redemanderait éternellement
+ * les mêmes leads : rien dans le CRM ne dirait qui a déjà été contacté.
+ */
+export async function quickLogCallAction(
+  leadId: string,
+  outcome: "answered" | "no_answer"
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+
+  const { getLeadById, createCallLog, createActivity, updateLead } = await import(
+    "@/lib/queries"
+  );
+  const lead = await getLeadById(leadId);
+  if (!lead) return { ok: false, message: "Lead introuvable." };
+
+  const { currentActor } = await import("@/lib/auth");
+  const actor = await currentActor();
+
+  await createCallLog({
+    type: "outgoing",
+    status: outcome === "answered" ? "completed" : "no_answer",
+    telephonyMedium: "manual",
+    toNumber: lead.mobileNo,
+    // call_logs n'a pas de colonne created_by : callerId porte l'auteur.
+    callerId: actor,
+    startTime: new Date(),
+    referenceType: "lead",
+    referenceId: leadId,
+  });
+
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "call",
+    direction: "outbound",
+    subject: outcome === "answered" ? "Appel — joint" : "Appel — sans réponse",
+    content: "",
+  });
+
+  // Un appel EST un contact, même sans réponse : la file doit arrêter de le
+  // proposer en tête pendant quelques jours.
+  await updateLead(leadId, { lastContactedAt: new Date() });
+
+  revalidatePath("/aujourdhui");
+  revalidatePath(`/leads/${leadId}`);
+  return {
+    ok: true,
+    message: outcome === "answered" ? "Appel enregistré." : "Sans réponse enregistré.",
+  };
+}
+
 // ── Lecture IA des leads ───────────────────────────────
 
 /**
