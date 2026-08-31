@@ -1014,7 +1014,12 @@ export async function sendEmailAction(
     const { getEmailTemplateById } = await import("@/lib/queries");
     const tpl = await getEmailTemplateById(templateId);
     if (tpl) {
-      html = renderEmailTemplate(tpl.content, { subject, content }, branding);
+      html = renderEmailTemplate(tpl.content, { subject, content }, branding, {
+        enabled: tpl.buttonEnabled,
+        label: tpl.buttonLabel,
+        url: tpl.buttonUrl,
+        position: tpl.buttonPosition,
+      });
       // Objet = texte brut, pas de HTML : substitution simple.
       subject = renderTemplate(tpl.subject || subject, { subject });
     }
@@ -1185,14 +1190,45 @@ export async function createEmailTemplateAction(formData: FormData) {
   const content = String(formData.get("content") || "").trim();
   if (!name || !content) return;
 
+  const button = readButton(formData);
+  if (button.error) return;
+
   const { createEmailTemplate } = await import("@/lib/queries");
   await createEmailTemplate({
     name,
     subject: String(formData.get("subject") || "").trim() || null,
     content,
+    ...button.values,
   });
 
   revalidatePath("/settings");
+}
+
+/**
+ * Champs du bouton principal. Un bouton activé sans libellé ou sans URL
+ * n'afficherait rien : on refuse plutôt que de laisser un modèle muet.
+ */
+function readButton(formData: FormData) {
+  const enabled = String(formData.get("buttonEnabled") || "") === "on";
+  const label = String(formData.get("buttonLabel") || "").trim();
+  const url = String(formData.get("buttonUrl") || "").trim();
+  const position = String(formData.get("buttonPosition") || "bottom") === "top" ? "top" : "bottom";
+
+  if (enabled && (!label || !url)) {
+    return { error: "Bouton activé : libellé et URL obligatoires.", values: {} };
+  }
+  if (enabled && !/^https?:\/\//i.test(url)) {
+    return { error: "L'URL du bouton doit commencer par https://", values: {} };
+  }
+  return {
+    error: null as string | null,
+    values: {
+      buttonEnabled: enabled,
+      buttonLabel: label || null,
+      buttonUrl: url || null,
+      buttonPosition: position,
+    },
+  };
 }
 
 export async function updateEmailTemplateAction(
@@ -1206,11 +1242,15 @@ export async function updateEmailTemplateAction(
     return { ok: false, message: "Nom et contenu obligatoires." };
   }
 
+  const button = readButton(formData);
+  if (button.error) return { ok: false, message: button.error };
+
   const { updateEmailTemplate } = await import("@/lib/queries");
   await updateEmailTemplate(id, {
     name,
     subject: String(formData.get("subject") || "").trim() || null,
     content,
+    ...button.values,
   });
 
   revalidatePath("/settings");
@@ -1290,7 +1330,8 @@ const TEST_VARIABLES: Record<string, string> = {
 export async function sendTestEmailAction(
   to: string,
   subject: string,
-  content: string
+  content: string,
+  button?: { enabled: boolean; label: string; url: string; position: string }
 ): Promise<{ ok: boolean; message: string }> {
   await requireUser();
 
@@ -1315,7 +1356,7 @@ export async function sendTestEmailAction(
   const res = await sendEmail({
     to: address,
     subject: renderTemplate(subject, TEST_VARIABLES),
-    html: renderEmailTemplate(content, TEST_VARIABLES, branding ?? undefined),
+    html: renderEmailTemplate(content, TEST_VARIABLES, branding ?? undefined, button),
   });
 
   if (!res.ok) return { ok: false, message: res.error ?? "Échec d'envoi." };

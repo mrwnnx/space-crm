@@ -424,6 +424,13 @@ export const emailTemplates = pgTable("email_templates", {
   name: text("name").notNull(),
   subject: text("subject"),
   content: text("content").notNull(),
+  // Bouton principal, piloté par un interrupteur. Les boutons SUPPLÉMENTAIRES
+  // vivent dans le contenu ([[Texte]](url), inséré au curseur) — celui-ci est
+  // le call-to-action, toujours au même endroit.
+  buttonEnabled: boolean("button_enabled").notNull().default(false),
+  buttonLabel: text("button_label"),
+  buttonUrl: text("button_url"),
+  buttonPosition: text("button_position").notNull().default("bottom"), // top | bottom
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -12,6 +12,14 @@ export type Branding = {
 
 export const DEFAULT_ACCENT = "#1a1a1a";
 
+/** Bouton principal d'un modèle, piloté par l'interrupteur de l'éditeur. */
+export type MainButton = {
+  enabled?: boolean | null;
+  label?: string | null;
+  url?: string | null;
+  position?: string | null; // "top" | "bottom"
+};
+
 /**
  * Styles en ligne, balise par balise.
  *
@@ -33,9 +41,15 @@ const S = {
   pre: "background:#f6f6f4;border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:13px",
   img: "max-width:100%;height:auto;display:block;margin:0 0 16px;border-radius:8px",
   font: "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif",
+  // Le pied de page reprend le même Markdown que le corps, en plus petit et
+  // en gris : sans ça, un lien de désinscription y serait du texte mort.
+  footerP: "margin:0 0 8px;font-size:12px;line-height:1.5;color:#9ca3af",
+  footerList: "margin:0 0 8px;padding-left:18px;font-size:12px;line-height:1.5;color:#9ca3af",
 };
 
-function buildMarked(accent: string) {
+function buildMarked(accent: string, variant: "body" | "footer" = "body") {
+  const pStyle = variant === "footer" ? S.footerP : S.p;
+  const listStyle = variant === "footer" ? S.footerList : S.list;
   const marked = new Marked({
     gfm: true,
     breaks: true, // un retour à la ligne simple = <br>, ce qu'attend quelqu'un qui écrit un email
@@ -66,7 +80,7 @@ function buildMarked(accent: string) {
     ],
     renderer: {
       paragraph({ tokens }) {
-        return `<p style="${S.p}">${this.parser.parseInline(tokens)}</p>\n`;
+        return `<p style="${pStyle}">${this.parser.parseInline(tokens)}</p>\n`;
       },
       heading({ tokens, depth }) {
         const style = depth === 1 ? S.h1 : depth === 2 ? S.h2 : S.h3;
@@ -78,7 +92,7 @@ function buildMarked(accent: string) {
         const items = token.items
           .map((i) => `<li style="${S.li}">${this.parser.parseInline(i.tokens)}</li>`)
           .join("\n");
-        return `<${tag} style="${S.list}">\n${items}\n</${tag}>\n`;
+        return `<${tag} style="${listStyle}">\n${items}\n</${tag}>\n`;
       },
       link({ href, tokens }) {
         return `<a href="${href}" style="color:${accent};text-decoration:underline">${this.parser.parseInline(tokens)}</a>`;
@@ -105,9 +119,13 @@ function buildMarked(accent: string) {
 }
 
 /** Markdown (ou HTML brut, qui passe tel quel) → corps HTML, sans l'habillage. */
-export function markdownToEmailHtml(source: string, branding?: Branding): string {
+export function markdownToEmailHtml(
+  source: string,
+  branding?: Branding,
+  variant: "body" | "footer" = "body"
+): string {
   const accent = branding?.accentColor || DEFAULT_ACCENT;
-  return buildMarked(accent).parse(source ?? "", { async: false }) as string;
+  return buildMarked(accent, variant).parse(source ?? "", { async: false }) as string;
 }
 
 /** Enveloppe commune : en-tête (logo) + corps + pied de page. */
@@ -118,7 +136,7 @@ export function wrapWithBranding(body: string, branding?: Branding): string {
       : "";
 
   const footer = branding?.footerText
-    ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;line-height:1.5;color:#9ca3af">${branding.footerText.replace(/\n/g, "<br>")}</div>`
+    ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5">${markdownToEmailHtml(branding.footerText, branding, "footer")}</div>`
     : "";
 
   return `<div style="${S.font};font-size:15px;line-height:1.6;color:#1a1a1a;max-width:560px;margin:0 auto;padding:8px">\n${logo}${body}${footer}</div>`;
@@ -145,12 +163,26 @@ export function fillVariables(html: string, variables: Record<string, string>): 
   );
 }
 
-/** Chaîne complète : modèle Markdown + habillage + variables → email prêt. */
+/**
+ * Ajoute le bouton principal au Markdown, en haut ou en bas.
+ *
+ * Il devient une ligne `[[Texte]](url)` comme les autres : un seul chemin de
+ * rendu, donc l'interrupteur et l'insertion au curseur produisent exactement
+ * le même bouton.
+ */
+export function composeSource(source: string, button?: MainButton): string {
+  if (!button?.enabled || !button.label?.trim() || !button.url?.trim()) return source;
+  const line = `[[${button.label.trim()}]](${button.url.trim()})`;
+  return button.position === "top" ? `${line}\n\n${source}` : `${source}\n\n${line}\n`;
+}
+
+/** Chaîne complète : modèle Markdown + bouton + habillage + variables → email prêt. */
 export function renderEmailTemplate(
   source: string,
   variables: Record<string, string>,
-  branding?: Branding
+  branding?: Branding,
+  button?: MainButton
 ): string {
-  const body = markdownToEmailHtml(source, branding);
+  const body = markdownToEmailHtml(composeSource(source, button), branding);
   return fillVariables(wrapWithBranding(body, branding), variables);
 }

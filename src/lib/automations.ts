@@ -155,7 +155,12 @@ async function executeRule(
 
   // L'objet est du texte brut : substitution simple, sans échappement HTML.
   const subject = renderTemplate(template.subject, vars);
-  const html = renderEmailTemplate(template.content, vars, branding ?? undefined);
+  const html = renderEmailTemplate(template.content, vars, branding ?? undefined, {
+    enabled: template.buttonEnabled,
+    label: template.buttonLabel,
+    url: template.buttonUrl,
+    position: template.buttonPosition,
+  });
 
   const res = await sendEmail({ to: lead.email, subject, html });
   if (!res.ok) return log("failed", res.error ?? "Échec d'envoi");

@@ -196,9 +196,15 @@ function TemplateEditor({
   const [isPending, startTransition] = useTransition();
   const areaRef = useRef<HTMLTextAreaElement>(null);
 
-  /** Insère le Markdown de l'image LÀ où est le curseur, pas en fin de texte. */
-  function insertImage(url: string) {
-    const md = `![](${url})`;
+  // Bouton PRINCIPAL : interrupteur, toujours en haut ou en bas de l'email.
+  const [btnOn, setBtnOn] = useState(template.buttonEnabled);
+  const [btnLabel, setBtnLabel] = useState(template.buttonLabel ?? "");
+  const [btnUrl, setBtnUrl] = useState(template.buttonUrl ?? "");
+  const [btnPos, setBtnPos] = useState(template.buttonPosition ?? "bottom");
+  const mainButton = { enabled: btnOn, label: btnLabel, url: btnUrl, position: btnPos };
+
+  /** Insère du Markdown LÀ où est le curseur, pas en fin de texte. */
+  function insertAtCursor(md: string) {
     const el = areaRef.current;
     if (!el) {
       setContent((c) => `${c}\n\n${md}`);
@@ -215,6 +221,10 @@ function TemplateEditor({
     formData.set("name", name);
     formData.set("subject", subject);
     formData.set("content", content);
+    if (btnOn) formData.set("buttonEnabled", "on");
+    formData.set("buttonLabel", btnLabel);
+    formData.set("buttonUrl", btnUrl);
+    formData.set("buttonPosition", btnPos);
     startTransition(async () => {
       const res = await updateEmailTemplateAction(template.id, formData);
       if (res.ok) onClose();
@@ -257,7 +267,7 @@ function TemplateEditor({
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <ImageUploadButton onUploaded={insertImage} />
+              <ImageUploadButton onUploaded={(url) => insertAtCursor(`![](${url})`)} />
               <span className="text-[10px] text-muted-foreground/70">
                 le fichier est hébergé et son lien inséré au curseur
               </span>
@@ -281,7 +291,12 @@ function TemplateEditor({
               // Contenu écrit par un membre de l'équipe, rendu par le MÊME
               // convertisseur que l'envoi : ce qu'on voit ici est ce qui part.
               dangerouslySetInnerHTML={{
-                __html: renderEmailTemplate(content, SAMPLE, branding ?? undefined),
+                __html: renderEmailTemplate(
+                  content,
+                  SAMPLE,
+                  branding ?? undefined,
+                  mainButton
+                ),
               }}
             />
           </div>
@@ -305,13 +320,117 @@ function TemplateEditor({
         {error && <span className="text-xs text-red-600">{error}</span>}
       </div>
 
+      <div className="rounded-lg border border-border p-3">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={btnOn}
+            onChange={(e) => setBtnOn(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="text-xs font-medium text-foreground">Bouton principal</span>
+        </label>
+
+        {btnOn && (
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <label className="flex-1 min-w-[140px]">
+              <span className={LABEL}>Texte du bouton</span>
+              <input
+                value={btnLabel}
+                onChange={(e) => setBtnLabel(e.target.value)}
+                placeholder="Je confirme ma place"
+                className={FIELD}
+              />
+            </label>
+            <label className="flex-1 min-w-[180px]">
+              <span className={LABEL}>Lien</span>
+              <input
+                value={btnUrl}
+                onChange={(e) => setBtnUrl(e.target.value)}
+                placeholder="https://thespace.academy/paiement"
+                className={FIELD}
+              />
+            </label>
+            <label className="w-32">
+              <span className={LABEL}>Position</span>
+              <select
+                value={btnPos}
+                onChange={(e) => setBtnPos(e.target.value)}
+                className={FIELD}
+              >
+                <option value="bottom">En bas</option>
+                <option value="top">En haut</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="mb-1.5 text-[10px] text-muted-foreground/70">
+            Besoin d&apos;un bouton <strong>au milieu</strong> du texte ? Place le
+            curseur dans le contenu, puis :
+          </p>
+          <InlineButtonInserter onInsert={insertAtCursor} />
+        </div>
+      </div>
+
       <div className="border-t border-border pt-3">
         <p className="mb-1.5 text-[10px] text-muted-foreground/70">
           Le test part avec l&apos;habillage réel et des valeurs d&apos;exemple
           ({`{{firstName}}`} → « Sana ») : tu reçois ce qu&apos;un lead recevrait.
         </p>
-        <SendTestButton subject={subject} content={content} defaultTo={testEmail} />
+        <SendTestButton
+          subject={subject}
+          content={content}
+          defaultTo={testEmail}
+          button={mainButton}
+        />
       </div>
     </form>
+  );
+}
+
+/**
+ * Bouton SUPPLÉMENTAIRE, posé là où est le curseur. Écrit la syntaxe
+ * `[[Texte]](url)` à ta place — plus rien à retenir.
+ */
+function InlineButtonInserter({ onInsert }: { onInsert: (md: string) => void }) {
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const ready = label.trim() !== "" && /^https?:\/\//i.test(url.trim());
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="flex-1 min-w-[120px]">
+        <span className={LABEL}>Texte</span>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="En savoir plus"
+          className={FIELD}
+        />
+      </label>
+      <label className="flex-1 min-w-[160px]">
+        <span className={LABEL}>Lien</span>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://…"
+          className={FIELD}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={!ready}
+        onClick={() => {
+          onInsert(`\n\n[[${label.trim()}]](${url.trim()})\n\n`);
+          setLabel("");
+          setUrl("");
+        }}
+        className="rounded-md border border-border px-2 py-2 text-xs text-foreground hover:bg-muted disabled:opacity-40"
+      >
+        Insérer ici
+      </button>
+    </div>
   );
 }

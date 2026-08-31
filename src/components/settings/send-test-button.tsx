@@ -12,10 +12,13 @@ export function SendTestButton({
   subject,
   content,
   defaultTo,
+  button,
 }: {
   subject: string;
   content: string;
   defaultTo: string;
+  /** Bouton principal en cours d'édition : le test doit l'embarquer aussi. */
+  button?: { enabled: boolean; label: string; url: string; position: string };
 }) {
   const [to, setTo] = useState(defaultTo);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -23,7 +26,9 @@ export function SendTestButton({
 
   function send() {
     setResult(null);
-    startTransition(async () => setResult(await sendTestEmailAction(to, subject, content)));
+    startTransition(async () =>
+      setResult(await sendTestEmailAction(to, subject, content, button))
+    );
   }
 
   return (
