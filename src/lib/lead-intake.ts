@@ -199,18 +199,6 @@ export async function ingestSubmission(
     created = true;
 
     await recordStageChange(leadId, null, targetStatusId, "webhook");
-
-    // Un lead déposé par l'import entre bien dans une colonne : il déclenche
-    // les mêmes automatisations qu'un déplacement à la main.
-    // ⚠️ Uniquement à la CRÉATION — une re-soumission ne redéplace pas le lead
-    // (statusId n'est jamais réécrit plus bas), donc pas de doublon d'email.
-    const { runStatusAutomations } = await import("@/lib/automations");
-    await runStatusAutomations(leadId, targetStatusId);
-    // Un lead importé déclenche aussi les séquences : « lead_created » pour
-    // celles qui visent l'arrivée, « enters_status » pour la colonne.
-    const { enrollLeadInSequences } = await import("@/lib/sequences");
-    await enrollLeadInSequences(leadId, "lead_created");
-    await enrollLeadInSequences(leadId, "enters_status", { statusId: targetStatusId });
   } else {
     // UPDATE non destructif
     leadId = existingLead.id;
@@ -257,11 +245,6 @@ export async function ingestSubmission(
   const tagIds = (formSource.defaultTagIds as string[] | null) ?? [];
   for (const tagId of tagIds) {
     await attachTagToLead(leadId, tagId);
-    // Un tag posé PAR L'IMPORT doit déclencher les séquences au même titre
-    // qu'un tag posé à la main — sinon un déclencheur « tag posé » ne verrait
-    // jamais les leads venus du site, c'est-à-dire la totalité d'entre eux.
-    const { enrollLeadInSequences } = await import("@/lib/sequences");
-    await enrollLeadInSequences(leadId, "tag_added", { tagId });
   }
 
   // 9. Journalise une activity type 'webhook_in'

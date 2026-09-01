@@ -80,37 +80,6 @@ jobs:
               if r.get('error'): print(f\"::warning::{r['sourceName']}: {r['error']}\")
           "
 
-      # File des automatisations différées, vidée au même rythme que l'import.
-      # Étape séparée et `if: always()` : un import en échec ne doit pas empêcher
-      # un email programmé de partir, les deux sujets sont indépendants.
-      - name: Vider la file des automatisations
-        if: always()
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          CRM_URL: https://space-crm-psi.vercel.app
-        run: |
-          BODY=$(mktemp)
-          CODE=$(curl -sS --max-time 120 \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            -o "$BODY" -w "%{http_code}" \
-            "$CRM_URL/api/cron/automations")
-
-          echo "HTTP $CODE"
-          cat "$BODY"
-
-          if [ "$CODE" != "200" ]; then
-            echo "::error::L'endpoint des automatisations a répondu $CODE."
-            exit 1
-          fi
-
-          python3 - "$BODY" <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          print("### Automatisations différées\n")
-          print(f"- Envoyés : **{d.get('sent', 0)}** · annulés : {d.get('cancelled', 0)}"
-                f" · ignorés : {d.get('skipped', 0)} · échecs : {d.get('failed', 0)}")
-          PY
-
       # Digest quotidien. Appelé au même rythme que le reste : c'est l'ENDPOINT
       # qui décide s'il doit envoyer (après 7 h à Tunis, une seule fois par
       # jour). L'idempotence vient d'une contrainte d'unicité en base, pas de
@@ -132,24 +101,5 @@ jobs:
 
           if [ "$CODE" != "200" ]; then
             echo "::error::Le digest a répondu $CODE."
-            exit 1
-          fi
-
-      # Séquences email : avance les étapes dues, évalue sorties et conditions.
-      - name: Séquences email
-        if: always()
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          CRM_URL: https://space-crm-psi.vercel.app
-        run: |
-          BODY=$(mktemp)
-          CODE=$(curl -sS --max-time 120 \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            -o "$BODY" -w "%{http_code}" \
-            "$CRM_URL/api/cron/sequences")
-          echo "HTTP $CODE"
-          cat "$BODY"
-          if [ "$CODE" != "200" ]; then
-            echo "::error::Les séquences ont répondu $CODE."
             exit 1
           fi

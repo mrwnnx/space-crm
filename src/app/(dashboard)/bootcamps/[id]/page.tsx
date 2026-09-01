@@ -2,16 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates, getSequencesByBootcamp } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
 import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
-import { AutomationsManager } from "@/components/bootcamps/automations-manager";
 import { AnalyzeLeadsButton } from "@/components/bootcamps/analyze-leads-button";
 import { CarryOverPanel } from "@/components/bootcamps/carry-over-panel";
-import { SequencesManager } from "@/components/bootcamps/sequences-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +35,7 @@ export default async function BootcampDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, automationData, aiData, carry] =
+  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, aiData, carry] =
     await Promise.all([
       getBootcampById(id),
       getLeadsKanban(id),
@@ -45,14 +43,6 @@ export default async function BootcampDetailPage({
       getFormSourcesByBootcamp(id),
       getTags(),
       getLeadStatuses(id),
-      // Les deux requêtes des automatisations tiennent dans UNE branche, en
-      // séquence : la page en ouvre déjà 6 de front et le pool postgres-js est
-      // calibré sur cette concurrence (gel Supavisor documenté).
-      (async () => ({
-        automations: await getAutomationsByBootcamp(id),
-        templates: await getEmailTemplates(),
-        sequences: await getSequencesByBootcamp(id),
-      }))(),
       // Même principe : deux requêtes dans UNE branche, pas deux de plus en front.
       (async () => ({
         pending: await countLeadsToAnalyze(id),
@@ -166,29 +156,6 @@ export default async function BootcampDetailPage({
             targets={carry.targets.map((b) => ({ id: b.id, name: b.name }))}
           />
         </div>
-        <div className="mb-2">
-          <SequencesManager
-            bootcampId={bootcamp.id}
-            sequences={automationData.sequences}
-            stages={pipelineStatuses.map((s) => ({ id: s.id, name: s.name }))}
-            tags={tags.map((t) => ({ id: t.id, name: t.name }))}
-            templates={automationData.templates.map((t) => ({
-              id: t.id,
-              name: t.name,
-              subject: t.subject,
-            }))}
-          />
-        </div>
-        <AutomationsManager
-          bootcampId={bootcamp.id}
-          automations={automationData.automations}
-          stages={pipelineStatuses.map((s) => ({ id: s.id, name: s.name, kind: s.kind }))}
-          templates={automationData.templates.map((t) => ({
-            id: t.id,
-            name: t.name,
-            subject: t.subject,
-          }))}
-        />
       </div>
 
       {/* Kanban */}

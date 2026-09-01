@@ -461,15 +461,6 @@ export async function updateLeadStatusAction(
   // Capture structurée de la transition (Phase 1) — à côté du createActivity existant.
   await recordStageChange(leadId, oldStatusId, lead?.statusId ?? statusId);
 
-  // Automatisations « entrée dans la colonne ». Attendu, jamais en tâche de
-  // fond : une promesse non attendue est tuée au retour en serverless.
-  const { runStatusAutomations } = await import("@/lib/automations");
-  await runStatusAutomations(leadId, lead?.statusId ?? statusId);
-  const { enrollLeadInSequences } = await import("@/lib/sequences");
-  await enrollLeadInSequences(leadId, "enters_status", {
-    statusId: lead?.statusId ?? statusId,
-  });
-
   const { createNotification } = await import("@/lib/queries");
   await createNotification({
     type: "lead_status_change",
@@ -681,16 +672,6 @@ export async function enrollLeadAction(
   });
 
   // 8.5 Automatisations de la colonne d'arrivée. APRÈS la transaction : avant,
-  // le nouveau statut n'est pas encore visible depuis une autre connexion.
-  {
-    const { getLeadStatusId } = await import("@/lib/queries");
-    const { runStatusAutomations } = await import("@/lib/automations");
-    const nowStatusId = await getLeadStatusId(leadId);
-    await runStatusAutomations(leadId, nowStatusId);
-    const { enrollLeadInSequences } = await import("@/lib/sequences");
-    await enrollLeadInSequences(leadId, "enters_status", { statusId: nowStatusId });
-  }
-
   // 9. revalidate
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
@@ -1525,106 +1506,6 @@ export async function logCallOutcomeAction(
   return { ok: true, message: "Appel enregistré." };
 }
 
-// ── Séquences email ────────────────────────────────────
-
-export async function createSequenceAction(
-  bootcampId: string,
-  input: {
-    name: string;
-    trigger: "lead_created" | "enters_status" | "tag_added";
-    triggerStatusId?: string | null;
-    triggerTagId?: string | null;
-  }
-): Promise<{ ok: boolean; message: string }> {
-  await requireUser();
-  if (!input.name.trim()) return { ok: false, message: "Donne un nom à la séquence." };
-  if (input.trigger === "enters_status" && !input.triggerStatusId) {
-    return { ok: false, message: "Choisis la colonne déclencheuse." };
-  }
-  if (input.trigger === "tag_added" && !input.triggerTagId) {
-    return { ok: false, message: "Choisis le tag déclencheur." };
-  }
-
-  const { createSequence } = await import("@/lib/queries");
-  await createSequence({
-    bootcampId,
-    name: input.name.trim(),
-    trigger: input.trigger,
-    triggerStatusId: input.triggerStatusId ?? null,
-    triggerTagId: input.triggerTagId ?? null,
-    // Jamais active à la création : on ajoute les étapes AVANT d'ouvrir le robinet.
-    active: false,
-  });
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true, message: "Séquence créée. Ajoute ses étapes avant de l'activer." };
-}
-
-export async function addSequenceStepAction(
-  bootcampId: string,
-  sequenceId: string,
-  input: { delayHours: number; emailTemplateId: string; condition: string }
-): Promise<{ ok: boolean; message: string }> {
-  await requireUser();
-
-  const { getEmailTemplateById, addSequenceStep } = await import("@/lib/queries");
-  const template = await getEmailTemplateById(input.emailTemplateId);
-  if (!template) return { ok: false, message: "Modèle introuvable." };
-  if (!template.subject?.trim()) {
-    return { ok: false, message: `Le modèle « ${template.name} » n'a pas d'objet.` };
-  }
-
-  const delay = Math.min(Math.max(Math.trunc(input.delayHours), 0), 24 * 60);
-  const ALLOWED = ["none", "clicked", "not_clicked", "not_moved", "has_tag", "no_tag"] as const;
-  const condition = (ALLOWED as readonly string[]).includes(input.condition)
-    ? (input.condition as (typeof ALLOWED)[number])
-    : "none";
-
-  await addSequenceStep({
-    sequenceId,
-    delayHours: delay,
-    emailTemplateId: input.emailTemplateId,
-    condition,
-  });
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true, message: "Étape ajoutée." };
-}
-
-export async function setSequenceActiveAction(
-  id: string,
-  active: boolean,
-  bootcampId: string
-): Promise<{ ok: boolean; message: string }> {
-  await requireUser();
-
-  const { getSequencesByBootcamp, setSequenceActive } = await import("@/lib/queries");
-  if (active) {
-    // Activer une séquence sans étape n'enverrait rien tout en donnant
-    // l'illusion que ça tourne.
-    const all = await getSequencesByBootcamp(bootcampId);
-    const seq = all.find((s) => s.id === id);
-    if (!seq || seq.steps.length === 0) {
-      return { ok: false, message: "Ajoute au moins une étape avant d'activer." };
-    }
-  }
-  await setSequenceActive(id, active);
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true, message: active ? "Séquence activée." : "Séquence en pause." };
-}
-
-export async function deleteSequenceAction(id: string, bootcampId: string) {
-  await requireUser();
-  const { deleteSequence } = await import("@/lib/queries");
-  await deleteSequence(id);
-  revalidatePath(`/bootcamps/${bootcampId}`);
-}
-
-export async function deleteSequenceStepAction(id: string, bootcampId: string) {
-  await requireUser();
-  const { deleteSequenceStep } = await import("@/lib/queries");
-  await deleteSequenceStep(id);
-  revalidatePath(`/bootcamps/${bootcampId}`);
-}
-
 // ── Report vers la formation suivante ──────────────────
 
 export async function carryLeadsOverAction(
@@ -1723,66 +1604,6 @@ export async function analyzeLeadsAction(
     remaining,
     message: lastError,
   };
-}
-
-// ── Automatisations ────────────────────────────────────
-
-export async function createAutomationAction(
-  bootcampId: string,
-  statusId: string,
-  emailTemplateId: string,
-  delayMinutes = 0
-): Promise<{ ok: boolean; message: string }> {
-  await requireUser();
-  if (!statusId || !emailTemplateId) {
-    return { ok: false, message: "Colonne et modèle d'email obligatoires." };
-  }
-
-  const { getEmailTemplateById, createAutomation } = await import("@/lib/queries");
-
-  // L'objet fait partie de l'email : un modèle sans objet enverrait un message
-  // sans titre. On bloque à la création plutôt que de le découvrir au 1er envoi.
-  const template = await getEmailTemplateById(emailTemplateId);
-  if (!template) return { ok: false, message: "Modèle d'email introuvable." };
-  if (!template.subject?.trim()) {
-    return {
-      ok: false,
-      message: `Le modèle « ${template.name} » n'a pas d'objet. Ajoute-lui un objet dans Settings → Emails.`,
-    };
-  }
-
-  // Plafond à 30 jours : au-delà, le contexte du lead n'a plus rien à voir avec
-  // le moment où il est entré dans la colonne.
-  const delay = Number.isFinite(delayMinutes)
-    ? Math.min(Math.max(Math.trunc(delayMinutes), 0), 43200)
-    : 0;
-
-  await createAutomation({ bootcampId, statusId, emailTemplateId, delayMinutes: delay });
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return {
-    ok: true,
-    message: delay > 0
-      ? "Automatisation créée. L'envoi est différé : la file part toutes les ~15 min."
-      : "Automatisation créée.",
-  };
-}
-
-export async function setAutomationActiveAction(
-  id: string,
-  active: boolean,
-  bootcampId: string
-) {
-  await requireUser();
-  const { setAutomationActive } = await import("@/lib/queries");
-  await setAutomationActive(id, active);
-  revalidatePath(`/bootcamps/${bootcampId}`);
-}
-
-export async function deleteAutomationAction(id: string, bootcampId: string) {
-  await requireUser();
-  const { deleteAutomation } = await import("@/lib/queries");
-  await deleteAutomation(id);
-  revalidatePath(`/bootcamps/${bootcampId}`);
 }
 
 // ── Data Import ────────────────────────────────────────
@@ -2265,11 +2086,7 @@ export async function deleteTagAction(id: string) {
 export async function toggleLeadTagAction(leadId: string, tagId: string, on: boolean) {
   await requireUser();
   const { attachTagToLead, detachTagFromLead } = await import("@/lib/queries");
-  if (on) {
-    await attachTagToLead(leadId, tagId);
-    const { enrollLeadInSequences } = await import("@/lib/sequences");
-    await enrollLeadInSequences(leadId, "tag_added", { tagId });
-  }
+  if (on) await attachTagToLead(leadId, tagId);
   else await detachTagFromLead(leadId, tagId);
   revalidatePath(`/leads/${leadId}`);
   return { ok: true, message: "" };

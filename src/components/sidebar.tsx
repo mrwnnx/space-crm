@@ -39,7 +39,6 @@ const primaryNav: NavItem[] = [
   { href: "/contacts", label: "Contacts", icon: Contact01Icon },
   { href: "/tags", label: "Tags", icon: Tag01Icon },
   { href: "/campaigns", label: "Campagnes", icon: Mail01Icon },
-  { href: "/automatisations", label: "Automatisations", icon: Mail01Icon },
 ];
 
 const secondaryNav: NavItem[] = [
