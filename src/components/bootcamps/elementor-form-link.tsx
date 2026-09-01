@@ -7,7 +7,7 @@ import {
   listElementorFormsAction,
   linkElementorFormAction,
   unlinkElementorFormAction,
-  importElementorNowAction,
+  importBootcampFormsAction,
   setElementorMappingAction,
   setElementorRoutingAction,
 } from "@/app/actions";
@@ -168,6 +168,12 @@ function ElementorFormDialog({
     });
   }
 
+  function importAll() {
+    startTransition(async () => {
+      setFeedback(await importBootcampFormsAction(bootcampId));
+    });
+  }
+
   function unlink(sourceId: string) {
     startTransition(async () => {
       setFeedback(await unlinkElementorFormAction(sourceId, bootcampId));
@@ -187,12 +193,21 @@ function ElementorFormDialog({
           <h2 className="text-sm font-semibold text-foreground font-heading">
             Formulaires Elementor — thespace.academy
           </h2>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
-          >
-            Fermer
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={importAll}
+              disabled={isPending || linked.length === 0}
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
+            >
+              {isPending ? "Import…" : "Importer"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+            >
+              Fermer
+            </button>
+          </div>
         </div>
         <p className="mb-4 text-[11px] text-muted-foreground/70">
           Les soumissions du formulaire lié deviennent des leads de cette formation.
@@ -314,12 +329,6 @@ function LinkedRow({
     Object.values(mapping).includes("email") ||
     Object.values(mapping).includes("mobileNo");
 
-  function runImport() {
-    startTransition(async () => {
-      onFeedback(await importElementorNowAction(source.id, bootcampId));
-    });
-  }
-
   function saveMapping() {
     startTransition(async () => {
       onFeedback(await setElementorMappingAction(source.id, bootcampId, mapping));
@@ -341,13 +350,6 @@ function LinkedRow({
           </p>
         </div>
         <div className="ml-3 flex shrink-0 items-center gap-1">
-          <button
-            onClick={runImport}
-            disabled={disabled || isPending}
-            className="rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-40"
-          >
-            {isPending ? "…" : "Importer"}
-          </button>
           {payloadKeys.length > 0 && (
             <button
               onClick={() => setOpen((v) => !v)}

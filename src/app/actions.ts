@@ -1952,32 +1952,67 @@ export async function setElementorMappingAction(
   return { ok: true, message: "Mapping enregistré." };
 }
 
-/** Import manuel « maintenant » pour une source. */
-export async function importElementorNowAction(sourceId: string, bootcampId: string) {
+/**
+ * Import manuel de TOUS les formulaires liés à une formation, en un clic.
+ *
+ * Séquentiel, comme le cron : le pool postgres-js est dimensionné sur la
+ * concurrence d'UNE requête HTTP, et l'API WordPress n'aime pas les rafales.
+ * Un formulaire en échec n'arrête pas les autres — son erreur est nommée dans
+ * le récapitulatif, sinon un seul mapping cassé masquerait tout le reste.
+ */
+export async function importBootcampFormsAction(bootcampId: string) {
   await requireUser();
-  const { getWpConnection, getFormSourceById } = await import("@/lib/queries");
+  const { getWpConnection, getFormSourcesByBootcamp } = await import("@/lib/queries");
   const { importElementorSource } = await import("@/lib/elementor-import");
 
-  const [conn, source] = await Promise.all([getWpConnection(), getFormSourceById(sourceId)]);
+  const conn = await getWpConnection();
   if (!conn) return { ok: false, message: "Connexion au site non configurée." };
-  if (!source) return { ok: false, message: "Source introuvable." };
 
-  const r = await importElementorSource(source, {
+  const sources = (await getFormSourcesByBootcamp(bootcampId)).filter(
+    (s) => s.active && s.elementorFormId
+  );
+  if (sources.length === 0) {
+    return { ok: false, message: "Aucun formulaire lié à cette formation." };
+  }
+
+  const creds = {
     siteUrl: conn.siteUrl,
     username: conn.username,
     appPassword: conn.appPassword,
-  });
+  };
+
+  let fetched = 0, created = 0, updated = 0, skipped = 0;
+  const skippedIds: number[] = [];
+  const errors: string[] = [];
+
+  for (const source of sources) {
+    const r = await importElementorSource(source, creds);
+    fetched += r.fetched;
+    created += r.created;
+    updated += r.updated;
+    skipped += r.skipped;
+    skippedIds.push(...r.skippedIds);
+    if (r.error) errors.push(`${source.name} : ${r.error}`);
+  }
 
   revalidatePath(`/bootcamps/${bootcampId}`);
-  if (r.error) return { ok: false, message: `${r.error} (${r.created} créé(s) avant l'erreur)` };
-  if (r.fetched === 0) return { ok: true, message: "Aucune nouvelle soumission." };
-  const base = `${r.fetched} soumission(s) — ${r.created} lead(s) créé(s), ${r.updated} mis à jour`;
-  if (r.skipped > 0) {
+
+  const scope = `${sources.length} formulaire(s)`;
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      message: `${errors.join(" — ")} (${created} lead(s) créé(s) au total)`,
+    };
+  }
+  if (fetched === 0) return { ok: true, message: `${scope} — aucune nouvelle soumission.` };
+
+  const base = `${scope} — ${fetched} soumission(s), ${created} lead(s) créé(s), ${updated} mis à jour`;
+  if (skipped > 0) {
     return {
       ok: true,
       message:
-        `${base}, ${r.skipped} ignorée(s) faute d'email ET de téléphone ` +
-        `(#${r.skippedIds.join(", #")}). Elles restent lisibles côté WordPress.`,
+        `${base}, ${skipped} ignorée(s) faute d'email ET de téléphone ` +
+        `(#${skippedIds.join(", #")}). Elles restent lisibles côté WordPress.`,
     };
   }
   return { ok: true, message: `${base}.` };
