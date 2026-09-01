@@ -8,7 +8,7 @@ import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { DuplicateBanner } from "@/components/leads/duplicate-banner";
 import { getDuplicateInfo } from "@/lib/duplicates";
-import { getReturningForLead } from "@/lib/queries";
+import { getReturningForLead, getCarriedOrigin } from "@/lib/queries";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
@@ -49,6 +49,7 @@ export default async function LeadDetailPage({
   const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
   const duplicateInfo = await getDuplicateInfo(lead.id);
   const returning = await getReturningForLead(lead.id);
+  const carriedFrom = await getCarriedOrigin(lead.id);
   const campaignHistory = lead.contactId
     ? await getCampaignsForContact(lead.contactId)
     : [];
@@ -114,6 +115,24 @@ export default async function LeadDetailPage({
 
           {duplicateInfo && (
             <DuplicateBanner leadId={lead.id} info={duplicateInfo} />
+          )}
+
+          {carriedFrom && (
+            // Le message que Marwen voulait : « ces gens-là, tu les as déjà
+            // contactés, mais rien n'a été conclu ».
+            <div className="border-b border-border bg-amber-50 px-4 py-2.5">
+              <p className="text-xs font-medium text-amber-900">
+                ↪ Reporté de « {carriedFrom.bootcamp_name} » — déjà contacté, jamais conclu
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {carriedFrom.qualification
+                  ? `Dernière qualification : ${carriedFrom.qualification} · `
+                  : ""}
+                <a href={`/leads/${carriedFrom.origin_id}`} className="underline">
+                  voir la fiche d&apos;origine
+                </a>
+              </p>
+            </div>
           )}
 
           {returning && (

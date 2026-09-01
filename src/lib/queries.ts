@@ -2507,3 +2507,182 @@ export async function getMultiFormByBootcamp(bootcampId: string): Promise<Set<st
   }
   return out;
 }
+
+// ── Report vers la formation suivante ──────────────────
+
+export type CarryCandidate = {
+  id: string;
+  fullName: string | null;
+  email: string | null;
+  qualification: string | null;
+  calls: number;
+  alreadyThere: boolean;
+};
+
+/**
+ * Leads NON CONCLUS d'une formation : ni inscrits, ni perdus.
+ *
+ * Ce sont eux qu'on oublie quand la session suivante s'ouvre — alors que
+ * beaucoup ne pouvaient pas payer CE mois-là, pas jamais.
+ *
+ * `alreadyThere` = un lead existe déjà pour cette personne dans la formation
+ * cible ; on ne le reportera pas deux fois.
+ */
+export async function getCarryCandidates(
+  fromBootcampId: string,
+  toBootcampId: string
+): Promise<CarryCandidate[]> {
+  const rows = await db.execute<{
+    id: string;
+    full_name: string | null;
+    email: string | null;
+    qualification: string | null;
+    calls: number;
+    already_there: boolean;
+  }>(sql`
+    select l.id, l.full_name, l.email, l.qualification::text as qualification,
+           (select count(*)::int from call_logs cl
+             where cl.reference_type = 'lead' and cl.reference_id = l.id) as calls,
+           exists (
+             select 1 from leads t
+             where t.bootcamp_id = ${toBootcampId}
+               and lower(trim(coalesce(t.email, ''))) = lower(trim(coalesce(l.email, '')))
+               and coalesce(l.email, '') <> ''
+           ) as already_there
+    from leads l
+    join lead_statuses ls on ls.id = l.status_id
+    where l.bootcamp_id = ${fromBootcampId}
+      and ls.kind = 'normal'
+      -- Inutile de traîner ceux qu'on a déjà écartés au téléphone.
+      and (l.qualification is null or l.qualification not in ('hors_cible', 'pas_serieux'))
+    order by l.qualification nulls last, l.created_at desc
+  `);
+
+  return rows.map((r) => ({
+    id: r.id,
+    fullName: r.full_name,
+    email: r.email,
+    qualification: r.qualification,
+    calls: r.calls,
+    alreadyThere: r.already_there,
+  }));
+}
+
+/**
+ * Recrée les leads dans la formation cible.
+ *
+ * L'historique n'est PAS recopié : le nouveau lead pointe vers l'ancien
+ * (`carriedFromLeadId`) et reçoit une activité de synthèse. Recopier des
+ * appels et des notes créerait deux vérités qui divergeraient.
+ */
+export async function carryLeadsOver(
+  leadIds: string[],
+  toBootcampId: string,
+  actor: string | null
+): Promise<number> {
+  if (leadIds.length === 0) return 0;
+
+  const stages = await db.query.leadStatuses.findMany({
+    where: and(eq(leadStatuses.bootcampId, toBootcampId), eq(leadStatuses.kind, "normal")),
+    orderBy: [asc(leadStatuses.position)],
+  });
+  const targetStatusId = stages[0]?.id ?? null;
+  if (!targetStatusId) return 0;
+
+  let created = 0;
+  for (const leadId of leadIds) {
+    const src = await db.query.leads.findFirst({
+      where: eq(leads.id, leadId),
+      with: { bootcamp: true },
+    });
+    if (!src) continue;
+
+    const emailNorm = src.email?.trim().toLowerCase() ?? "";
+    if (emailNorm) {
+      const existing = await db.query.leads.findMany({
+        where: and(
+          eq(leads.bootcampId, toBootcampId),
+          sql`lower(trim(coalesce(${leads.email}, ''))) = ${emailNorm}`
+        ),
+        limit: 1,
+      });
+      if (existing.length > 0) continue; // déjà présent : on ne double pas
+    }
+
+    const [copy] = await db
+      .insert(leads)
+      .values({
+        bootcampId: toBootcampId,
+        contactId: src.contactId,
+        statusId: targetStatusId,
+        temperature: src.temperature,
+        fullName: src.fullName,
+        firstName: src.firstName,
+        lastName: src.lastName,
+        email: src.email,
+        mobileNo: src.mobileNo,
+        phone: src.phone,
+        jobTitle: src.jobTitle,
+        organizationName: src.organizationName,
+        motivation: src.motivation,
+        wantsCall: src.wantsCall,
+        promoCode: src.promoCode,
+        // La qualification humaine suit la personne, elle ne dépend pas
+        // de la session ; l'offre, si : les prix peuvent changer.
+        qualification: src.qualification,
+        qualifiedAt: src.qualifiedAt,
+        carriedFromLeadId: src.id,
+        stageEnteredAt: new Date(),
+      })
+      .returning();
+
+    const calls = await db.execute<{ n: number }>(sql`
+      select count(*)::int as n from call_logs
+      where reference_type = 'lead' and reference_id = ${src.id}`);
+
+    await createActivity({
+      referenceType: "lead",
+      referenceId: copy.id,
+      type: "note",
+      direction: "outbound",
+      subject: `Reporté de « ${src.bootcamp?.name ?? "une formation précédente"} »`,
+      content: [
+        `Cette personne était déjà un lead sur ${src.bootcamp?.name ?? "une session précédente"} sans conclure.`,
+        src.qualification ? `Dernière qualification : ${src.qualification}.` : null,
+        `${calls[0]?.n ?? 0} appel(s) enregistré(s) sur la fiche d'origine.`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      createdBy: actor,
+    });
+
+    created++;
+  }
+  return created;
+}
+
+/** Formations pouvant recevoir un report : ouvertes, non archivées. */
+export async function getOpenBootcamps(excludeId?: string) {
+  const rows = await db.query.bootcamps.findMany({
+    where: sql`${bootcamps.archivedAt} is null and ${bootcamps.status} not in ('completed', 'cancelled')`,
+    orderBy: [desc(bootcamps.createdAt)],
+  });
+  return rows.filter((b) => b.id !== excludeId);
+}
+
+/** Fiche d'origine d'un lead reporté, pour l'afficher et y renvoyer. */
+export async function getCarriedOrigin(leadId: string) {
+  const rows = await db.execute<{
+    origin_id: string;
+    bootcamp_name: string;
+    qualification: string | null;
+  }>(sql`
+    select o.id as origin_id, ob.name as bootcamp_name,
+           o.qualification::text as qualification
+    from leads l
+    join leads o on o.id = l.carried_from_lead_id
+    join bootcamps ob on ob.id = o.bootcamp_id
+    where l.id = ${leadId}
+  `);
+  return rows[0] ?? null;
+}

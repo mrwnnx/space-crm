@@ -274,6 +274,9 @@ export const leads = pgTable("leads", {
   qualifiedAt: timestamp("qualified_at"),
   // « À rappeler le » : c'est CE champ qui fait remonter un lead au bon moment.
   nextFollowUpAt: timestamp("next_follow_up_at"),
+  // Lead repris d'une formation précédente. Garde le lien plutôt que de
+  // recopier l'historique : la vérité reste à un seul endroit.
+  carriedFromLeadId: uuid("carried_from_lead_id"),
   // Réponses de formulaire qui n'entraient dans aucune colonne : elles ne
   // survivaient que dans rawPayload, donc invisibles dans la fiche.
   motivation: text("motivation"), // « pourquoi tu veux étudier avec nous » (texte libre)

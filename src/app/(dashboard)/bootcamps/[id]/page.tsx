@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
@@ -10,6 +10,7 @@ import { NewLeadButton } from "@/components/leads/new-lead-button";
 import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
 import { AutomationsManager } from "@/components/bootcamps/automations-manager";
 import { AnalyzeLeadsButton } from "@/components/bootcamps/analyze-leads-button";
+import { CarryOverPanel } from "@/components/bootcamps/carry-over-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function BootcampDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, automationData, aiData] =
+  const [bootcamp, kanbanData, sources, formSources, tags, pipelineStatuses, automationData, aiData, carry] =
     await Promise.all([
       getBootcampById(id),
       getLeadsKanban(id),
@@ -57,6 +58,12 @@ export default async function BootcampDetailPage({
         returning: await getReturningByBootcamp(id),
         multiForm: await getMultiFormByBootcamp(id),
       }))(),
+      // Formations pouvant recevoir un report + les candidats vers la première.
+      (async () => {
+        const targets = await getOpenBootcamps(id);
+        const candidates = targets[0] ? await getCarryCandidates(id, targets[0].id) : [];
+        return { targets, candidates };
+      })(),
     ]);
 
   if (!bootcamp) notFound();
@@ -149,6 +156,13 @@ export default async function BootcampDetailPage({
       <div className="border-b border-border px-4 py-2">
         <div className="mb-2">
           <AnalyzeLeadsButton bootcampId={bootcamp.id} pending={aiData.pending} />
+        </div>
+        <div className="mb-2">
+          <CarryOverPanel
+            bootcampId={bootcamp.id}
+            candidates={carry.candidates}
+            targets={carry.targets.map((b) => ({ id: b.id, name: b.name }))}
+          />
         </div>
         <AutomationsManager
           bootcampId={bootcamp.id}

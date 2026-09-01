@@ -1518,6 +1518,41 @@ export async function logCallOutcomeAction(
   return { ok: true, message: "Appel enregistré." };
 }
 
+// ── Report vers la formation suivante ──────────────────
+
+export async function carryLeadsOverAction(
+  fromBootcampId: string,
+  toBootcampId: string,
+  leadIds: string[]
+): Promise<{ ok: boolean; created: number; message: string }> {
+  await requireUser();
+
+  if (!toBootcampId || fromBootcampId === toBootcampId) {
+    return { ok: false, created: 0, message: "Choisis une formation de destination." };
+  }
+  if (leadIds.length === 0) {
+    return { ok: false, created: 0, message: "Aucun lead sélectionné." };
+  }
+
+  const { carryLeadsOver } = await import("@/lib/queries");
+  const { currentActor } = await import("@/lib/auth");
+  const created = await carryLeadsOver(leadIds, toBootcampId, await currentActor());
+
+  revalidatePath(`/bootcamps/${fromBootcampId}`);
+  revalidatePath(`/bootcamps/${toBootcampId}`);
+  revalidatePath("/aujourdhui");
+
+  const skipped = leadIds.length - created;
+  return {
+    ok: true,
+    created,
+    message:
+      created === 0
+        ? "Aucun report : ces personnes sont déjà dans la formation cible."
+        : `${created} lead(s) reporté(s)${skipped > 0 ? ` · ${skipped} déjà présent(s)` : ""}.`,
+  };
+}
+
 // ── Lecture IA des leads ───────────────────────────────
 
 /**
