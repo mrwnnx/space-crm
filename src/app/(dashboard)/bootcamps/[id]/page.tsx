@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates, getSequencesByBootcamp } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
@@ -11,6 +11,7 @@ import { ElementorFormLink } from "@/components/bootcamps/elementor-form-link";
 import { AutomationsManager } from "@/components/bootcamps/automations-manager";
 import { AnalyzeLeadsButton } from "@/components/bootcamps/analyze-leads-button";
 import { CarryOverPanel } from "@/components/bootcamps/carry-over-panel";
+import { SequencesManager } from "@/components/bootcamps/sequences-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function BootcampDetailPage({
       (async () => ({
         automations: await getAutomationsByBootcamp(id),
         templates: await getEmailTemplates(),
+        sequences: await getSequencesByBootcamp(id),
       }))(),
       // Même principe : deux requêtes dans UNE branche, pas deux de plus en front.
       (async () => ({
@@ -162,6 +164,19 @@ export default async function BootcampDetailPage({
             bootcampId={bootcamp.id}
             candidates={carry.candidates}
             targets={carry.targets.map((b) => ({ id: b.id, name: b.name }))}
+          />
+        </div>
+        <div className="mb-2">
+          <SequencesManager
+            bootcampId={bootcamp.id}
+            sequences={automationData.sequences}
+            stages={pipelineStatuses.map((s) => ({ id: s.id, name: s.name }))}
+            tags={tags.map((t) => ({ id: t.id, name: t.name }))}
+            templates={automationData.templates.map((t) => ({
+              id: t.id,
+              name: t.name,
+              subject: t.subject,
+            }))}
           />
         </div>
         <AutomationsManager

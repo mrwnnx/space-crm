@@ -915,6 +915,107 @@ export type NoteTemplate = typeof noteTemplates.$inferSelect;
 export type NewNoteTemplate = typeof noteTemplates.$inferInsert;
 export type StageHistory = typeof stageHistory.$inferSelect;
 export type NewStageHistory = typeof stageHistory.$inferInsert;
+// ── Séquences email ────────────────────────────────────
+// Une automatisation = un email. Une SÉQUENCE = plusieurs étapes ordonnées,
+// avec des délais, des conditions, et surtout des sorties automatiques.
+
+export const sequenceTriggerEnum = pgEnum("sequence_trigger", [
+  "lead_created", // arrivée d'un lead dans la formation
+  "enters_status", // entrée dans une colonne
+  "tag_added", // un tag est posé
+]);
+
+export const stepConditionEnum = pgEnum("step_condition", [
+  "none",
+  "clicked", // a cliqué dans l'email d'une étape précédente
+  "not_clicked", // n'a pas cliqué
+  "not_moved", // n'a pas changé de colonne depuis l'inscription à la séquence
+]);
+
+export const enrollmentStatusEnum = pgEnum("enrollment_status", [
+  "active",
+  "done", // toutes les étapes envoyées
+  "exited", // sorti avant la fin (inscrit, désabonné, hors cible…)
+]);
+
+export const sequences = pgTable("sequences", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bootcampId: uuid("bootcamp_id")
+    .notNull()
+    .references(() => bootcamps.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  trigger: sequenceTriggerEnum("trigger").notNull(),
+  triggerStatusId: uuid("trigger_status_id"),
+  triggerTagId: uuid("trigger_tag_id"),
+  active: boolean("active").notNull().default(false),
+  // Fenêtre d'envoi en heure de Tunis. Personne ne veut d'un email à 3 h.
+  sendFromHour: integer("send_from_hour").notNull().default(9),
+  sendToHour: integer("send_to_hour").notNull().default(20),
+  // Plafond par passage : le plan Resend gratuit s'arrête à 100 emails/jour,
+  // tous envois confondus. Sans plafond, une séquence lancée sur 59 leads
+  // épuise le quota dès le premier jour, en silence.
+  dailyCap: integer("daily_cap").notNull().default(40),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const sequenceSteps = pgTable("sequence_steps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sequenceId: uuid("sequence_id")
+    .notNull()
+    .references(() => sequences.id, { onDelete: "cascade" }),
+  position: integer("position").notNull(),
+  delayHours: integer("delay_hours").notNull().default(24),
+  emailTemplateId: uuid("email_template_id")
+    .notNull()
+    .references(() => emailTemplates.id),
+  condition: stepConditionEnum("condition").notNull().default("none"),
+  // Étape dont on regarde le clic. NULL = l'étape précédente.
+  conditionOnStepId: uuid("condition_on_step_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const sequenceEnrollments = pgTable(
+  "sequence_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sequenceId: uuid("sequence_id")
+      .notNull()
+      .references(() => sequences.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    status: enrollmentStatusEnum("status").notNull().default("active"),
+    exitReason: text("exit_reason"),
+    // Position de la PROCHAINE étape à traiter.
+    currentStep: integer("current_step").notNull().default(0),
+    nextRunAt: timestamp("next_run_at"),
+    // Colonne au moment de l'inscription, pour évaluer « n'a pas bougé ».
+    statusAtEnrollment: uuid("status_at_enrollment"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.sequenceId, t.leadId], name: "sequence_enrollment_unique" })]
+);
+
+export const sequenceSends = pgTable("sequence_sends", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  enrollmentId: uuid("enrollment_id")
+    .notNull()
+    .references(() => sequenceEnrollments.id, { onDelete: "cascade" }),
+  stepId: uuid("step_id").notNull(),
+  leadId: uuid("lead_id").notNull(),
+  // Identifiant Resend : c'est LUI qui permet de rattacher une ouverture ou un
+  // clic reçus par le webhook. Sans ça, les événements arrivent et se perdent.
+  resendId: text("resend_id"),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+  openedAt: timestamp("opened_at"),
+  clickedAt: timestamp("clicked_at"),
+});
+
+export type Sequence = typeof sequences.$inferSelect;
+export type SequenceStep = typeof sequenceSteps.$inferSelect;
+
 // ── Habillage des emails ───────────────────────────────
 // Enveloppe commune à TOUS les envois (en-tête + pied de page). Table à ligne
 // unique, même motif que wp_connection : `id` est un booléen contraint à true.

@@ -36,6 +36,10 @@ import {
   automationRuns,
   emailBranding,
   leadInsights,
+  sequences,
+  sequenceSteps,
+  sequenceEnrollments,
+  sequenceSends,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -2685,4 +2689,125 @@ export async function getCarriedOrigin(leadId: string) {
     where l.id = ${leadId}
   `);
   return rows[0] ?? null;
+}
+
+// ── Séquences email ────────────────────────────────────
+
+export type SequenceRow = {
+  id: string;
+  name: string;
+  trigger: string;
+  triggerStatusId: string | null;
+  triggerTagId: string | null;
+  active: boolean;
+  sendFromHour: number;
+  sendToHour: number;
+  dailyCap: number;
+  steps: {
+    id: string;
+    position: number;
+    delayHours: number;
+    templateId: string;
+    templateName: string | null;
+    condition: string;
+  }[];
+  activeCount: number;
+  exitedCount: number;
+  sentCount: number;
+  clickedCount: number;
+};
+
+export async function getSequencesByBootcamp(bootcampId: string): Promise<SequenceRow[]> {
+  const rows = await db.query.sequences.findMany({
+    where: eq(sequences.bootcampId, bootcampId),
+    orderBy: [desc(sequences.createdAt)],
+  });
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+
+  const steps = await db
+    .select({
+      id: sequenceSteps.id,
+      sequenceId: sequenceSteps.sequenceId,
+      position: sequenceSteps.position,
+      delayHours: sequenceSteps.delayHours,
+      templateId: sequenceSteps.emailTemplateId,
+      templateName: emailTemplates.name,
+      condition: sequenceSteps.condition,
+    })
+    .from(sequenceSteps)
+    .leftJoin(emailTemplates, eq(emailTemplates.id, sequenceSteps.emailTemplateId))
+    .where(inArray(sequenceSteps.sequenceId, ids))
+    .orderBy(asc(sequenceSteps.position));
+
+  const enr = await db
+    .select({
+      sequenceId: sequenceEnrollments.sequenceId,
+      status: sequenceEnrollments.status,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(sequenceEnrollments)
+    .where(inArray(sequenceEnrollments.sequenceId, ids))
+    .groupBy(sequenceEnrollments.sequenceId, sequenceEnrollments.status);
+
+  const sends = await db.execute<{ sequence_id: string; sent: number; clicked: number }>(sql`
+    select e.sequence_id,
+           count(*)::int as sent,
+           count(*) filter (where s.clicked_at is not null)::int as clicked
+    from sequence_sends s
+    join sequence_enrollments e on e.id = s.enrollment_id
+    where e.sequence_id = any(${ids})
+    group by e.sequence_id
+  `);
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    trigger: r.trigger,
+    triggerStatusId: r.triggerStatusId,
+    triggerTagId: r.triggerTagId,
+    active: r.active,
+    sendFromHour: r.sendFromHour,
+    sendToHour: r.sendToHour,
+    dailyCap: r.dailyCap,
+    steps: steps.filter((s) => s.sequenceId === r.id),
+    activeCount: enr.find((e) => e.sequenceId === r.id && e.status === "active")?.n ?? 0,
+    exitedCount: enr.find((e) => e.sequenceId === r.id && e.status === "exited")?.n ?? 0,
+    sentCount: sends.find((s) => s.sequence_id === r.id)?.sent ?? 0,
+    clickedCount: sends.find((s) => s.sequence_id === r.id)?.clicked ?? 0,
+  }));
+}
+
+export async function createSequence(data: typeof sequences.$inferInsert) {
+  const createdBy = data.createdBy !== undefined ? data.createdBy : await currentActor();
+  const [row] = await db.insert(sequences).values({ ...data, createdBy }).returning();
+  return row;
+}
+
+export async function addSequenceStep(data: {
+  sequenceId: string;
+  delayHours: number;
+  emailTemplateId: string;
+  condition: "none" | "clicked" | "not_clicked" | "not_moved";
+}) {
+  const existing = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(sequenceSteps)
+    .where(eq(sequenceSteps.sequenceId, data.sequenceId));
+  const position = existing[0]?.n ?? 0;
+  const [row] = await db.insert(sequenceSteps).values({ ...data, position }).returning();
+  return row;
+}
+
+export async function setSequenceActive(id: string, active: boolean) {
+  await db.update(sequences).set({ active }).where(eq(sequences.id, id));
+}
+
+export async function deleteSequence(id: string) {
+  await db.delete(sequences).where(eq(sequences.id, id));
+}
+
+export async function deleteSequenceStep(id: string) {
+  await db.delete(sequenceSteps).where(eq(sequenceSteps.id, id));
 }

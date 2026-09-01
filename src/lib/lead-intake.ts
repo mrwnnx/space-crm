@@ -206,6 +206,11 @@ export async function ingestSubmission(
     // (statusId n'est jamais réécrit plus bas), donc pas de doublon d'email.
     const { runStatusAutomations } = await import("@/lib/automations");
     await runStatusAutomations(leadId, targetStatusId);
+    // Un lead importé déclenche aussi les séquences : « lead_created » pour
+    // celles qui visent l'arrivée, « enters_status » pour la colonne.
+    const { enrollLeadInSequences } = await import("@/lib/sequences");
+    await enrollLeadInSequences(leadId, "lead_created");
+    await enrollLeadInSequences(leadId, "enters_status", { statusId: targetStatusId });
   } else {
     // UPDATE non destructif
     leadId = existingLead.id;

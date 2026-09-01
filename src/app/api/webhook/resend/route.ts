@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/db";
-import { campaignLinkClicks, campaignRecipients, contacts } from "@/db/schema";
+import { campaignLinkClicks, campaignRecipients, contacts, sequenceSends } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 /**
@@ -94,6 +94,14 @@ export async function POST(request: NextRequest) {
 
   if ((type === "email.opened" || type === "email.clicked") && emailId) {
     const isOpen = type === "email.opened";
+
+    // Les emails de SÉQUENCE portent le même identifiant Resend. Sans ce
+    // rattachement, les ouvertures et clics arrivaient bien ici et se
+    // perdaient — et une condition « n'a pas cliqué » aurait été toujours vraie.
+    await db
+      .update(sequenceSends)
+      .set(isOpen ? { openedAt: new Date() } : { clickedAt: new Date() })
+      .where(eq(sequenceSends.resendId, emailId));
 
     // L'URL cliquée n'est portée QUE par cet événement : si on ne la garde
     // pas ici, on saura qu'il y a eu un clic mais jamais sur quoi.

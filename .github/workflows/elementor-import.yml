@@ -134,3 +134,22 @@ jobs:
             echo "::error::Le digest a répondu $CODE."
             exit 1
           fi
+
+      # Séquences email : avance les étapes dues, évalue sorties et conditions.
+      - name: Séquences email
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRM_URL: https://space-crm-psi.vercel.app
+        run: |
+          BODY=$(mktemp)
+          CODE=$(curl -sS --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o "$BODY" -w "%{http_code}" \
+            "$CRM_URL/api/cron/sequences")
+          echo "HTTP $CODE"
+          cat "$BODY"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Les séquences ont répondu $CODE."
+            exit 1
+          fi
