@@ -62,9 +62,6 @@ export function ElementorFormLink({
     <>
       {/* Barre compacte : le nom du formulaire connecté et rien d'autre. */}
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Formulaire
-        </span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           {linked.length === 0 ? (
             <span className="text-xs text-muted-foreground/60">Aucun formulaire lié</span>
@@ -182,7 +179,7 @@ function ElementorFormDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
       onClick={onClose}
     >
       <div

@@ -52,12 +52,12 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="space-y-2">
       <select
         value={bootcamp.status}
         onChange={handleStatusChange}
         disabled={isPending}
-        className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
+        className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
       >
         {statusOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -74,7 +74,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
       </button>
 
       {showPricing && (
-        <div className="absolute right-4 top-14 z-50 w-72 rounded-xl border border-border bg-card p-4 shadow-xl">
+        <div className="rounded-lg border border-border bg-background p-3">
           <p className="mb-3 text-xs font-semibold text-foreground">Offre &amp; paiement</p>
 
           <label className="mb-1 block text-[10px] text-muted-foreground">Devise</label>
