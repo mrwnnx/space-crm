@@ -57,10 +57,18 @@ export function ElementorFormLink({
   tags: Tag[];
 }) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  function importAll() {
+    startTransition(async () => {
+      setResult(await importBootcampFormsAction(bootcampId));
+    });
+  }
 
   return (
     <>
-      {/* Barre compacte : le nom du formulaire connecté et rien d'autre. */}
+      {/* Barre compacte : les formulaires connectés, importer, configurer. */}
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           {linked.length === 0 ? (
@@ -78,6 +86,13 @@ export function ElementorFormLink({
           )}
         </div>
         <button
+          onClick={importAll}
+          disabled={isPending || linked.length === 0}
+          className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
+        >
+          {isPending ? "Import…" : "Importer"}
+        </button>
+        <button
           onClick={() => setOpen(true)}
           aria-label="Configurer les formulaires"
           title="Configurer les formulaires"
@@ -86,6 +101,16 @@ export function ElementorFormLink({
           <HugeiconsIcon icon={PencilEdit02Icon} size={15} />
         </button>
       </div>
+
+      {result && (
+        <p
+          className={`mt-2 rounded-md px-2 py-1.5 text-[11px] ${
+            result.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          }`}
+        >
+          {result.message}
+        </p>
+      )}
 
       {open && (
         <ElementorFormDialog
