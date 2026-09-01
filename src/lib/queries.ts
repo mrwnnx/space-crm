@@ -2280,7 +2280,12 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
            li.intent::text as intent, li.summary, li.objection,
            c.created_at as last_call_at, c.status::text as last_call_status
     from leads l
-    join bootcamps b on b.id = l.bootcamp_id and b.archived_at is null
+    join bootcamps b
+      on b.id = l.bootcamp_id
+     and b.archived_at is null
+     -- Une formation TERMINÉE ou ANNULÉE ne se rappelle plus : filtrer sur
+     -- l'archivage seul laissait 84 leads d'août dans une file de 186.
+     and b.status not in ('completed', 'cancelled')
     join lead_statuses ls on ls.id = l.status_id and ls.kind = 'normal'
     left join lead_insights li on li.lead_id = l.id
     left join lateral (
