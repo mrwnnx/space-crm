@@ -1400,7 +1400,10 @@ export async function saveEmailBrandingAction(
 
 /** Qualifications proposées à l'appel. Courte volontairement : une liste
  *  longue ne se clique pas, elle se contourne. */
-export const CALL_QUALIFICATIONS = [
+// PAS exportée : ce fichier porte "use server", qui n'autorise QUE des exports
+// de fonctions async. L'exporter faisait échouer l'évaluation du module —
+// donc TOUTE page important ce fichier (fiche lead, page formation).
+const CALL_QUALIFICATIONS = [
   "chaud",
   "tiede",
   "froid",
