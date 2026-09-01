@@ -930,6 +930,8 @@ export const stepConditionEnum = pgEnum("step_condition", [
   "clicked", // a cliqué dans l'email d'une étape précédente
   "not_clicked", // n'a pas cliqué
   "not_moved", // n'a pas changé de colonne depuis l'inscription à la séquence
+  "has_tag", // porte encore le tag déclencheur
+  "no_tag", // ne le porte plus
 ]);
 
 export const enrollmentStatusEnum = pgEnum("enrollment_status", [

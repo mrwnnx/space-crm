@@ -232,6 +232,21 @@ export async function processSequences(): Promise<SequenceReport> {
             ? await hasClicked(enr.id, refStepId)
             : false;
           passes = step.condition === "clicked" ? clicked : !clicked;
+        } else if (step.condition === "has_tag" || step.condition === "no_tag") {
+          // « Est-il ENCORE tagué ? » — n'a de sens que si quelqu'un retire
+          // les tags. Sans discipline d'équipe, la condition est toujours vraie.
+          const tagId = seq.triggerTagId;
+          if (!tagId) passes = step.condition === "no_tag";
+          else {
+            const { leadTags } = await import("@/db/schema");
+            const rows = await db
+              .select({ leadId: leadTags.leadId })
+              .from(leadTags)
+              .where(and(eq(leadTags.leadId, enr.leadId), eq(leadTags.tagId, tagId)))
+              .limit(1);
+            const tagged = rows.length > 0;
+            passes = step.condition === "has_tag" ? tagged : !tagged;
+          }
         } else if (step.condition === "not_moved") {
           const lead = await db.query.leads.findFirst({
             where: eq(leads.id, enr.leadId),

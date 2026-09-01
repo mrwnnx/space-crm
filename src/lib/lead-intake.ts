@@ -257,6 +257,11 @@ export async function ingestSubmission(
   const tagIds = (formSource.defaultTagIds as string[] | null) ?? [];
   for (const tagId of tagIds) {
     await attachTagToLead(leadId, tagId);
+    // Un tag posé PAR L'IMPORT doit déclencher les séquences au même titre
+    // qu'un tag posé à la main — sinon un déclencheur « tag posé » ne verrait
+    // jamais les leads venus du site, c'est-à-dire la totalité d'entre eux.
+    const { enrollLeadInSequences } = await import("@/lib/sequences");
+    await enrollLeadInSequences(leadId, "tag_added", { tagId });
   }
 
   // 9. Journalise une activity type 'webhook_in'

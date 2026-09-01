@@ -1574,8 +1574,9 @@ export async function addSequenceStepAction(
   }
 
   const delay = Math.min(Math.max(Math.trunc(input.delayHours), 0), 24 * 60);
-  const condition = ["none", "clicked", "not_clicked", "not_moved"].includes(input.condition)
-    ? (input.condition as "none" | "clicked" | "not_clicked" | "not_moved")
+  const ALLOWED = ["none", "clicked", "not_clicked", "not_moved", "has_tag", "no_tag"] as const;
+  const condition = (ALLOWED as readonly string[]).includes(input.condition)
+    ? (input.condition as (typeof ALLOWED)[number])
     : "none";
 
   await addSequenceStep({

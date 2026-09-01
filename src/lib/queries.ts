@@ -2789,7 +2789,7 @@ export async function addSequenceStep(data: {
   sequenceId: string;
   delayHours: number;
   emailTemplateId: string;
-  condition: "none" | "clicked" | "not_clicked" | "not_moved";
+  condition: "none" | "clicked" | "not_clicked" | "not_moved" | "has_tag" | "no_tag";
 }) {
   const existing = await db
     .select({ n: sql<number>`count(*)::int` })

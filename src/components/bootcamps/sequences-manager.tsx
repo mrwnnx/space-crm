@@ -25,6 +25,8 @@ const CONDITIONS = [
   { value: "not_clicked", label: "s'il n'a pas cliqué avant" },
   { value: "clicked", label: "s'il a cliqué avant" },
   { value: "not_moved", label: "s'il n'a pas changé de colonne" },
+  { value: "has_tag", label: "s'il porte encore le tag" },
+  { value: "no_tag", label: "si le tag lui a été retiré" },
 ];
 
 const DELAYS = [
