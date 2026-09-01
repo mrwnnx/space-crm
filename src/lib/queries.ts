@@ -2751,15 +2751,19 @@ export async function getSequencesByBootcamp(bootcampId: string): Promise<Sequen
     .where(inArray(sequenceEnrollments.sequenceId, ids))
     .groupBy(sequenceEnrollments.sequenceId, sequenceEnrollments.status);
 
-  const sends = await db.execute<{ sequence_id: string; sent: number; clicked: number }>(sql`
-    select e.sequence_id,
-           count(*)::int as sent,
-           count(*) filter (where s.clicked_at is not null)::int as clicked
-    from sequence_sends s
-    join sequence_enrollments e on e.id = s.enrollment_id
-    where e.sequence_id = any(${ids})
-    group by e.sequence_id
-  `);
+  // ⚠️ PAS `any(${ids})` : le gabarit `sql` éclate un tableau JS en paramètres
+  // séparés, si bien qu'avec UNE seule séquence Postgres reçoit un scalaire et
+  // refuse (« malformed array literal »). `inArray` construit la bonne clause.
+  const sends = await db
+    .select({
+      sequenceId: sequenceEnrollments.sequenceId,
+      sent: sql<number>`count(*)::int`,
+      clicked: sql<number>`count(*) filter (where ${sequenceSends.clickedAt} is not null)::int`,
+    })
+    .from(sequenceSends)
+    .innerJoin(sequenceEnrollments, eq(sequenceEnrollments.id, sequenceSends.enrollmentId))
+    .where(inArray(sequenceEnrollments.sequenceId, ids))
+    .groupBy(sequenceEnrollments.sequenceId);
 
   return rows.map((r) => ({
     id: r.id,
@@ -2774,8 +2778,8 @@ export async function getSequencesByBootcamp(bootcampId: string): Promise<Sequen
     steps: steps.filter((s) => s.sequenceId === r.id),
     activeCount: enr.find((e) => e.sequenceId === r.id && e.status === "active")?.n ?? 0,
     exitedCount: enr.find((e) => e.sequenceId === r.id && e.status === "exited")?.n ?? 0,
-    sentCount: sends.find((s) => s.sequence_id === r.id)?.sent ?? 0,
-    clickedCount: sends.find((s) => s.sequence_id === r.id)?.clicked ?? 0,
+    sentCount: sends.find((s) => s.sequenceId === r.id)?.sent ?? 0,
+    clickedCount: sends.find((s) => s.sequenceId === r.id)?.clicked ?? 0,
   }));
 }
 
