@@ -25,6 +25,8 @@ type StageWithLeads = LeadStatus & {
     insight?: { summary: string; intent: string; objection: string | null } | null;
     // Déjà passé par une autre formation.
     returning?: { formations: string[]; alumni: boolean } | null;
+    // A rempli brochure ET inscription.
+    multiForm?: boolean;
   })[];
 };
 
@@ -241,6 +243,7 @@ const KanbanCard = memo(function KanbanCard({
     lastActor?: string | null;
     insight?: { summary: string; intent: string; objection: string | null } | null;
     returning?: { formations: string[]; alumni: boolean } | null;
+    multiForm?: boolean;
   };
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
@@ -285,6 +288,16 @@ const KanbanCard = memo(function KanbanCard({
             <p className="truncate text-xs text-muted-foreground">
               {lead.jobTitle}
             </p>
+          )}
+          {lead.multiForm && (
+            // Le plus fort des signaux : a téléchargé le programme PUIS rempli
+            // l'inscription en connaissant le prix.
+            <span
+              title="A téléchargé la brochure puis rempli le formulaire d'inscription"
+              className="mt-1 mr-1 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-800"
+            >
+              🔥 Brochure + inscription
+            </span>
           )}
           {lead.returning && (
             // Déjà inscrit ailleurs = ancien élève, signal commercial fort ;

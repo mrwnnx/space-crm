@@ -2241,6 +2241,8 @@ export type QueueLead = {
   objection: string | null;
   lastCallAt: Date | null;
   lastCallStatus: string | null;
+  /** A rempli plusieurs formulaires de la formation (brochure PUIS inscription). */
+  multiForm: boolean;
   score: number;
   reasons: string[];
 };
@@ -2258,6 +2260,7 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     full_name: string | null;
     mobile_no: string | null;
     email: string | null;
+    bootcamp_id: string;
     bootcamp_name: string;
     status_name: string;
     stage_days: number;
@@ -2270,7 +2273,7 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     last_call_status: string | null;
   }>(sql`
     select l.id, l.full_name, l.mobile_no, l.email,
-           b.name as bootcamp_name, ls.name as status_name,
+           b.id as bootcamp_id, b.name as bootcamp_name, ls.name as status_name,
            extract(epoch from (now() - coalesce(l.stage_entered_at, l.created_at)))/86400 as stage_days,
            (l.seen_at is not null) as seen,
            l.intended_plan::text as intended_plan,
@@ -2288,6 +2291,12 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     ) c on true
     where l.mobile_no is not null
   `);
+
+  // Une seule passe par formation, pas une par lead.
+  const multi = new Set<string>();
+  for (const bid of new Set(rows.map((r) => r.bootcamp_id))) {
+    for (const id of await getMultiFormByBootcamp(bid)) multi.add(id);
+  }
 
   const scored = rows.map((r) => {
     const reasons: string[] = [];
@@ -2317,6 +2326,11 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     if (days >= 5) reasons.push(`${days} j sans bouger`);
 
     if (r.intended_plan) { score += 10; reasons.push("a choisi une formule"); }
+
+    // Le signal le plus fort : a téléchargé le programme PUIS rempli
+    // l'inscription en connaissant le prix.
+    const multiForm = multi.has(r.id);
+    if (multiForm) { score += 45; reasons.unshift("brochure puis inscription"); }
     if (!r.seen) { score += 5; }
 
     return {
@@ -2334,6 +2348,7 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
       objection: r.objection,
       lastCallAt: r.last_call_at,
       lastCallStatus: r.last_call_status,
+      multiForm,
       score,
       reasons,
     };
@@ -2402,4 +2417,58 @@ export async function getReturningForLead(leadId: string): Promise<ReturningInfo
   const r = rows[0];
   if (!r?.formations?.length) return null;
   return { formations: r.formations, alumni: !!r.alumni };
+}
+
+// ── Double parcours : brochure PUIS inscription ────────
+
+/**
+ * Qui a rempli PLUSIEURS formulaires de la formation.
+ *
+ * Signal commercial le plus fort dont on dispose : télécharger le programme,
+ * puis revenir remplir l'inscription en ayant vu le prix.
+ *
+ * ⚠️ Les clés sont dérivées des `field_mapping` réels des sources, jamais
+ * écrites en dur : un formulaire remanié ferait mentir une liste figée.
+ *
+ * ⚠️ Un lead qui commence par la brochure et s'inscrit ensuite est FUSIONNÉ
+ * dans la fiche existante SANS changer de colonne — il reste donc en
+ * « Nouveau ». C'est précisément pour ça que ce marqueur existe.
+ */
+export async function getMultiFormByBootcamp(bootcampId: string): Promise<Set<string>> {
+  const sources = await db.query.formSources.findMany({
+    where: and(eq(formSources.bootcampId, bootcampId), eq(formSources.active, true)),
+  });
+  if (sources.length < 2) return new Set();
+
+  const keySets = sources.map(
+    (s) => new Set(Object.keys((s.fieldMapping ?? {}) as Record<string, string>))
+  );
+  // Une clé partagée (email, name…) ne distingue rien : on garde les signatures.
+  const shared = new Set<string>();
+  for (let i = 0; i < keySets.length; i++) {
+    for (let j = i + 1; j < keySets.length; j++) {
+      for (const k of keySets[i]) if (keySets[j].has(k)) shared.add(k);
+    }
+  }
+  const signatures = keySets.map((set) => [...set].filter((k) => !shared.has(k)));
+  if (signatures.some((sig) => sig.length === 0)) return new Set();
+
+  const rows = await db.execute<{ id: string; keys: string[] }>(sql`
+    select l.id, array_agg(distinct k) as keys
+    from leads l,
+         lateral jsonb_each(l.raw_payload) as blocks(bk, bv),
+         lateral jsonb_object_keys(bv) as k
+    where l.bootcamp_id = ${bootcampId}
+      and l.raw_payload is not null
+      and jsonb_typeof(bv) = 'object'
+    group by l.id
+  `);
+
+  const out = new Set<string>();
+  for (const r of rows) {
+    const keys = new Set(r.keys ?? []);
+    // Présent dans TOUTES les signatures = a rempli tous les formulaires.
+    if (signatures.every((sig) => sig.some((k) => keys.has(k)))) out.add(r.id);
+  }
+  return out;
 }
