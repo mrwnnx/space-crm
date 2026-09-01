@@ -38,8 +38,9 @@ export default async function AutomationsPage() {
             Une <strong>campagne</strong> part une fois, à une liste. Une{" "}
             <strong>séquence</strong> suit une personne dans le temps : elle démarre
             sur un déclencheur, enchaîne des étapes espacées, et{" "}
-            <strong>s&apos;arrête d&apos;elle-même</strong> dès que la personne
-            s&apos;inscrit, se désabonne ou est écartée au téléphone.
+            <strong>s&apos;arrête d&apos;elle-même</strong>{" "}
+            dès que la personne s&apos;inscrit, se désabonne ou est écartée au
+            téléphone.
           </p>
 
           {blocks.length === 0 && (

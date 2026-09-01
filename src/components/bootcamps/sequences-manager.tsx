@@ -86,8 +86,8 @@ export function SequencesManager({
           <p className="text-sm font-medium text-foreground">Séquences email</p>
           <p className="text-[10px] text-muted-foreground">
             Plusieurs emails espacés, avec conditions. Une séquence{" "}
-            <strong>s&apos;arrête toute seule</strong> si la personne s&apos;inscrit, se
-            désabonne ou est qualifiée hors cible.
+            <strong>s&apos;arrête toute seule</strong>{" "}
+            si la personne s&apos;inscrit, se désabonne ou est qualifiée hors cible.
           </p>
         </div>
         <button
