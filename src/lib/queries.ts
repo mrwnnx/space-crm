@@ -417,8 +417,59 @@ export async function updateLeadStatus(leadId: string, statusId: string) {
   return lead;
 }
 
+/**
+ * Ce qui empêche de supprimer ce lead, en clair. Vide = suppression possible.
+ *
+ * Les deux liens sont en `ON DELETE NO ACTION` : sans ce contrôle, le DELETE
+ * remonte une violation de contrainte Postgres illisible à l'écran.
+ */
+export async function getLeadDeleteBlockers(id: string): Promise<string[]> {
+  const out: string[] = [];
+
+  const dealRows = await db.execute<{ n: number }>(
+    sql`select count(*)::int as n from deals where lead_id = ${id}`
+  );
+  if ((dealRows[0]?.n ?? 0) > 0) {
+    out.push("Ce lead est rattaché à un deal — supprimez le deal d'abord.");
+  }
+
+  const carried = await db.execute<{ name: string }>(
+    sql`select b.name
+        from leads l join bootcamps b on b.id = l.bootcamp_id
+        where l.carried_from_lead_id = ${id}
+        limit 1`
+  );
+  if (carried[0]) {
+    out.push(`Ce lead a été reporté vers « ${carried[0].name} » — supprimez la copie d'abord.`);
+  }
+
+  return out;
+}
+
+/**
+ * Suppression définitive.
+ *
+ * Les six tables à référence polymorphe n'ont AUCUNE clé étrangère vers `leads` :
+ * elles ne cascadent pas et ne bloquent pas. Sans ce ménage, 226 activités,
+ * 41 notifications et l'historique d'appel resteraient en base, orphelins.
+ * Tout dans une transaction : un ménage à moitié fait serait pire que rien.
+ */
 export async function deleteLead(id: string) {
-  await db.delete(leads).where(eq(leads.id, id));
+  await db.transaction(async (tx) => {
+    for (const table of [
+      "activities",
+      "call_logs",
+      "comments",
+      "notes",
+      "notifications",
+      "tasks",
+    ]) {
+      await tx.execute(
+        sql`delete from ${sql.raw(table)} where reference_type = 'lead' and reference_id = ${id}`
+      );
+    }
+    await tx.delete(leads).where(eq(leads.id, id));
+  });
 }
 
 // ── Activities ─────────────────────────────────────────

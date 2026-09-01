@@ -474,10 +474,32 @@ export async function updateLeadStatusAction(
   revalidatePath(`/leads/${leadId}`);
 }
 
+/**
+ * Supprime un lead, définitivement.
+ *
+ * ⚠️ Six tables pointent le lead par référence POLYMORPHE (`reference_type`
+ * + `reference_id`) : activities, call_logs, comments, notes, notifications,
+ * tasks. Aucune n'a de clé étrangère, donc **aucune ne casse et aucune ne se
+ * nettoie toute seule** — sans ce ménage explicite, l'historique du lead reste
+ * en base pour toujours, invisible, rattaché à un identifiant mort.
+ *
+ * Deux liens à clé étrangère sont en NO ACTION et feraient échouer le DELETE
+ * sur une erreur Postgres brute : un deal, et un report vers une autre session.
+ * On les nomme au lieu de laisser passer le message technique.
+ */
 export async function deleteLeadAction(leadId: string) {
   await requireUser();
+  const { getLeadDeleteBlockers } = await import("@/lib/queries");
+
+  const blockers = await getLeadDeleteBlockers(leadId);
+  if (blockers.length > 0) {
+    return { ok: false as const, message: blockers.join(" ") };
+  }
+
   await deleteLeadQuery(leadId);
   revalidatePath("/leads");
+  revalidatePath("/bootcamps");
+  return { ok: true as const, message: "Lead supprimé." };
 }
 
 export async function addLeadNoteAction(leadId: string, content: string) {

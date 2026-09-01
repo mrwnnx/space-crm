@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
-import { updateLeadStatusAction } from "@/app/actions";
+import { updateLeadStatusAction, deleteLeadAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import type { LeadStatus } from "@/db/schema";
 
@@ -27,16 +28,34 @@ export function LeadDetailHeader({
   statusColor: StatusColor;
   statusName?: string;
 }) {
+  const router = useRouter();
   const [statusOpen, setStatusOpen] = useState(false);
-  const [, startTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function changeStatus(newStatusId: string) {
     setStatusOpen(false);
     startTransition(() => updateLeadStatusAction(leadId, newStatusId));
   }
 
+  function remove() {
+    setDeleteError(null);
+    startTransition(async () => {
+      const res = await deleteLeadAction(leadId);
+      // Un lead rattaché à un deal ou déjà reporté ne part pas : on montre
+      // pourquoi au lieu de laisser croire que le clic n'a rien fait.
+      if (!res.ok) {
+        setDeleteError(res.message);
+        setConfirmDelete(false);
+        return;
+      }
+      router.push("/leads");
+    });
+  }
+
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-5">
+    <header className="relative flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-5">
       <div className="flex items-center gap-3">
         <Link
           href="/leads"
@@ -104,7 +123,41 @@ export function LeadDetailHeader({
             ✓ Converti
           </span>
         )}
+
+        {/* Suppression définitive. Deux temps : le premier clic ne supprime
+            rien, il demande. Un lead effacé ne se récupère pas. */}
+        {confirmDelete ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={remove}
+              disabled={isPending}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {isPending ? "…" : "Supprimer définitivement"}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              disabled={isPending}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+            >
+              Annuler
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
+          >
+            Supprimer
+          </button>
+        )}
       </div>
+
+      {deleteError && (
+        <p className="absolute right-5 top-14 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shadow-lg">
+          {deleteError}
+        </p>
+      )}
     </header>
   );
 }
