@@ -101,7 +101,18 @@ export async function POST(
 // (Le support du format Tally { data: { fields: [] } } a été retiré le
 // 2026-08-06 avec les sources Tally — plus aucun formulaire ne l'utilise.)
 function parsePayload(parsed: unknown): Record<string, string> {
-  return flattenJson(parsed);
+  const flat = flattenJson(parsed);
+
+  // ⚠️ Elementor envoie ses champs sous « fields[<clé>][value] », alors que
+  // l'import par API les lit à plat (« <clé> »). Sans cette normalisation, le
+  // MÊME formulaire aurait besoin de DEUX mappings : celui configuré ne
+  // matcherait rien côté webhook et les soumissions seraient ignorées en
+  // silence. On ramène donc les deux chemins à la même forme.
+  for (const [key, value] of Object.entries(flat)) {
+    const m = /^fields\[([^\]]+)\]\[value\]$/.exec(key);
+    if (m && flat[m[1]] === undefined) flat[m[1]] = value;
+  }
+  return flat;
 }
 
 // Aplatit un JSON nested en notation crochet "parent[child]" (format Elementor)
