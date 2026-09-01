@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { quickLogCallAction } from "@/app/actions";
+import { CallOutcomeForm } from "@/components/leads/call-outcome-form";
 import { formatRelative } from "@/lib/utils";
 import type { QueueLead } from "@/lib/queries";
 
@@ -23,7 +23,9 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
   // Une ligne traitée disparaît de la liste : la file doit fondre au fil des
   // appels, sinon on ne sait plus où on en est.
   const [done, setDone] = useState<Record<string, string>>({});
-  const [isPending, startTransition] = useTransition();
+  // Le formulaire ne s'ouvre que sur la ligne qu'on traite : garder 40
+  // formulaires ouverts rendrait la file illisible.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   if (leads.length === 0) {
     return (
@@ -31,13 +33,6 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
         Personne à rappeler — aucun lead avec un numéro de téléphone.
       </p>
     );
-  }
-
-  function log(leadId: string, outcome: "answered" | "no_answer") {
-    startTransition(async () => {
-      const res = await quickLogCallAction(leadId, outcome);
-      if (res.ok) setDone((d) => ({ ...d, [leadId]: res.message }));
-    });
   }
 
   return (
@@ -87,6 +82,13 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
                   <p className="text-xs text-amber-700">Frein : {lead.objection}</p>
                 )}
 
+                {lead.nextFollowUpAt && (
+                  <p className="mt-1 text-[11px] font-medium text-primary">
+                    À rappeler le{" "}
+                    {new Date(lead.nextFollowUpAt).toLocaleDateString("fr-FR")}
+                  </p>
+                )}
+
                 <p className="mt-1 text-[10px] text-muted-foreground/70">
                   {lead.reasons.join(" · ")}
                   {lead.lastCallAt && ` · dernier appel ${formatRelative(lead.lastCallAt)}`}
@@ -106,25 +108,27 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
                 {closed ? (
                   <span className="text-[11px] text-green-600">{closed}</span>
                 ) : (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => log(lead.id, "answered")}
-                      disabled={isPending}
-                      className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted disabled:opacity-50"
-                    >
-                      Joint
-                    </button>
-                    <button
-                      onClick={() => log(lead.id, "no_answer")}
-                      disabled={isPending}
-                      className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted disabled:opacity-50"
-                    >
-                      Pas répondu
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setOpenId(openId === lead.id ? null : lead.id)}
+                    className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
+                  >
+                    {openId === lead.id ? "Fermer" : "Noter l'appel"}
+                  </button>
                 )}
               </div>
             </div>
+
+            {openId === lead.id && !closed && (
+              <div className="mt-3">
+                <CallOutcomeForm
+                  leadId={lead.id}
+                  onDone={(message) => {
+                    setDone((d) => ({ ...d, [lead.id]: message }));
+                    setOpenId(null);
+                  }}
+                />
+              </div>
+            )}
           </div>
         );
       })}

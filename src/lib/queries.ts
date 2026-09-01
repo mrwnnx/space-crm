@@ -2241,6 +2241,8 @@ export type QueueLead = {
   objection: string | null;
   lastCallAt: Date | null;
   lastCallStatus: string | null;
+  qualification: string | null;
+  nextFollowUpAt: Date | null;
   /** A rempli plusieurs formulaires de la formation (brochure PUIS inscription). */
   multiForm: boolean;
   score: number;
@@ -2271,6 +2273,8 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     objection: string | null;
     last_call_at: Date | null;
     last_call_status: string | null;
+    qualification: string | null;
+    next_follow_up_at: Date | null;
   }>(sql`
     select l.id, l.full_name, l.mobile_no, l.email,
            b.id as bootcamp_id, b.name as bootcamp_name, ls.name as status_name,
@@ -2278,6 +2282,7 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
            (l.seen_at is not null) as seen,
            l.intended_plan::text as intended_plan,
            li.intent::text as intent, li.summary, li.objection,
+           l.qualification::text as qualification, l.next_follow_up_at,
            c.created_at as last_call_at, c.status::text as last_call_status
     from leads l
     join bootcamps b
@@ -2306,6 +2311,29 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
   const scored = rows.map((r) => {
     const reasons: string[] = [];
     let score = 0;
+
+    // La qualification d'un humain prime sur la lecture d'un modèle : elle
+    // vient de la conversation, pas d'un formulaire.
+    const QUALIF: Record<string, { pts: number; label: string }> = {
+      chaud: { pts: 40, label: "🔥 chaud" },
+      tiede: { pts: 15, label: "tiède" },
+      froid: { pts: -25, label: "froid" },
+      pas_serieux: { pts: -70, label: "pas sérieux" },
+      hors_cible: { pts: -100, label: "hors cible" },
+      reporte: { pts: -40, label: "reporté à une prochaine session" },
+    };
+    if (r.qualification && QUALIF[r.qualification]) {
+      score += QUALIF[r.qualification].pts;
+      reasons.push(QUALIF[r.qualification].label);
+    }
+
+    // Un rappel programmé fait autorité : avant la date on n'appelle pas,
+    // le jour venu il passe devant tout le reste.
+    if (r.next_follow_up_at) {
+      const due = new Date(r.next_follow_up_at).getTime();
+      if (due <= Date.now()) { score += 60; reasons.unshift("rappel prévu"); }
+      else { score -= 80; reasons.push("rappel programmé plus tard"); }
+    }
 
     if (r.intent === "serieux") { score += 50; reasons.push("profil sérieux"); }
     else if (r.intent === "curieux") { score += 25; reasons.push("curieux"); }
@@ -2353,6 +2381,8 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
       objection: r.objection,
       lastCallAt: r.last_call_at,
       lastCallStatus: r.last_call_status,
+      qualification: r.qualification,
+      nextFollowUpAt: r.next_follow_up_at,
       multiForm,
       score,
       reasons,

@@ -102,6 +102,17 @@ export const stageKindEnum = pgEnum("stage_kind", ["normal", "converted", "lost"
 
 export const temperatureEnum = pgEnum("temperature", ["hot", "cold"]);
 
+// Qualification commerciale posée après un appel. Volontairement courte :
+// une liste longue ne se clique pas, elle se contourne.
+export const leadQualificationEnum = pgEnum("lead_qualification", [
+  "chaud",
+  "tiede",
+  "froid",
+  "pas_serieux",
+  "hors_cible",
+  "reporte", // intéressé, mais pour une prochaine session
+]);
+
 export const paymentPlanEnum = pgEnum("payment_plan", ["total", "monthly"]);
 
 // ── Bootcamps (Formations) ─────────────────────────────
@@ -257,6 +268,12 @@ export const leads = pgTable("leads", {
   formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead
   intendedPlan: paymentPlanEnum("intended_plan"), // plan envisagé (noté pendant le pipeline, avant inscription)
   promoCode: text("promo_code"), // code promo de l'inscription (info du lead, pas de la personne)
+  // Qualification issue du DERNIER appel. L'historique complet vit dans
+  // call_logs + activities ; ceci est l'état courant, celui qui pilote la file.
+  qualification: leadQualificationEnum("qualification"),
+  qualifiedAt: timestamp("qualified_at"),
+  // « À rappeler le » : c'est CE champ qui fait remonter un lead au bon moment.
+  nextFollowUpAt: timestamp("next_follow_up_at"),
   // Réponses de formulaire qui n'entraient dans aucune colonne : elles ne
   // survivaient que dans rawPayload, donc invisibles dans la fiche.
   motivation: text("motivation"), // « pourquoi tu veux étudier avec nous » (texte libre)

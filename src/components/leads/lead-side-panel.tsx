@@ -13,6 +13,8 @@ type LeadData = {
   promoCode: string | null;
   motivation: string | null;
   wantsCall: boolean | null;
+  qualification: string | null;
+  nextFollowUpAt: Date | null;
 };
 
 type ContactData = {
@@ -21,6 +23,15 @@ type ContactData = {
   unsubscribedAt?: Date | null;
   bouncedAt?: Date | null;
   bounceReason?: string | null;
+};
+
+const QUALIF_LABEL: Record<string, string> = {
+  chaud: "🔥 Chaud",
+  tiede: "Tiède",
+  froid: "Froid",
+  pas_serieux: "Pas sérieux",
+  hors_cible: "Hors cible",
+  reporte: "Reporté à une prochaine session",
 };
 
 export function LeadSidePanel({
@@ -40,6 +51,23 @@ export function LeadSidePanel({
 }) {
   return (
     <div className="flex flex-col gap-0.5 p-4">
+      {(lead.qualification || lead.nextFollowUpAt) && (
+        // État commercial courant, posé au dernier appel. L'historique complet
+        // est dans le fil d'activité à droite.
+        <div className="mb-3 rounded-lg border border-border bg-muted/30 p-2.5">
+          {lead.qualification && (
+            <p className="text-xs font-medium text-foreground">
+              {QUALIF_LABEL[lead.qualification] ?? lead.qualification}
+            </p>
+          )}
+          {lead.nextFollowUpAt && (
+            <p className="mt-0.5 text-[11px] text-primary">
+              À rappeler le {new Date(lead.nextFollowUpAt).toLocaleDateString("fr-FR")}
+            </p>
+          )}
+        </div>
+      )}
+
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Coordonnées
       </p>

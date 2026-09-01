@@ -1410,13 +1410,34 @@ export async function saveEmailBrandingAction(
 
 // ── Appel en un clic ───────────────────────────────────
 
+/** Qualifications proposées à l'appel. Courte volontairement : une liste
+ *  longue ne se clique pas, elle se contourne. */
+export const CALL_QUALIFICATIONS = [
+  "chaud",
+  "tiede",
+  "froid",
+  "pas_serieux",
+  "hors_cible",
+  "reporte",
+] as const;
+
 /**
- * Journalise un appel en UN clic. Sans ça, la file redemanderait éternellement
- * les mêmes leads : rien dans le CRM ne dirait qui a déjà été contacté.
+ * Résultat d'un appel : ce qui s'est passé, comment on qualifie la personne,
+ * quand la rappeler, et ce qui s'est dit.
+ *
+ * L'état courant (qualification, prochaine relance) va sur le lead — c'est lui
+ * qui pilote la file. Le détail va dans call_logs + une activité attribuée,
+ * pour que l'associé voie qui a appelé et ce qui s'est dit.
  */
-export async function quickLogCallAction(
+export async function logCallOutcomeAction(
   leadId: string,
-  outcome: "answered" | "no_answer"
+  input: {
+    outcome: "answered" | "no_answer" | "wrong_number";
+    qualification?: string | null;
+    followUpDays?: number | null; // null = pas de rappel programmé
+    durationMinutes?: number | null;
+    note?: string | null;
+  }
 ): Promise<{ ok: boolean; message: string }> {
   await requireUser();
 
@@ -1429,37 +1450,72 @@ export async function quickLogCallAction(
   const { currentActor } = await import("@/lib/auth");
   const actor = await currentActor();
 
+  const qualification =
+    input.qualification && (CALL_QUALIFICATIONS as readonly string[]).includes(input.qualification)
+      ? (input.qualification as (typeof CALL_QUALIFICATIONS)[number])
+      : null;
+
+  const days = input.followUpDays;
+  const nextFollowUpAt =
+    days !== null && days !== undefined && Number.isFinite(days) && days >= 0
+      ? new Date(Date.now() + days * 86400_000)
+      : null;
+
+  const minutes = Number(input.durationMinutes ?? 0);
+  const duration = Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 60) : 0;
+
   await createCallLog({
     type: "outgoing",
-    status: outcome === "answered" ? "completed" : "no_answer",
+    status:
+      input.outcome === "answered"
+        ? "completed"
+        : input.outcome === "wrong_number"
+          ? "failed"
+          : "no_answer",
+    duration,
     telephonyMedium: "manual",
     toNumber: lead.mobileNo,
-    // call_logs n'a pas de colonne created_by : callerId porte l'auteur.
-    callerId: actor,
+    callerId: actor, // call_logs n'a pas de created_by
     startTime: new Date(),
     referenceType: "lead",
     referenceId: leadId,
   });
+
+  const label =
+    input.outcome === "answered"
+      ? "Appel — joint"
+      : input.outcome === "wrong_number"
+        ? "Appel — faux numéro"
+        : "Appel — sans réponse";
+
+  const details = [
+    qualification ? `Qualification : ${qualification}` : null,
+    nextFollowUpAt ? `À rappeler le ${nextFollowUpAt.toLocaleDateString("fr-FR")}` : null,
+    duration ? `Durée : ${Math.round(duration / 60)} min` : null,
+    input.note?.trim() || null,
+  ].filter(Boolean);
 
   await createActivity({
     referenceType: "lead",
     referenceId: leadId,
     type: "call",
     direction: "outbound",
-    subject: outcome === "answered" ? "Appel — joint" : "Appel — sans réponse",
-    content: "",
+    subject: label,
+    content: details.join("\n"),
   });
 
-  // Un appel EST un contact, même sans réponse : la file doit arrêter de le
-  // proposer en tête pendant quelques jours.
-  await updateLead(leadId, { lastContactedAt: new Date() });
+  // Un faux numéro n'est pas un contact : ne pas prétendre l'avoir joint.
+  const patch: Record<string, unknown> = { nextFollowUpAt };
+  if (qualification) {
+    patch.qualification = qualification;
+    patch.qualifiedAt = new Date();
+  }
+  if (input.outcome !== "wrong_number") patch.lastContactedAt = new Date();
+  await updateLead(leadId, patch);
 
   revalidatePath("/aujourdhui");
   revalidatePath(`/leads/${leadId}`);
-  return {
-    ok: true,
-    message: outcome === "answered" ? "Appel enregistré." : "Sans réponse enregistré.",
-  };
+  return { ok: true, message: "Appel enregistré." };
 }
 
 // ── Lecture IA des leads ───────────────────────────────

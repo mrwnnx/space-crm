@@ -157,6 +157,8 @@ export default async function LeadDetailPage({
               promoCode: lead.promoCode,
               motivation: lead.motivation,
               wantsCall: lead.wantsCall,
+              qualification: lead.qualification,
+              nextFollowUpAt: lead.nextFollowUpAt,
             }}
             contactId={lead.contactId}
             contact={{
