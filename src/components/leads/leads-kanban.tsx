@@ -23,6 +23,8 @@ type StageWithLeads = LeadStatus & {
     lastActor?: string | null;
     // Lecture IA de ce que le lead a écrit lui-même.
     insight?: { summary: string; intent: string; objection: string | null } | null;
+    // Déjà passé par une autre formation.
+    returning?: { formations: string[]; alumni: boolean } | null;
   })[];
 };
 
@@ -238,6 +240,7 @@ const KanbanCard = memo(function KanbanCard({
     isNew?: boolean;
     lastActor?: string | null;
     insight?: { summary: string; intent: string; objection: string | null } | null;
+    returning?: { formations: string[]; alumni: boolean } | null;
   };
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
@@ -282,6 +285,21 @@ const KanbanCard = memo(function KanbanCard({
             <p className="truncate text-xs text-muted-foreground">
               {lead.jobTitle}
             </p>
+          )}
+          {lead.returning && (
+            // Déjà inscrit ailleurs = ancien élève, signal commercial fort ;
+            // simplement déjà passé = intérêt répété sans conversion.
+            <span
+              title={`Déjà présent sur : ${lead.returning.formations.join(", ")}`}
+              className={cn(
+                "mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                lead.returning.alumni
+                  ? "bg-violet-100 text-violet-800"
+                  : "bg-sky-100 text-sky-800"
+              )}
+            >
+              {lead.returning.alumni ? "★ Ancien inscrit" : "↺ Déjà venu"}
+            </span>
           )}
         </div>
       </div>

@@ -2341,3 +2341,65 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
 
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
+
+// ── Contacts déjà venus sur une autre formation ────────
+
+export type ReturningInfo = {
+  /** Autres formations où ce contact apparaît. */
+  formations: string[];
+  /** Il s'est déjà INSCRIT ailleurs : ancien élève, signal fort. */
+  alumni: boolean;
+};
+
+/**
+ * Qui, parmi les leads de cette formation, est déjà passé par une autre.
+ *
+ * Le rapprochement se fait par `contact_id` — donc par email dédupliqué. Une
+ * personne revenue avec une AUTRE adresse ne sera pas reconnue : c'est la
+ * limite du procédé, pas un oubli.
+ */
+export async function getReturningByBootcamp(
+  bootcampId: string
+): Promise<Map<string, ReturningInfo>> {
+  const rows = await db.execute<{
+    lead_id: string;
+    formations: string[];
+    alumni: boolean;
+  }>(sql`
+    select l.id as lead_id,
+           array_agg(distinct ob.name) as formations,
+           bool_or(o.converted) as alumni
+    from leads l
+    join leads o
+      on o.contact_id = l.contact_id
+     and o.id <> l.id
+     and o.bootcamp_id <> l.bootcamp_id
+    join bootcamps ob on ob.id = o.bootcamp_id
+    where l.bootcamp_id = ${bootcampId} and l.contact_id is not null
+    group by l.id
+  `);
+
+  return new Map(
+    rows.map((r) => [
+      r.lead_id,
+      { formations: r.formations ?? [], alumni: !!r.alumni },
+    ])
+  );
+}
+
+/** Même information pour UN lead, pour la fiche. */
+export async function getReturningForLead(leadId: string): Promise<ReturningInfo | null> {
+  const rows = await db.execute<{ formations: string[]; alumni: boolean }>(sql`
+    select array_agg(distinct ob.name) as formations, bool_or(o.converted) as alumni
+    from leads l
+    join leads o
+      on o.contact_id = l.contact_id
+     and o.id <> l.id
+     and o.bootcamp_id <> l.bootcamp_id
+    join bootcamps ob on ob.id = o.bootcamp_id
+    where l.id = ${leadId} and l.contact_id is not null
+  `);
+  const r = rows[0];
+  if (!r?.formations?.length) return null;
+  return { formations: r.formations, alumni: !!r.alumni };
+}

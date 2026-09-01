@@ -8,6 +8,7 @@ import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { DuplicateBanner } from "@/components/leads/duplicate-banner";
 import { getDuplicateInfo } from "@/lib/duplicates";
+import { getReturningForLead } from "@/lib/queries";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
@@ -47,6 +48,7 @@ export default async function LeadDetailPage({
 
   const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
   const duplicateInfo = await getDuplicateInfo(lead.id);
+  const returning = await getReturningForLead(lead.id);
   const campaignHistory = lead.contactId
     ? await getCampaignsForContact(lead.contactId)
     : [];
@@ -112,6 +114,33 @@ export default async function LeadDetailPage({
 
           {duplicateInfo && (
             <DuplicateBanner leadId={lead.id} info={duplicateInfo} />
+          )}
+
+          {returning && (
+            // Déjà inscrit ailleurs = ancien élève. Déjà passé sans s'inscrire =
+            // intérêt répété. Les deux changent la façon d'aborder l'appel.
+            <div
+              className={
+                returning.alumni
+                  ? "border-b border-border bg-violet-50 px-4 py-2.5"
+                  : "border-b border-border bg-sky-50 px-4 py-2.5"
+              }
+            >
+              <p
+                className={
+                  returning.alumni
+                    ? "text-xs font-medium text-violet-900"
+                    : "text-xs font-medium text-sky-900"
+                }
+              >
+                {returning.alumni
+                  ? "★ Ancien inscrit — cette personne s'est déjà inscrite chez vous"
+                  : "↺ Déjà venu — cette personne a déjà été un lead sur une autre formation"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {returning.formations.join(" · ")}
+              </p>
+            </div>
           )}
 
           <div className="border-b border-border p-4">

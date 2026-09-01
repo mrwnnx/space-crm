@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, getAutomationsByBootcamp, getEmailTemplates, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { BootcampActions } from "@/components/bootcamps/bootcamp-actions";
@@ -54,6 +54,7 @@ export default async function BootcampDetailPage({
       (async () => ({
         pending: await countLeadsToAnalyze(id),
         insights: await getInsightsByBootcamp(id),
+        returning: await getReturningByBootcamp(id),
       }))(),
     ]);
 
@@ -71,6 +72,7 @@ export default async function BootcampDetailPage({
       ...l,
       isNew: !!l.formSourceId && l.seenAt === null,
       insight: aiData.insights.get(l.id) ?? null,
+      returning: aiData.returning.get(l.id) ?? null,
     })),
   }));
 
