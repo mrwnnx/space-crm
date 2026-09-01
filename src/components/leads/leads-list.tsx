@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
 import type { LeadWithRelations } from "@/lib/queries";
+import { LeadsBulkBar, type BulkStatus, type BulkTag, type BulkBootcamp } from "./leads-bulk-bar";
 
 export function LeadsList({
   leads,
@@ -12,15 +14,47 @@ export function LeadsList({
   filterConverted,
   bootcamps,
   statuses,
+  tags,
 }: {
   leads: LeadWithRelations[];
   filterBootcampId: string | null;
   filterStatusId: string | null;
   filterTemperature: string | null;
   filterConverted: string | null;
-  bootcamps: { id: string; name: string }[];
-  statuses: { id: string; name: string }[];
+  bootcamps: BulkBootcamp[];
+  statuses: BulkStatus[];
+  tags: BulkTag[];
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Le compte rendu vit ICI : après une suppression la sélection se vide, la
+  // barre se démonte, et un message porté par la barre disparaîtrait avec elle
+  // — sans aucun retour sur l'action la plus lourde de conséquences.
+  const [bulkResult, setBulkResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Les ids affichés changent avec les filtres : une sélection qui survivrait à
+  // un changement de filtre agirait sur des leads qu'on ne voit plus.
+  const visibleIds = leads.map((l) => l.id);
+  const selectedVisible = visibleIds.filter((id) => selected.has(id));
+  const allChecked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allChecked ? new Set() : new Set(visibleIds));
+  }
+
+  const bootcampIds = [
+    ...new Set(
+      leads.filter((l) => selected.has(l.id)).map((l) => l.bootcampId).filter((x): x is string => !!x)
+    ),
+  ];
   function filterHref(params: Record<string, string | undefined>) {
     const sp = new URLSearchParams();
     if (params.q) sp.set("q", params.q);
@@ -124,6 +158,38 @@ export function LeadsList({
         )}
       </div>
 
+      {selectedVisible.length > 0 && (
+        <LeadsBulkBar
+          selected={selectedVisible}
+          bootcampIds={bootcampIds}
+          statuses={statuses}
+          tags={tags}
+          bootcamps={bootcamps}
+          onDone={() => setSelected(new Set())}
+          onClear={() => {
+            setSelected(new Set());
+            setBulkResult(null);
+          }}
+          onResult={setBulkResult}
+        />
+      )}
+
+      {bulkResult && (
+        <div
+          className={`flex items-center justify-between gap-2 border-b border-border px-4 py-1.5 text-[11px] ${
+            bulkResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          }`}
+        >
+          <span>{bulkResult.message}</span>
+          <button
+            onClick={() => setBulkResult(null)}
+            className="shrink-0 rounded px-1.5 py-0.5 hover:bg-black/5"
+          >
+            Fermer
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="flex-1 overflow-auto">
         {leads.length === 0 ? (
@@ -137,7 +203,16 @@ export function LeadsList({
           <table className="w-full">
             <thead className="sticky top-0 z-10 bg-background">
               <tr className="border-b border-border">
-                <Th className="pl-5">Nom</Th>
+                <th className="w-9 pl-5">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={toggleAll}
+                    aria-label="Tout sélectionner"
+                    className="h-3.5 w-3.5 cursor-pointer rounded border-border"
+                  />
+                </th>
+                <Th>Nom</Th>
                 <Th>Formation</Th>
                 <Th>Statut</Th>
                 <Th>Temp.</Th>
@@ -155,7 +230,16 @@ export function LeadsList({
                     key={lead.id}
                     className="group border-b border-border transition-colors hover:bg-muted/40"
                   >
-                    <td className="py-2.5 pl-5">
+                    <td className="pl-5">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(lead.id)}
+                        onChange={() => toggle(lead.id)}
+                        aria-label={`Sélectionner ${lead.fullName}`}
+                        className="h-3.5 w-3.5 cursor-pointer rounded border-border"
+                      />
+                    </td>
+                    <td className="py-2.5">
                       <Link
                         href={`/leads/${lead.id}`}
                         className="flex items-center gap-2.5"

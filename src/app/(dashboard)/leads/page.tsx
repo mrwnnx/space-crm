@@ -1,4 +1,4 @@
-import { getLeads, getLeadSources, getLeadStatuses, getBootcamps, getViewSettings } from "@/lib/queries";
+import { getLeads, getLeadSources, getLeadStatuses, getBootcamps, getViewSettings, getTags } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { LeadsList } from "@/components/leads/leads-list";
@@ -15,11 +15,12 @@ export default async function LeadsPage({
 }) {
   const { q, bootcamp, statusId, temperature, converted } = await searchParams;
 
-  const [sources, statuses, bootcamps, savedViews] = await Promise.all([
+  const [sources, statuses, bootcamps, savedViews, tags] = await Promise.all([
     getLeadSources(),
     getLeadStatuses(),
     getBootcamps(),
     getViewSettings("leads"),
+    getTags(),
   ]);
 
   const leadsData = await getLeads({
@@ -68,7 +69,13 @@ export default async function LeadsPage({
           filterTemperature={temperature || null}
           filterConverted={converted || null}
           bootcamps={bootcamps.map((b) => ({ id: b.id, name: b.name }))}
-          statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
+          statuses={statuses.map((s) => ({
+            id: s.id,
+            name: s.name,
+            kind: s.kind,
+            bootcampId: s.bootcampId,
+          }))}
+          tags={tags.map((t) => ({ id: t.id, name: t.name }))}
         />
       </div>
     </>

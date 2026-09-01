@@ -1396,6 +1396,10 @@ export async function getTags() {
   return db.query.tags.findMany({ orderBy: [asc(tags.name)] });
 }
 
+export async function getTagById(id: string) {
+  return db.query.tags.findFirst({ where: eq(tags.id, id) });
+}
+
 export async function createTag(data: typeof tags.$inferInsert) {
   const [tag] = await db.insert(tags).values(data).returning();
   return tag;

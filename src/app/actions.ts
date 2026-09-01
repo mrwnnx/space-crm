@@ -502,6 +502,97 @@ export async function deleteLeadAction(leadId: string) {
   return { ok: true as const, message: "Lead supprimé." };
 }
 
+// ── Actions groupées sur les leads ─────────────────────
+// Toutes réutilisent la logique unitaire, une ligne à la fois. Volontairement :
+// une version « en masse » écrite à part finirait par diverger de la version
+// unitaire (historique de colonne, activité, notification) sans que rien ne
+// le signale.
+
+/** Plafond commun : au-delà, la fonction serverless dépasserait son temps. */
+const BULK_MAX = 200;
+
+export async function bulkDeleteLeadsAction(leadIds: string[]) {
+  await requireUser();
+  const ids = leadIds.slice(0, BULK_MAX);
+  if (ids.length === 0) return { ok: false as const, message: "Aucun lead sélectionné." };
+
+  const { getLeadDeleteBlockers, getLeadById } = await import("@/lib/queries");
+
+  let deleted = 0;
+  const refused: string[] = [];
+  for (const id of ids) {
+    const blockers = await getLeadDeleteBlockers(id);
+    if (blockers.length > 0) {
+      const lead = await getLeadById(id);
+      refused.push(lead?.fullName ?? id);
+      continue;
+    }
+    await deleteLeadQuery(id);
+    deleted++;
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/bootcamps");
+
+  if (refused.length > 0) {
+    return {
+      ok: true as const,
+      message:
+        `${deleted} lead(s) supprimé(s). ${refused.length} refusé(s) — rattaché(s) à un deal ` +
+        `ou déjà reporté(s) : ${refused.join(", ")}.`,
+    };
+  }
+  return { ok: true as const, message: `${deleted} lead(s) supprimé(s).` };
+}
+
+export async function bulkSetLeadStatusAction(leadIds: string[], statusId: string) {
+  await requireUser();
+  const ids = leadIds.slice(0, BULK_MAX);
+  if (ids.length === 0) return { ok: false as const, message: "Aucun lead sélectionné." };
+
+  const { getLeadStatusById } = await import("@/lib/queries");
+  const target = await getLeadStatusById(statusId);
+  if (!target) return { ok: false as const, message: "Colonne introuvable." };
+  // L'inscription demande l'offre ET le montant réellement convenu : elle ne
+  // peut pas se faire en masse. Voir enrollLeadAction.
+  if (target.kind === "converted") {
+    return {
+      ok: false as const,
+      message: "« Inscrit » se fait un par un : la fenêtre demande l'offre et le montant.",
+    };
+  }
+
+  for (const id of ids) await updateLeadStatusAction(id, statusId);
+
+  revalidatePath("/leads");
+  return { ok: true as const, message: `${ids.length} lead(s) déplacé(s) vers « ${target.name} ».` };
+}
+
+export async function bulkToggleLeadTagAction(
+  leadIds: string[],
+  tagId: string,
+  on: boolean
+) {
+  await requireUser();
+  const ids = leadIds.slice(0, BULK_MAX);
+  if (ids.length === 0) return { ok: false as const, message: "Aucun lead sélectionné." };
+
+  const { attachTagToLead, detachTagFromLead, getTagById } = await import("@/lib/queries");
+  const tag = await getTagById(tagId);
+  if (!tag) return { ok: false as const, message: "Tag introuvable." };
+
+  for (const id of ids) {
+    if (on) await attachTagToLead(id, tagId);
+    else await detachTagFromLead(id, tagId);
+  }
+
+  revalidatePath("/leads");
+  return {
+    ok: true as const,
+    message: `Tag « ${tag.name} » ${on ? "posé sur" : "retiré de"} ${ids.length} lead(s).`,
+  };
+}
+
 export async function addLeadNoteAction(leadId: string, content: string) {
   await requireUser();
   if (!content.trim()) return;
