@@ -7,6 +7,7 @@ export type CampaignRow = {
   id: string;
   name: string;
   subject: string | null;
+  internalNote: string | null;
   status: string;
   scheduledAt: Date | null;
   sentAt: Date | null;
@@ -47,6 +48,7 @@ export async function getCampaigns(filters?: {
       id: campaigns.id,
       name: campaigns.name,
       subject: campaigns.subject,
+      internalNote: campaigns.internalNote,
       status: campaigns.status,
       scheduledAt: campaigns.scheduledAt,
       sentAt: campaigns.sentAt,
@@ -96,6 +98,7 @@ export async function updateCampaign(
     content: string;
     targetTagIds: string[];
     targetEmails: string[];
+    internalNote: string | null;
     scheduledAt: Date | null;
   }>
 ) {

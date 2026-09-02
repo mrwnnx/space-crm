@@ -619,6 +619,9 @@ export const campaigns = pgTable("campaigns", {
   status: text("status").notNull().default("draft"),
   targetTagIds: jsonb("target_tag_ids").notNull().default([]),
   targetEmails: jsonb("target_emails").notNull().default([]),
+  /** Note d'équipe, jamais envoyée. Reprise de Kit : savoir de quoi parle une
+   *  campagne sans l'ouvrir. */
+  internalNote: text("internal_note"),
   scheduledAt: timestamp("scheduled_at"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

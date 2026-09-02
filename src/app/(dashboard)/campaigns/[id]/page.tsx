@@ -4,12 +4,14 @@ import { getCampaignById, getCampaignRecipients } from "@/lib/campaigns/queries"
 import { getCampaignStats, getLinkClicks } from "@/lib/campaigns/analytics";
 import { resolveCampaignAudience } from "@/lib/campaigns/audience";
 import { renderCampaignHtml } from "@/lib/campaigns/template";
+import { checkCampaign } from "@/lib/campaigns/preflight";
 import { getTagsWithUsage } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { CampaignEditor } from "@/components/campaigns/campaign-editor";
-import { CampaignAudience } from "@/components/campaigns/campaign-audience";
 import { CampaignSend } from "@/components/campaigns/campaign-send";
+import { CampaignPublish } from "@/components/campaigns/campaign-publish";
+import { CampaignStepper } from "@/components/campaigns/campaign-stepper";
 import { CampaignStatsPanel } from "@/components/campaigns/campaign-stats";
 import { CampaignStatusActions } from "@/components/campaigns/campaign-status-actions";
 import { CampaignAudienceList } from "@/components/campaigns/campaign-audience-list";
@@ -70,8 +72,10 @@ function Shell({
 
 export default async function CampaignDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ etape?: string }>;
 }) {
   const { id } = await params;
   const campaign = await getCampaignById(id);
@@ -151,7 +155,12 @@ export default async function CampaignDetailPage({
     );
   }
 
-  // ── Mode PRÉPARATION ─────────────────────────────────
+  // ── Mode PRÉPARATION — deux étapes, comme Kit ────────
+  // On écrit d'abord, on décide ensuite à qui et quand. L'étape vit dans
+  // l'URL : un rechargement ne renvoie pas au début.
+  const { etape } = await searchParams;
+  const step = etape === "envoyer" ? "envoyer" : "rediger";
+
   const tags = await getTagsWithUsage();
   const recipients = await getCampaignRecipients(campaign.id);
   const { stats: audience } = await resolveCampaignAudience({
@@ -161,6 +170,14 @@ export default async function CampaignDetailPage({
   const canSend =
     !!campaign.subject?.trim() && !!campaign.content?.trim() && audience.total > 0;
 
+  // Mêmes contrôles qu'à l'écran d'écriture et qu'à l'envoi : un seul module.
+  const blocking = checkCampaign({
+    subject: campaign.subject ?? "",
+    content: campaign.content ?? "",
+  })
+    .filter((c) => c.level === "error")
+    .map((c) => c.message);
+
   const preview = renderCampaignHtml({
     content: campaign.content || "<p></p>",
     unsubscribeUrl: "#apercu",
@@ -168,36 +185,25 @@ export default async function CampaignDetailPage({
 
   return (
     <Shell campaign={campaign}>
-      <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            <Section title="Cible">
-              <CampaignAudience
-                campaignId={campaign.id}
-                tags={tags}
-                initialTagIds={(campaign.targetTagIds as string[]) ?? []}
-                initialEmails={(campaign.targetEmails as string[]) ?? []}
-                readOnly={campaign.status !== "draft"}
-              />
-            </Section>
+      <div className="mb-6 border-b border-border pb-3">
+        <CampaignStepper
+          campaignId={campaign.id}
+          step={step}
+          subject={campaign.subject ?? ""}
+          content={campaign.content ?? ""}
+        />
+      </div>
 
-            <Section title="Contenu">
-              <CampaignEditor
-                campaignId={campaign.id}
-                initialSubject={campaign.subject ?? ""}
-                initialContent={campaign.content}
-                readOnly={campaign.status !== "draft"}
-              />
-            </Section>
-
-            <Section title="Envoi">
-              <CampaignSend
-                campaignId={campaign.id}
-                status={campaign.status}
-                recipients={recipients}
-                canSend={canSend}
-              />
-            </Section>
-          </div>
+      {step === "rediger" ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Section title="Contenu">
+            <CampaignEditor
+              campaignId={campaign.id}
+              initialSubject={campaign.subject ?? ""}
+              initialContent={campaign.content}
+              readOnly={campaign.status !== "draft"}
+            />
+          </Section>
 
           <Section title="Aperçu dans la boîte de réception">
             <iframe
@@ -211,7 +217,22 @@ export default async function CampaignDetailPage({
               chaque destinataire reçoit le sien.
             </p>
           </Section>
-      </div>
+        </div>
+      ) : (
+        <CampaignPublish
+          campaignId={campaign.id}
+          status={campaign.status}
+          tags={tags}
+          initialTagIds={(campaign.targetTagIds as string[]) ?? []}
+          initialEmails={(campaign.targetEmails as string[]) ?? []}
+          initialNote={campaign.internalNote ?? ""}
+          recipients={recipients}
+          recipientCount={audience.total}
+          canSend={canSend}
+          blocking={blocking}
+          from={process.env.EMAIL_FROM ?? "Expéditeur non configuré"}
+        />
+      )}
     </Shell>
   );
 }

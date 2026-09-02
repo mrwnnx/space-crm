@@ -13,11 +13,15 @@ export function CampaignSend({
   status,
   recipients,
   canSend,
+  recipientCount,
 }: {
   campaignId: string;
   status: string;
   recipients: RecipientRow[];
   canSend: boolean;
+  /** Nombre réel de destinataires. Nommé dans la confirmation : sans lui, on
+   *  confirme un envoi irréversible sans savoir à combien de personnes. */
+  recipientCount?: number;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -71,8 +75,15 @@ export function CampaignSend({
             <>
               {/* Un envoi ne s'annule pas : la confirmation est explicite. */}
               <p className="text-sm text-foreground">
-                Envoyer maintenant ? Les emails partent immédiatement et ne
-                peuvent pas être rappelés.
+                {typeof recipientCount === "number" ? (
+                  <>
+                    Envoyer à <strong>{recipientCount} destinataire
+                    {recipientCount > 1 ? "s" : ""}</strong> maintenant ?
+                  </>
+                ) : (
+                  <>Envoyer maintenant ?</>
+                )}{" "}
+                Les emails partent immédiatement et ne peuvent pas être rappelés.
               </p>
               <div className="mt-2 flex gap-2">
                 <button
@@ -80,7 +91,11 @@ export function CampaignSend({
                   disabled={isPending}
                   className="rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
-                  {isPending ? "Envoi en cours…" : "Oui, envoyer"}
+                  {isPending
+                  ? "Envoi en cours…"
+                  : typeof recipientCount === "number"
+                    ? `Oui, envoyer à ${recipientCount}`
+                    : "Oui, envoyer"}
                 </button>
                 <button
                   onClick={() => setConfirming(false)}

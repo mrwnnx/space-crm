@@ -102,8 +102,40 @@ export async function saveCampaignTargetAction(
   return { ok: true as const };
 }
 
+export async function saveCampaignNoteAction(id: string, note: string) {
+  await requireUser();
+  const existing = await getCampaignById(id);
+  if (!existing) return { ok: false as const, error: "Campagne introuvable" };
+  await updateCampaign(id, { internalNote: note.trim() || null });
+  revalidatePath(`/campaigns/${id}`);
+  revalidatePath("/campaigns");
+  return { ok: true as const };
+}
+
 export async function sendCampaignAction(id: string) {
   await requireUser();
+
+  // Les contrôles tournent AUSSI ici, pas seulement à l'écran : l'action est
+  // appelable sans passer par l'interface, et c'est le dernier point où l'on
+  // peut encore empêcher un {{…}} de partir chez 500 personnes.
+  const existing = await getCampaignById(id);
+  if (!existing) return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "Campagne introuvable" };
+  const { checkCampaign, hasBlockingError } = await import("@/lib/campaigns/preflight");
+  const checks = checkCampaign({
+    subject: existing.subject ?? "",
+    content: existing.content ?? "",
+  });
+  if (hasBlockingError(checks)) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: 0,
+      remaining: 0,
+      quotaReached: false,
+      error: checks.filter((c) => c.level === "error").map((c) => c.message).join(" "),
+    };
+  }
+
   const { sendCampaign } = await import("@/lib/campaigns/send");
   const r = await sendCampaign(id);
   revalidatePath(`/campaigns/${id}`);

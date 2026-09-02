@@ -143,6 +143,13 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                   <p className="truncate text-xs text-muted-foreground">
                     {c.subject || "Sans sujet"}
                   </p>
+                  {/* La note d'équipe : savoir de quoi parle une campagne sans
+                      l'ouvrir. Elle ne part jamais dans l'email. */}
+                  {c.internalNote && (
+                    <p className="mt-0.5 truncate text-xs italic text-muted-foreground/70">
+                      {c.internalNote}
+                    </p>
+                  )}
                   {c.recipientCount > 0 && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {c.sentCount}/{c.recipientCount} envoyés

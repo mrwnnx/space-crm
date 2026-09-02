@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { useEffect, useState, useTransition } from "react";
 import { saveCampaignContentAction } from "@/app/(dashboard)/campaigns/actions";
+import { CampaignPreflight } from "./campaign-preflight";
 
 function ToolbarButton({
   active,
@@ -45,6 +46,10 @@ export function CampaignEditor({
   readOnly: boolean;
 }) {
   const [subject, setSubject] = useState(initialSubject);
+  // Copie vivante du HTML : les contrôles doivent réagir à la frappe, et
+  // `editor.getHTML()` n'est pas réactif — sans cet état, l'alerte ne
+  // s'afficherait qu'au prochain rendu déclenché par autre chose.
+  const [html, setHtml] = useState(initialContent || "<p></p>");
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -56,6 +61,7 @@ export function CampaignEditor({
     ],
     content: initialContent || "<p></p>",
     editable: !readOnly,
+    onUpdate: ({ editor }) => setHtml(editor.getHTML()),
     // Obligatoire en App Router : sans ça, Tiptap rend côté serveur et
     // déclenche une erreur d'hydratation.
     immediatelyRender: false,
@@ -175,6 +181,9 @@ export function CampaignEditor({
         )}
         <EditorContent editor={editor} />
       </div>
+
+      {/* Les contrôles tournent pendant l'écriture, jamais au moment du clic. */}
+      {!readOnly && <CampaignPreflight subject={subject} content={html} />}
 
       {!readOnly && (
         <div className="flex items-center gap-3">
