@@ -76,14 +76,7 @@ export default async function SettingsPage({
           {current === "branding" && (
           /* Enveloppe commune à tous les emails */
           <section>
-            <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
-              Habillage des emails
-            </h2>
-            <p className="mb-4 text-xs text-muted-foreground">
-              En-tête et pied de page appliqués à <strong>tous</strong> les envois :
-              automatisations et emails écrits depuis une fiche lead. Les modèles ne
-              contiennent que le message.
-            </p>
+            {/* Le titre vit dans le composant, avec le bouton d'enregistrement. */}
             <EmailDesignForm
               branding={branding}
               defaultSender={process.env.EMAIL_FROM ?? "Expéditeur non configuré"}

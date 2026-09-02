@@ -154,7 +154,11 @@ function buildMarked(
             : branding?.buttonPosition === "right"
               ? "right"
               : "left";
-          return `<table role="presentation" align="${align}" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px${align === "center" ? ";margin-left:auto;margin-right:auto" : align === "right" ? ";margin-left:auto" : ""}"><tr><td bgcolor="${bg}" style="${border}border-radius:8px"><a href="${token.href}" style="display:inline-block;padding:13px 26px;${FONT};font-size:15px;font-weight:600;color:${fg};text-decoration:none;border-radius:8px">${token.text}</a></td></tr></table>\n`;
+          // ⚠️ `align` sur une table la fait FLOTTER : le texte suivant
+          // s'enroulait autour du bouton. Le bouton vit donc dans une table
+          // pleine largeur dont la cellule porte l'alignement — bloc partout,
+          // Outlook compris.
+          return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 20px"><tr><td align="${align}" style="padding:0"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0"><tr><td bgcolor="${bg}" style="${border}border-radius:8px"><a href="${token.href}" style="display:inline-block;padding:13px 26px;${FONT};font-size:15px;font-weight:600;color:${fg};text-decoration:none;border-radius:8px">${token.text}</a></td></tr></table></td></tr></table>\n`;
         },
       },
     ],
