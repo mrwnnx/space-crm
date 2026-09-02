@@ -387,3 +387,36 @@ ${inner}
 </body>
 </html>`;
 }
+
+/**
+ * Décor de l'email pour l'éditeur visuel : la bannière et le pied de page tels
+ * qu'ils partiront, plus les couleurs à appliquer à la zone d'écriture.
+ *
+ * Réutilise `renderBanner` — le décor affiché autour de l'éditeur est donc
+ * exactement celui du rendu final, pas une imitation qui finirait par diverger.
+ */
+export function renderEmailFrame(branding?: Branding | null): {
+  bannerHtml: string;
+  footerHtml: string;
+  bodyBg: string;
+  textColor: string;
+  titleColor: string;
+  accent: string;
+} {
+  const b = branding ?? undefined;
+  // `renderBanner` produit une ligne de tableau : on l'enveloppe pour qu'elle
+  // s'affiche seule dans l'éditeur.
+  const row = renderBanner(b);
+  return {
+    bannerHtml: row
+      ? `<table role="presentation" width="100%" style="width:100%;border-collapse:collapse">${row}</table>`
+      : "",
+    footerHtml: b?.footerText
+      ? markdownToEmailHtml(b.footerText, b, "footer")
+      : "",
+    bodyBg: b?.bodyBg || D.bodyBg,
+    textColor: b?.textColor || D.textColor,
+    titleColor: b?.titleColor || D.titleColor,
+    accent: b?.accentColor || DEFAULT_ACCENT,
+  };
+}

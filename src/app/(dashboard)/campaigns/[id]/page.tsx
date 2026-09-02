@@ -9,7 +9,8 @@ import { checkCampaign } from "@/lib/campaigns/preflight";
 import { getTagsWithUsage } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
-import { CampaignMarkdownEditor } from "@/components/campaigns/campaign-markdown-editor";
+import { CampaignVisualEditor } from "@/components/campaigns/campaign-visual-editor";
+import { renderEmailFrame } from "@/lib/messaging/markdown";
 import { CampaignSend } from "@/components/campaigns/campaign-send";
 import { CampaignPublish } from "@/components/campaigns/campaign-publish";
 import { CampaignStepper } from "@/components/campaigns/campaign-stepper";
@@ -213,12 +214,13 @@ export default async function CampaignDetailPage({
       {step === "rediger" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
           <Section title="Contenu">
-            <CampaignMarkdownEditor
+            <CampaignVisualEditor
               campaignId={campaign.id}
               initialSubject={campaign.subject ?? ""}
               initialContent={campaign.content}
               readOnly={campaign.status !== "draft"}
               testEmail={testEmail}
+              frame={renderEmailFrame(branding)}
             />
           </Section>
 

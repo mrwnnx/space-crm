@@ -92,3 +92,34 @@
     @apply font-sans;
   }
 }
+/* ── Zone d'écriture de l'éditeur d'email ──────────────
+   L'éditeur doit ressembler à l'email, pas à un champ de formulaire : mêmes
+   tailles et mêmes couleurs que le rendu final, injectées en variables. */
+.email-canvas .ProseMirror {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.email-canvas .ProseMirror > * + * { margin-top: 16px; }
+.email-canvas .ProseMirror h1 { font-size: 21px; font-weight: 600; line-height: 1.3; color: var(--email-title); }
+.email-canvas .ProseMirror h2 { font-size: 17px; font-weight: 600; line-height: 1.35; color: var(--email-title); }
+.email-canvas .ProseMirror h3 { font-size: 16px; font-weight: 600; color: var(--email-title); }
+.email-canvas .ProseMirror ul { list-style: disc; padding-left: 20px; }
+.email-canvas .ProseMirror ol { list-style: decimal; padding-left: 20px; }
+.email-canvas .ProseMirror li { margin-bottom: 6px; }
+.email-canvas .ProseMirror li > p { margin: 0; }
+.email-canvas .ProseMirror a { color: var(--email-accent); text-decoration: underline; }
+.email-canvas .ProseMirror img { max-width: 100%; height: auto; border-radius: 8px; }
+.email-canvas .ProseMirror blockquote {
+  padding-left: 14px;
+  border-left: 3px solid rgba(0, 0, 0, 0.12);
+  opacity: 0.85;
+}
+/* Message d'invite quand le document est vide. */
+.email-canvas .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  opacity: 0.45;
+}

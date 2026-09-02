@@ -6,7 +6,12 @@
  *
  * Pas de "server-only" ici : fonctions pures, testables isolément.
  */
-import { markdownToEmailHtml, wrapWithBranding, type Branding } from "@/lib/messaging/markdown";
+import {
+  markdownToEmailHtml,
+  wrapWithBranding,
+  asEmailDocument,
+  type Branding,
+} from "@/lib/messaging/markdown";
 
 export type CampaignTemplateInput = {
   /** Markdown, comme partout ailleurs. Le HTML des anciennes campagnes passe. */
@@ -50,10 +55,15 @@ export function renderCampaignHtml({
   // pied de page commun au lieu d'y être enfermé.
   const unsubscribe = `<p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#9ca3af">Vous recevez cet email parce que vous vous êtes inscrit à une formation ${escapeHtml(senderName)}.<br><a href="${safeUrl}" style="color:#9ca3af;text-decoration:underline">Se désabonner</a></p>`;
 
-  return wrapWithBranding(
-    markdownToEmailHtml(content || "", branding ?? undefined),
-    branding ?? undefined,
-    { footerExtra: unsubscribe }
+  // Document COMPLET, pas un fragment : c'est ce qui part par email, et c'est
+  // aussi ce que l'aperçu doit recevoir — un `srcDoc` sans <body> ne s'affiche
+  // pas du tout. `asEmailDocument` est idempotente, l'envoi ne double rien.
+  return asEmailDocument(
+    wrapWithBranding(
+      markdownToEmailHtml(content || "", branding ?? undefined),
+      branding ?? undefined,
+      { footerExtra: unsubscribe }
+    )
   );
 }
 
