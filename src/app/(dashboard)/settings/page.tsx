@@ -37,7 +37,13 @@ export default async function SettingsPage({
     <>
       <PageHeader title="Settings" subtitle="Configuration du CRM" />
       <div className="flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-2xl space-y-6">
+        {/* L'onglet Design a besoin de place : un aperçu mobile de 390 px ne
+            tient pas dans une colonne de 2xl, et le sélecteur semblait inerte. */}
+        <div
+          className={`mx-auto space-y-6 ${
+            current === "branding" ? "max-w-[1180px]" : "max-w-2xl"
+          }`}
+        >
           <SettingsTabs current={current} />
 
           {current === "site" && (
