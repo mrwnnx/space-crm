@@ -28,15 +28,15 @@ export type MainButton = {
  * chaque élément. D'où l'émission directe depuis le renderer.
  */
 const S = {
-  p: "margin:0 0 16px;font-size:15px;line-height:1.6;color:#1a1a1a",
+  p: "margin:0 0 16px;font-size:16px;line-height:1.6;color:#1a1a1a",
   h1: "margin:0 0 14px;font-size:21px;font-weight:600;line-height:1.3;color:#111",
   h2: "margin:24px 0 12px;font-size:17px;font-weight:600;line-height:1.35;color:#111",
-  h3: "margin:20px 0 10px;font-size:15px;font-weight:600;color:#111",
-  list: "margin:0 0 16px;padding-left:20px;font-size:15px;line-height:1.6;color:#1a1a1a",
+  h3: "margin:20px 0 10px;font-size:16px;font-weight:600;color:#111",
+  list: "margin:0 0 16px;padding-left:20px;font-size:16px;line-height:1.6;color:#1a1a1a",
   li: "margin-bottom:6px",
   hr: "border:0;border-top:1px solid #e5e5e5;margin:24px 0",
   blockquote:
-    "margin:0 0 16px;padding:2px 0 2px 14px;border-left:3px solid #e5e5e5;color:#6b7280;font-size:15px;line-height:1.6",
+    "margin:0 0 16px;padding:2px 0 2px 14px;border-left:3px solid #e5e5e5;color:#6b7280;font-size:16px;line-height:1.6",
   code: "background:#f6f6f4;border-radius:4px;padding:2px 5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px",
   pre: "background:#f6f6f4;border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:13px",
   img: "max-width:100%;height:auto;display:block;margin:0 0 16px;border-radius:8px",
@@ -139,7 +139,7 @@ export function wrapWithBranding(body: string, branding?: Branding): string {
     ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5">${markdownToEmailHtml(branding.footerText, branding, "footer")}</div>`
     : "";
 
-  return `<div style="${S.font};font-size:15px;line-height:1.6;color:#1a1a1a;max-width:560px;margin:0 auto;padding:8px">\n${logo}${body}${footer}</div>`;
+  return `<div style="${S.font};font-size:16px;line-height:1.6;color:#1a1a1a;max-width:560px;margin:0 auto;padding:8px">\n${logo}${body}${footer}</div>`;
 }
 
 function escapeHtml(value: string): string {
@@ -185,4 +185,36 @@ export function renderEmailTemplate(
 ): string {
   const body = markdownToEmailHtml(composeSource(source, button), branding);
   return fillVariables(wrapWithBranding(body, branding), variables);
+}
+
+/**
+ * Enveloppe HTML complète, appliquée AU MOMENT DE L'ENVOI.
+ *
+ * ⚠️ Sans `<meta viewport>`, un client mobile rend l'email à la largeur d'un
+ * écran d'ordinateur puis dézoome : le texte arrive minuscule. `wrapWithBranding`
+ * ne peut pas la porter — sa sortie est aussi injectée dans les aperçus de
+ * l'écran de réglages via `dangerouslySetInnerHTML`, où des balises `<html>`
+ * seraient invalides. D'où cette fonction séparée, posée au seul endroit qui
+ * part vraiment : `sendEmail`.
+ *
+ * `text-size-adjust` empêche iOS et Android de redimensionner le texte d'eux-mêmes.
+ * Idempotente : un HTML déjà complet ressort intact.
+ */
+export function asEmailDocument(inner: string): string {
+  if (/^\s*<(!doctype|html)\b/i.test(inner)) return inner;
+  return `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<style>
+  body{margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;}
+  img{border:0;outline:none;text-decoration:none;}
+</style>
+</head>
+<body>
+${inner}
+</body>
+</html>`;
 }

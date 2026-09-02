@@ -33,7 +33,7 @@ const escapeHtml = (s: string) =>
  */
 function inlineContentStyles(html: string): string {
   return html
-    .replace(/<p>/g, '<p style="margin:0 0 16px;line-height:1.6;">')
+    .replace(/<p>/g, '<p style="margin:0 0 16px;font-size:16px;line-height:1.6;">')
     .replace(
       /<h1>/g,
       '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.3;font-weight:600;">'
@@ -46,13 +46,13 @@ function inlineContentStyles(html: string): string {
       /<h3>/g,
       '<h3 style="margin:20px 0 8px;font-size:16px;line-height:1.4;font-weight:600;">'
     )
-    .replace(/<ul>/g, '<ul style="margin:0 0 16px;padding-left:22px;">')
-    .replace(/<ol>/g, '<ol style="margin:0 0 16px;padding-left:22px;">')
-    .replace(/<li>/g, '<li style="margin:0 0 6px;line-height:1.6;">')
+    .replace(/<ul>/g, '<ul style="margin:0 0 16px;padding-left:22px;font-size:16px;">')
+    .replace(/<ol>/g, '<ol style="margin:0 0 16px;padding-left:22px;font-size:16px;">')
+    .replace(/<li>/g, '<li style="margin:0 0 6px;font-size:16px;line-height:1.6;">')
     .replace(/<a /g, '<a style="color:#1a56db;text-decoration:underline;" ')
     .replace(
       /<blockquote>/g,
-      '<blockquote style="margin:0 0 16px;padding-left:14px;border-left:3px solid #e5e7eb;color:#4b5563;">'
+      '<blockquote style="margin:0 0 16px;padding-left:14px;font-size:16px;line-height:1.6;border-left:3px solid #e5e7eb;color:#4b5563;">'
     );
 }
 
@@ -69,21 +69,27 @@ export function renderCampaignHtml({
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<style>
+  /* Sans ça, iOS et Android redimensionnent le texte tout seuls et l'email
+     arrive en petit sur mobile. */
+  body{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;}
+</style>
 </head>
 <body style="margin:0;padding:0;background-color:#f5f5f4;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f4;">
 <tr><td align="center" style="padding:32px 12px;">
-  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
     <tr><td style="padding:28px 32px 8px;">
-      <p style="margin:0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#78716c;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(senderName)}</p>
+      <p style="margin:0;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#78716c;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(senderName)}</p>
     </td></tr>
-    <tr><td style="padding:8px 32px 28px;font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#1c1917;">
+    <tr><td style="padding:8px 32px 28px;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1c1917;">
 ${body}
     </td></tr>
   </table>
 
-  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;">
-    <tr><td style="padding:20px 32px;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#78716c;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+    <tr><td style="padding:20px 32px;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#78716c;">
       Vous recevez cet email parce que vous vous êtes inscrit à une formation ${escapeHtml(senderName)}.<br>
       <a href="${safeUrl}" style="color:#78716c;text-decoration:underline;">Se désabonner</a>
     </td></tr>
