@@ -932,9 +932,25 @@ export const emailBranding = pgTable("email_branding", {
   bannerBg: text("banner_bg").notNull().default("#ffffff"),
   bannerImageUrl: text("banner_image_url"),
   bannerTagline: text("banner_tagline"),
+  logoAlt: text("logo_alt"),
+  logoPosition: text("logo_position").notNull().default("left"),
+  headerDivider: text("header_divider").notNull().default("#e0e2ea"),
+  bodyBg: text("body_bg").notNull().default("#ffffff"),
+  titleColor: text("title_color").notNull().default("#212327"),
+  textColor: text("text_color").notNull().default("#5b616f"),
+  boldColor: text("bold_color").notNull().default("#212327"),
+  footnoteColor: text("footnote_color").notNull().default("#a4a8b2"),
   footerText: text("footer_text"),
-  // Couleur des boutons.
+  /** Bouton principal — `accentColor` en porte le fond, historiquement. */
   accentColor: text("accent_color").notNull().default("#1a1a1a"),
+  primaryBtnText: text("primary_btn_text").notNull().default("#ffffff"),
+  secondaryBtnBg: text("secondary_btn_bg").notNull().default("#ffffff"),
+  secondaryBtnText: text("secondary_btn_text").notNull().default("#3e64de"),
+  secondaryBtnBorder: text("secondary_btn_border").notNull().default("#3e64de"),
+  buttonPosition: text("button_position").notNull().default("left"),
+  /** Expéditeur. Vide = on retombe sur EMAIL_FROM. */
+  senderEmail: text("sender_email"),
+  senderName: text("sender_name"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

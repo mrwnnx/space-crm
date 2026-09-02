@@ -1488,39 +1488,83 @@ export async function saveEmailBrandingAction(
 ): Promise<{ ok: boolean; message: string }> {
   await requireUser();
 
-  const logoUrl = String(formData.get("logoUrl") || "").trim() || null;
-  const footerText = String(formData.get("footerText") || "").trim() || null;
-  const accentColor = String(formData.get("accentColor") || "").trim() || "#1a1a1a";
-  const bannerBg = String(formData.get("bannerBg") || "").trim() || "#ffffff";
-  const bannerImageUrl = String(formData.get("bannerImageUrl") || "").trim() || null;
-  const bannerTagline = String(formData.get("bannerTagline") || "").trim() || null;
-  const width = parseInt(String(formData.get("logoWidth") || "150"), 10);
+  const str = (k: string) => String(formData.get(k) || "").trim();
+  const hex = (k: string, fallback: string) => {
+    const v = str(k);
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+  };
+  const align = (k: string) => {
+    const v = str(k);
+    return v === "center" || v === "right" ? v : "left";
+  };
+
+  const logoUrl = str("logoUrl") || null;
+  const bannerImageUrl = str("bannerImageUrl") || null;
+  const width = parseInt(str("logoWidth") || "150", 10);
   const logoWidth = Number.isFinite(width) && width > 0 ? Math.min(width, 560) : 150;
 
   // Un client mail n'a pas de session : une URL relative ou en http afficherait
   // une image cassée chez le destinataire, sans que rien ne le signale ici.
-  if (logoUrl && !/^https:\/\//i.test(logoUrl)) {
-    return { ok: false, message: "L'URL du logo doit être absolue et en https://" };
+  for (const [label, url] of [["logo", logoUrl], ["bannière", bannerImageUrl]] as const) {
+    if (url && !/^https:\/\//i.test(url)) {
+      return { ok: false, message: `L'URL du ${label} doit être absolue et en https://` };
+    }
   }
-  if (bannerImageUrl && !/^https:\/\//i.test(bannerImageUrl)) {
-    return { ok: false, message: "L'URL de la bannière doit être absolue et en https://" };
+
+  // Toute couleur saisie doit être un hexadécimal complet : une valeur
+  // approximative passerait silencieusement et donnerait un email cassé.
+  for (const key of [
+    "accentColor", "bannerBg", "headerDivider", "bodyBg", "titleColor",
+    "textColor", "boldColor", "footnoteColor", "primaryBtnText",
+    "secondaryBtnBg", "secondaryBtnText", "secondaryBtnBorder",
+  ]) {
+    const v = str(key);
+    if (v && !/^#[0-9a-f]{6}$/i.test(v)) {
+      return { ok: false, message: `Couleur invalide sur « ${key} » (format attendu : #1a1a1a).` };
+    }
   }
-  if (!/^#[0-9a-f]{6}$/i.test(accentColor)) {
-    return { ok: false, message: "Couleur des boutons invalide (format attendu : #1a1a1a)." };
-  }
-  if (!/^#[0-9a-f]{6}$/i.test(bannerBg)) {
-    return { ok: false, message: "Couleur de bannière invalide (format attendu : #ffffff)." };
+
+  // ⚠️ Resend refuse toute adresse dont le domaine n'est pas vérifié : une
+  // faute de frappe ici ferait échouer TOUS les envois, sans message clair.
+  const senderEmail = str("senderEmail").toLowerCase() || null;
+  if (senderEmail) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmail)) {
+      return { ok: false, message: "Adresse d'expédition invalide." };
+    }
+    if (!/@send\.thespace\.academy$/.test(senderEmail)) {
+      return {
+        ok: false,
+        message:
+          "L'adresse doit finir par @send.thespace.academy — c'est le seul domaine vérifié chez Resend. " +
+          "Une autre adresse ferait échouer tous les envois.",
+      };
+    }
   }
 
   const { saveEmailBranding } = await import("@/lib/queries");
   await saveEmailBranding({
     logoUrl,
     logoWidth,
-    bannerBg,
+    logoAlt: str("logoAlt") || null,
+    logoPosition: align("logoPosition"),
+    bannerBg: hex("bannerBg", "#ffffff"),
     bannerImageUrl,
-    bannerTagline,
-    footerText,
-    accentColor,
+    bannerTagline: str("bannerTagline") || null,
+    headerDivider: hex("headerDivider", "#e0e2ea"),
+    bodyBg: hex("bodyBg", "#ffffff"),
+    titleColor: hex("titleColor", "#212327"),
+    textColor: hex("textColor", "#5b616f"),
+    boldColor: hex("boldColor", "#212327"),
+    footnoteColor: hex("footnoteColor", "#a4a8b2"),
+    footerText: str("footerText") || null,
+    accentColor: hex("accentColor", "#1a1a1a"),
+    primaryBtnText: hex("primaryBtnText", "#ffffff"),
+    secondaryBtnBg: hex("secondaryBtnBg", "#ffffff"),
+    secondaryBtnText: hex("secondaryBtnText", "#3e64de"),
+    secondaryBtnBorder: hex("secondaryBtnBorder", "#3e64de"),
+    buttonPosition: align("buttonPosition"),
+    senderEmail,
+    senderName: str("senderName") || null,
   });
   revalidatePath("/settings");
   return { ok: true, message: "Habillage enregistré." };

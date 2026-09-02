@@ -2093,15 +2093,9 @@ export async function getEmailBranding() {
   return row ?? null;
 }
 
-export async function saveEmailBranding(data: {
-  logoUrl: string | null;
-  logoWidth: number;
-  bannerBg: string;
-  bannerImageUrl: string | null;
-  bannerTagline: string | null;
-  footerText: string | null;
-  accentColor: string;
-}) {
+export async function saveEmailBranding(
+  data: Omit<typeof emailBranding.$inferInsert, "id" | "updatedAt">
+) {
   const existing = await db.query.emailBranding.findFirst();
   if (existing) {
     await db

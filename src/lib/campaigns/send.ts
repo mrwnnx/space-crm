@@ -135,15 +135,21 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
     return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "Contenu vide" };
   }
 
-  const from = process.env.EMAIL_FROM;
-  if (!from) {
-    return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "EMAIL_FROM manquant" };
-  }
-
   // L'habillage est lu UNE fois : il est identique pour tous les destinataires,
   // et le relire par email ferait 500 requêtes pour la même ligne.
   const { getEmailBranding } = await import("@/lib/queries");
   const branding = await getEmailBranding();
+
+  // Le même expéditeur que les envois unitaires : l'écran de design prime,
+  // la variable d'environnement sert de repli.
+  const from = branding?.senderEmail
+    ? branding.senderName
+      ? `${branding.senderName} <${branding.senderEmail}>`
+      : branding.senderEmail
+    : process.env.EMAIL_FROM;
+  if (!from) {
+    return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "Aucun expéditeur configuré" };
+  }
 
   await materializeRecipients(campaignId);
   await db

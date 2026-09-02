@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
 import { WpConnectionForm } from "@/components/settings/wp-connection-form";
 import { TeamManager } from "@/components/settings/team-manager";
-import { EmailBrandingForm } from "@/components/settings/email-branding-form";
+import { EmailDesignForm } from "@/components/settings/email-design-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,8 @@ export default async function SettingsPage({
   const templates = current === "emails" ? await getEmailTemplates() : [];
   const templateBranding = current === "emails" ? await getEmailBranding() : null;
   // Adresse du compte connecté : pré-remplit le champ « envoyer un test ».
-  const testEmail = current === "emails" ? ((await currentActor()) ?? "") : "";
+  const testEmail =
+    current === "emails" || current === "branding" ? ((await currentActor()) ?? "") : "";
   const allowed = current === "team" ? await getAllowedEmails() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
 
@@ -83,7 +84,11 @@ export default async function SettingsPage({
               automatisations et emails écrits depuis une fiche lead. Les modèles ne
               contiennent que le message.
             </p>
-            <EmailBrandingForm branding={branding} />
+            <EmailDesignForm
+              branding={branding}
+              defaultSender={process.env.EMAIL_FROM ?? "Expéditeur non configuré"}
+              testEmail={testEmail}
+            />
           </section>
           )}
 

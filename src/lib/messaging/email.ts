@@ -17,7 +17,10 @@ export async function sendEmail({
     return { ok: false, error: "Resend non configuré (RESEND_API_KEY manquant)" };
   }
 
-  const from = process.env.EMAIL_FROM || "CRM <noreply@example.com>";
+  // L'expéditeur réglé dans « Design des emails » prime sur la variable
+  // d'environnement. Vide = on retombe sur EMAIL_FROM : changer l'écran ne peut
+  // donc pas casser les envois par omission.
+  const from = await resolveSender();
 
   try {
     const resend = new Resend(apiKey);
@@ -49,4 +52,23 @@ export function renderTemplate(
   variables: Record<string, string>
 ): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] ?? "");
+}
+
+/**
+ * Expéditeur effectif : base d'abord, variable d'environnement ensuite.
+ *
+ * L'adresse en base est déjà validée à l'enregistrement (domaine vérifié chez
+ * Resend). Si la lecture échoue — base indisponible — on ne bloque pas l'envoi :
+ * on retombe sur EMAIL_FROM.
+ */
+async function resolveSender(): Promise<string> {
+  const fallback = process.env.EMAIL_FROM || "CRM <noreply@example.com>";
+  try {
+    const { getEmailBranding } = await import("@/lib/queries");
+    const b = await getEmailBranding();
+    if (!b?.senderEmail) return fallback;
+    return b.senderName ? `${b.senderName} <${b.senderEmail}>` : b.senderEmail;
+  } catch {
+    return fallback;
+  }
 }
