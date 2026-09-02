@@ -136,12 +136,14 @@ export async function sendCampaignTestAction(
 
   const { sendEmail } = await import("@/lib/messaging/email");
   const { renderCampaignHtml } = await import("@/lib/campaigns/template");
+  const { getEmailBranding } = await import("@/lib/queries");
+  const branding = await getEmailBranding();
 
   const url = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/unsubscribe/apercu`;
   const res = await sendEmail({
     to: address,
     subject: `[TEST] ${subject}`,
-    html: renderCampaignHtml({ content, unsubscribeUrl: url }),
+    html: renderCampaignHtml({ content, unsubscribeUrl: url, branding }),
   });
 
   if (!res.ok) {

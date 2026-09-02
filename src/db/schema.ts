@@ -927,6 +927,11 @@ export const emailBranding = pgTable("email_branding", {
   // URL absolue et PUBLIQUE : un client mail n'a pas de session.
   logoUrl: text("logo_url"),
   logoWidth: integer("logo_width").notNull().default(150),
+  /** Bannière du haut, commune à tous les emails. Une image large REMPLACE le
+   *  logo quand elle est présente. */
+  bannerBg: text("banner_bg").notNull().default("#ffffff"),
+  bannerImageUrl: text("banner_image_url"),
+  bannerTagline: text("banner_tagline"),
   footerText: text("footer_text"),
   // Couleur des boutons.
   accentColor: text("accent_color").notNull().default("#1a1a1a"),

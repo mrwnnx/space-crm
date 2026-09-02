@@ -1491,6 +1491,9 @@ export async function saveEmailBrandingAction(
   const logoUrl = String(formData.get("logoUrl") || "").trim() || null;
   const footerText = String(formData.get("footerText") || "").trim() || null;
   const accentColor = String(formData.get("accentColor") || "").trim() || "#1a1a1a";
+  const bannerBg = String(formData.get("bannerBg") || "").trim() || "#ffffff";
+  const bannerImageUrl = String(formData.get("bannerImageUrl") || "").trim() || null;
+  const bannerTagline = String(formData.get("bannerTagline") || "").trim() || null;
   const width = parseInt(String(formData.get("logoWidth") || "150"), 10);
   const logoWidth = Number.isFinite(width) && width > 0 ? Math.min(width, 560) : 150;
 
@@ -1499,12 +1502,26 @@ export async function saveEmailBrandingAction(
   if (logoUrl && !/^https:\/\//i.test(logoUrl)) {
     return { ok: false, message: "L'URL du logo doit être absolue et en https://" };
   }
+  if (bannerImageUrl && !/^https:\/\//i.test(bannerImageUrl)) {
+    return { ok: false, message: "L'URL de la bannière doit être absolue et en https://" };
+  }
   if (!/^#[0-9a-f]{6}$/i.test(accentColor)) {
-    return { ok: false, message: "Couleur invalide (format attendu : #1a1a1a)." };
+    return { ok: false, message: "Couleur des boutons invalide (format attendu : #1a1a1a)." };
+  }
+  if (!/^#[0-9a-f]{6}$/i.test(bannerBg)) {
+    return { ok: false, message: "Couleur de bannière invalide (format attendu : #ffffff)." };
   }
 
   const { saveEmailBranding } = await import("@/lib/queries");
-  await saveEmailBranding({ logoUrl, logoWidth, footerText, accentColor });
+  await saveEmailBranding({
+    logoUrl,
+    logoWidth,
+    bannerBg,
+    bannerImageUrl,
+    bannerTagline,
+    footerText,
+    accentColor,
+  });
   revalidatePath("/settings");
   return { ok: true, message: "Habillage enregistré." };
 }

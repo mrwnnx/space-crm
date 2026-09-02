@@ -4,11 +4,12 @@ import { getCampaignById, getCampaignRecipients } from "@/lib/campaigns/queries"
 import { getCampaignStats, getLinkClicks } from "@/lib/campaigns/analytics";
 import { resolveCampaignAudience } from "@/lib/campaigns/audience";
 import { renderCampaignHtml } from "@/lib/campaigns/template";
+import { getEmailBranding } from "@/lib/queries";
 import { checkCampaign } from "@/lib/campaigns/preflight";
 import { getTagsWithUsage } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
-import { CampaignEditor } from "@/components/campaigns/campaign-editor";
+import { CampaignMarkdownEditor } from "@/components/campaigns/campaign-markdown-editor";
 import { CampaignSend } from "@/components/campaigns/campaign-send";
 import { CampaignPublish } from "@/components/campaigns/campaign-publish";
 import { CampaignStepper } from "@/components/campaigns/campaign-stepper";
@@ -93,15 +94,17 @@ export default async function CampaignDetailPage({
 
   // ── Mode RAPPORT ─────────────────────────────────────
   if (isReport) {
-    const [recipients, stats, links] = await Promise.all([
+    const [recipients, stats, links, branding] = await Promise.all([
       getCampaignRecipients(campaign.id),
       getCampaignStats(campaign.id),
       getLinkClicks(campaign.id),
+      getEmailBranding(),
     ]);
 
     const preview = renderCampaignHtml({
-      content: campaign.content || "<p></p>",
+      content: campaign.content || "",
       unsubscribeUrl: "#apercu",
+      branding,
     });
 
     return (
@@ -186,9 +189,12 @@ export default async function CampaignDetailPage({
     .filter((c) => c.level === "error")
     .map((c) => c.message);
 
+  // L'aperçu montre l'habillage RÉEL : sans lui il mentirait sur ce qui part.
+  const branding = await getEmailBranding();
   const preview = renderCampaignHtml({
-    content: campaign.content || "<p></p>",
+    content: campaign.content || "",
     unsubscribeUrl: "#apercu",
+    branding,
   });
 
   return (
@@ -207,7 +213,7 @@ export default async function CampaignDetailPage({
       {step === "rediger" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
           <Section title="Contenu">
-            <CampaignEditor
+            <CampaignMarkdownEditor
               campaignId={campaign.id}
               initialSubject={campaign.subject ?? ""}
               initialContent={campaign.content}

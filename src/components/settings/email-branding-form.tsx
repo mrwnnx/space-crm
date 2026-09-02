@@ -20,6 +20,9 @@ Voici à quoi ressemblent tes emails.
 export function EmailBrandingForm({ branding }: { branding: EmailBranding | null }) {
   const [logoUrl, setLogoUrl] = useState(branding?.logoUrl ?? "");
   const [logoWidth, setLogoWidth] = useState(String(branding?.logoWidth ?? 150));
+  const [bannerBg, setBannerBg] = useState(branding?.bannerBg ?? "#ffffff");
+  const [bannerImageUrl, setBannerImageUrl] = useState(branding?.bannerImageUrl ?? "");
+  const [bannerTagline, setBannerTagline] = useState(branding?.bannerTagline ?? "");
   const [footerText, setFooterText] = useState(branding?.footerText ?? "");
   const [accentColor, setAccentColor] = useState(branding?.accentColor ?? "#1a1a1a");
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -30,6 +33,9 @@ export function EmailBrandingForm({ branding }: { branding: EmailBranding | null
     const fd = new FormData();
     fd.set("logoUrl", logoUrl);
     fd.set("logoWidth", logoWidth);
+    fd.set("bannerBg", bannerBg);
+    fd.set("bannerImageUrl", bannerImageUrl);
+    fd.set("bannerTagline", bannerTagline);
     fd.set("footerText", footerText);
     fd.set("accentColor", accentColor);
     startTransition(async () => setResult(await saveEmailBrandingAction(fd)));
@@ -41,6 +47,9 @@ export function EmailBrandingForm({ branding }: { branding: EmailBranding | null
     {
       logoUrl: logoUrl || null,
       logoWidth: parseInt(logoWidth, 10) || 150,
+      bannerBg: /^#[0-9a-f]{6}$/i.test(bannerBg) ? bannerBg : "#ffffff",
+      bannerImageUrl: bannerImageUrl || null,
+      bannerTagline: bannerTagline || null,
       footerText: footerText || null,
       accentColor: /^#[0-9a-f]{6}$/i.test(accentColor) ? accentColor : "#1a1a1a",
     }
@@ -76,6 +85,61 @@ export function EmailBrandingForm({ branding }: { branding: EmailBranding | null
             className={FIELD}
           />
         </div>
+        <div className="rounded-lg border border-border p-3">
+          <p className="mb-2 text-xs font-semibold text-foreground">Bannière du haut</p>
+
+          <label className={LABEL}>Couleur de fond</label>
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="color"
+              value={/^#[0-9a-f]{6}$/i.test(bannerBg) ? bannerBg : "#ffffff"}
+              onChange={(e) => setBannerBg(e.target.value)}
+              className="h-8 w-10 cursor-pointer rounded border border-border bg-background"
+            />
+            <input
+              value={bannerBg}
+              onChange={(e) => setBannerBg(e.target.value)}
+              placeholder="#ffffff"
+              className={FIELD}
+            />
+          </div>
+
+          <label className={LABEL}>Ligne sous le logo</label>
+          <input
+            value={bannerTagline}
+            onChange={(e) => setBannerTagline(e.target.value)}
+            placeholder="Bootcamp UX · Septembre 2026"
+            className={FIELD}
+          />
+
+          <label className={`${LABEL} mt-3`}>Image de bannière</label>
+          <input
+            value={bannerImageUrl}
+            onChange={(e) => setBannerImageUrl(e.target.value)}
+            placeholder="https://… (laisser vide pour garder le logo)"
+            className={FIELD}
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <ImageUploadButton
+              label="Téléverser une bannière"
+              onUploaded={setBannerImageUrl}
+            />
+            {bannerImageUrl && (
+              <button
+                type="button"
+                onClick={() => setBannerImageUrl("")}
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+              >
+                Retirer l&apos;image
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground/70">
+            Une image de bannière <strong>remplace</strong> le logo et la ligne de texte.
+            Prévoir 1200 px de large pour rester net sur les écrans à haute densité.
+          </p>
+        </div>
+
         <div>
           <label className={LABEL}>Couleur des boutons</label>
           <div className="flex items-center gap-2">

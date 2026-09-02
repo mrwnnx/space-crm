@@ -6,6 +6,9 @@ import { Marked } from "marked";
 export type Branding = {
   logoUrl?: string | null;
   logoWidth?: number | null;
+  bannerBg?: string | null;
+  bannerImageUrl?: string | null;
+  bannerTagline?: string | null;
   footerText?: string | null;
   accentColor?: string | null;
 };
@@ -129,17 +132,87 @@ export function markdownToEmailHtml(
 }
 
 /** Enveloppe commune : en-tête (logo) + corps + pied de page. */
-export function wrapWithBranding(body: string, branding?: Branding): string {
-  const logo =
-    branding?.logoUrl
-      ? `<div style="margin:0 0 28px"><img src="${branding.logoUrl}" alt="" width="${branding.logoWidth || 150}" style="width:${branding.logoWidth || 150}px;max-width:100%;height:auto;display:block;border:0"></div>`
-      : "";
+/**
+ * Le gabarit unique : **bannière — corps — pied de page**.
+ *
+ * Tout ce qui sort du CRM passe par ici : modèles, envois 1-à-1, digest,
+ * campagnes. Un second moteur produirait deux apparences différentes — c'était
+ * exactement le cas des campagnes avant le 2026-09-02.
+ *
+ * Bâti en `<table>` et non en `<div>` : Outlook ignore `max-width` sur un div
+ * et laisserait l'email s'étaler sur toute la fenêtre.
+ *
+ * `options.footerExtra` : le lien de désabonnement des campagnes, qui n'existe
+ * que pour un vrai destinataire et n'a rien à faire dans l'habillage commun.
+ */
+export function wrapWithBranding(
+  body: string,
+  branding?: Branding,
+  options?: { footerExtra?: string }
+): string {
+  const banner = renderBanner(branding);
 
-  const footer = branding?.footerText
-    ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5">${markdownToEmailHtml(branding.footerText, branding, "footer")}</div>`
+  const footerParts: string[] = [];
+  if (branding?.footerText) {
+    footerParts.push(markdownToEmailHtml(branding.footerText, branding, "footer"));
+  }
+  if (options?.footerExtra) footerParts.push(options.footerExtra);
+
+  const footer = footerParts.length
+    ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5">${footerParts.join("")}</div>`
     : "";
 
-  return `<div style="${S.font};font-size:16px;line-height:1.6;color:#1a1a1a;max-width:560px;margin:0 auto;padding:8px">\n${logo}${body}${footer}</div>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#ffffff">
+<tr><td align="center" style="padding:0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
+${banner}<tr><td style="${S.font};font-size:16px;line-height:1.6;color:#1a1a1a;padding:28px 20px">
+${body}${footer}</td></tr>
+</table>
+</td></tr>
+</table>`;
+}
+
+/**
+ * Bannière du haut. Trois cas, dans cet ordre de priorité :
+ * une image large REMPLACE le logo ; sinon le logo sur le fond choisi ;
+ * sinon rien du tout.
+ */
+function renderBanner(branding?: Branding): string {
+  const bg = branding?.bannerBg?.trim() || "#ffffff";
+  const tagline = branding?.bannerTagline?.trim();
+
+  if (branding?.bannerImageUrl) {
+    return `<tr><td bgcolor="${escapeHtml(bg)}" style="background-color:${escapeHtml(bg)};padding:0;line-height:0">
+<img src="${escapeHtml(branding.bannerImageUrl)}" alt="" width="600" style="width:100%;max-width:600px;height:auto;display:block;border:0">
+</td></tr>
+`;
+  }
+
+  if (!branding?.logoUrl && !tagline) return "";
+
+  const width = branding?.logoWidth || 150;
+  const logo = branding?.logoUrl
+    ? `<img src="${escapeHtml(branding.logoUrl)}" alt="" width="${width}" style="width:${width}px;max-width:100%;height:auto;display:block;border:0;margin:0 auto">`
+    : "";
+  // Le texte se lit sur clair comme sur sombre : on choisit sa couleur d'après
+  // la luminosité du fond, sinon une bannière noire donne du gris sur noir.
+  const line = tagline
+    ? `<p style="${S.font};margin:${logo ? "12px" : "0"} 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:${isDark(bg) ? "#e8e8e8" : "#78716c"};text-align:center">${escapeHtml(tagline)}</p>`
+    : "";
+
+  return `<tr><td bgcolor="${escapeHtml(bg)}" style="background-color:${escapeHtml(bg)};padding:28px 20px;text-align:center">
+${logo}${line}
+</td></tr>
+`;
+}
+
+/** Luminance perçue : au-delà de 0,6 le fond est clair. */
+function isDark(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.6;
 }
 
 function escapeHtml(value: string): string {

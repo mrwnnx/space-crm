@@ -140,6 +140,11 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
     return { ok: false, sent: 0, failed: 0, remaining: 0, quotaReached: false, error: "EMAIL_FROM manquant" };
   }
 
+  // L'habillage est lu UNE fois : il est identique pour tous les destinataires,
+  // et le relire par email ferait 500 requêtes pour la même ligne.
+  const { getEmailBranding } = await import("@/lib/queries");
+  const branding = await getEmailBranding();
+
   await materializeRecipients(campaignId);
   await db
     .update(campaigns)
@@ -229,7 +234,7 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
         from,
         to: p.email,
         subject: campaign.subject!,
-        html: renderCampaignHtml({ content: campaign.content, unsubscribeUrl: url }),
+        html: renderCampaignHtml({ content: campaign.content, unsubscribeUrl: url, branding }),
         text: renderCampaignText(campaign.content, url),
         headers: {
           // Permet le désabonnement en un clic depuis Gmail — Google l'exige

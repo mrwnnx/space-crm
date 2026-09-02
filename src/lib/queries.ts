@@ -2096,6 +2096,9 @@ export async function getEmailBranding() {
 export async function saveEmailBranding(data: {
   logoUrl: string | null;
   logoWidth: number;
+  bannerBg: string;
+  bannerImageUrl: string | null;
+  bannerTagline: string | null;
   footerText: string | null;
   accentColor: string;
 }) {
