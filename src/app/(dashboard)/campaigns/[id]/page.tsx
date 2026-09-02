@@ -45,15 +45,19 @@ function Section({
 function Shell({
   campaign,
   children,
+  wide,
 }: {
   campaign: { id: string; name: string; subject: string | null; status: string };
   children: React.ReactNode;
+  /** L'étape « Rédiger » a besoin de place : l'aperçu doit montrer l'email
+   *  à sa vraie largeur, pas une colonne rognée. */
+  wide?: boolean;
 }) {
   return (
     <>
       <PageHeader title={campaign.name} subtitle={campaign.subject || "Sans sujet"} />
       <div className="flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-4xl">
+        <div className={`mx-auto ${wide ? "max-w-[1400px]" : "max-w-4xl"}`}>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <Link
               href="/campaigns"
@@ -161,6 +165,10 @@ export default async function CampaignDetailPage({
   const { etape } = await searchParams;
   const step = etape === "envoyer" ? "envoyer" : "rediger";
 
+  // Adresse du compte connecté, pré-remplie pour l'envoi d'un test.
+  const { currentActor } = await import("@/lib/auth");
+  const testEmail = (await currentActor()) ?? "";
+
   const tags = await getTagsWithUsage();
   const recipients = await getCampaignRecipients(campaign.id);
   const { stats: audience } = await resolveCampaignAudience({
@@ -184,7 +192,7 @@ export default async function CampaignDetailPage({
   });
 
   return (
-    <Shell campaign={campaign}>
+    <Shell campaign={campaign} wide={step === "rediger"}>
       <div className="mb-6 border-b border-border pb-3">
         <CampaignStepper
           campaignId={campaign.id}
@@ -194,14 +202,17 @@ export default async function CampaignDetailPage({
         />
       </div>
 
+      {/* L'aperçu prend la plus grande part de la grille : c'est lui qu'on
+          scrute avant d'envoyer, et un email rogné ne se juge pas. */}
       {step === "rediger" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
           <Section title="Contenu">
             <CampaignEditor
               campaignId={campaign.id}
               initialSubject={campaign.subject ?? ""}
               initialContent={campaign.content}
               readOnly={campaign.status !== "draft"}
+              testEmail={testEmail}
             />
           </Section>
 
@@ -210,7 +221,7 @@ export default async function CampaignDetailPage({
               title="Aperçu de l'email"
               srcDoc={preview}
               sandbox=""
-              className="h-[560px] w-full rounded-lg border border-border bg-white"
+              className="h-[calc(100vh-260px)] min-h-[560px] w-full rounded-lg border border-border bg-white"
             />
             <p className="mt-2 text-xs text-muted-foreground">
               Le lien de désabonnement est inactif ici&nbsp;; à l&apos;envoi,

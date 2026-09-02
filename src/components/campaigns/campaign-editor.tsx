@@ -6,6 +6,7 @@ import Link from "@tiptap/extension-link";
 import { useEffect, useState, useTransition } from "react";
 import { saveCampaignContentAction } from "@/app/(dashboard)/campaigns/actions";
 import { CampaignPreflight } from "./campaign-preflight";
+import { CampaignTestSend } from "./campaign-test-send";
 
 function ToolbarButton({
   active,
@@ -39,11 +40,14 @@ export function CampaignEditor({
   initialSubject,
   initialContent,
   readOnly,
+  testEmail,
 }: {
   campaignId: string;
   initialSubject: string;
   initialContent: string;
   readOnly: boolean;
+  /** Adresse pré-remplie pour l'envoi d'un test — celle du compte connecté. */
+  testEmail: string;
 }) {
   const [subject, setSubject] = useState(initialSubject);
   // Copie vivante du HTML : les contrôles doivent réagir à la frappe, et
@@ -184,6 +188,16 @@ export function CampaignEditor({
 
       {/* Les contrôles tournent pendant l'écriture, jamais au moment du clic. */}
       {!readOnly && <CampaignPreflight subject={subject} content={html} />}
+
+      {/* Le test porte sur ce qui est à l'écran, pas sur la version enregistrée. */}
+      {!readOnly && (
+        <CampaignTestSend
+          campaignId={campaignId}
+          subject={subject}
+          content={html}
+          defaultTo={testEmail}
+        />
+      )}
 
       {!readOnly && (
         <div className="flex items-center gap-3">

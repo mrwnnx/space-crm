@@ -102,6 +102,54 @@ export async function saveCampaignTargetAction(
   return { ok: true as const };
 }
 
+/**
+ * Envoi d'un test de la campagne à UNE adresse, sans toucher aux destinataires.
+ *
+ * Le rendu passe par `renderCampaignHtml` — le MÊME que l'envoi réel : un test
+ * qui emprunterait un autre chemin ne prouverait rien. Le lien de
+ * désabonnement est inactif ici, il n'existe que pour un vrai destinataire.
+ *
+ * Les contrôles bloquants s'appliquent : tester un email qu'on ne pourra pas
+ * envoyer n'a pas d'intérêt, et c'est l'occasion de les rappeler.
+ */
+export async function sendCampaignTestAction(
+  id: string,
+  to: string,
+  subject: string,
+  content: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+
+  const address = to.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    return { ok: false, message: "Adresse email invalide." };
+  }
+
+  const { checkCampaign, hasBlockingError } = await import("@/lib/campaigns/preflight");
+  const checks = checkCampaign({ subject, content });
+  if (hasBlockingError(checks)) {
+    return {
+      ok: false,
+      message: checks.filter((c) => c.level === "error").map((c) => c.message).join(" "),
+    };
+  }
+
+  const { sendEmail } = await import("@/lib/messaging/email");
+  const { renderCampaignHtml } = await import("@/lib/campaigns/template");
+
+  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/unsubscribe/apercu`;
+  const res = await sendEmail({
+    to: address,
+    subject: `[TEST] ${subject}`,
+    html: renderCampaignHtml({ content, unsubscribeUrl: url }),
+  });
+
+  if (!res.ok) {
+    return { ok: false, message: res.error ?? "L'envoi du test a échoué." };
+  }
+  return { ok: true, message: `Test envoyé à ${address}.` };
+}
+
 export async function saveCampaignNoteAction(id: string, note: string) {
   await requireUser();
   const existing = await getCampaignById(id);
