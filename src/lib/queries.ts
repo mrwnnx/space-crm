@@ -966,6 +966,53 @@ export async function getTasksByReference(
   });
 }
 
+/**
+ * La tâche de rappel d'un lead, dans la liste de celui qui a passé l'appel.
+ * UNE SEULE ouverte par personne et par lead : noter trois appels sans réponse
+ * ne doit pas empiler trois « Rappeler … » dont deux resteraient en retard pour
+ * toujours — on repousse celle qui existe déjà.
+ */
+export async function scheduleFollowUpTask(input: {
+  leadId: string;
+  leadName: string;
+  assignedTo: string;
+  dueDate: Date;
+}) {
+  const existing = await db.query.tasks.findFirst({
+    where: and(
+      eq(tasks.referenceType, "lead"),
+      eq(tasks.referenceId, input.leadId),
+      eq(tasks.assignedTo, input.assignedTo),
+      inArray(tasks.status, ["backlog", "todo", "in_progress"]),
+      ilike(tasks.title, "Rappeler %")
+    ),
+  });
+
+  if (existing) {
+    return updateTask(existing.id, { dueDate: input.dueDate });
+  }
+
+  return createTask({
+    title: `Rappeler ${input.leadName}`,
+    status: "todo",
+    dueDate: input.dueDate,
+    assignedTo: input.assignedTo,
+    referenceType: "lead",
+    referenceId: input.leadId,
+    createdBy: input.assignedTo,
+  });
+}
+
+/** Nom lisible des colonnes de pipeline, par id. */
+export async function getStatusLabels(ids: string[]) {
+  const clean = ids.filter(Boolean);
+  if (clean.length === 0) return new Map<string, string>();
+  const rows = await db.query.leadStatuses.findMany({
+    where: inArray(leadStatuses.id, clean),
+  });
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
+
 export async function createTask(data: typeof tasks.$inferInsert) {
   const [task] = await db.insert(tasks).values(data).returning();
   return task;

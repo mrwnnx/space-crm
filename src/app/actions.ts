@@ -510,10 +510,21 @@ export async function updateLeadStatusAction(
 ) {
   await requireUser();
   // Capture l'ancien statut AVANT l'update (pour stage_history) — Phase 1, ajout pur.
-  const { getLeadStatusId, recordStageChange } = await import("@/lib/queries");
+  const { getLeadStatusId, recordStageChange, getStatusLabels } = await import(
+    "@/lib/queries"
+  );
   const oldStatusId = await getLeadStatusId(leadId);
 
   const lead = await updateLeadStatusQuery(leadId, statusId);
+
+  // Le journal nomme les colonnes. Il écrivait leur identifiant interne :
+  // « Nouveau statut: 6d674394-963f-… », illisible sur la fiche.
+  const newStatusId = lead?.statusId ?? statusId;
+  const labels = await getStatusLabels([oldStatusId, newStatusId].filter(
+    (v): v is string => !!v
+  ));
+  const from = oldStatusId ? labels.get(oldStatusId) : null;
+  const to = labels.get(newStatusId) ?? newStatusId;
 
   await createActivity({
     referenceType: "lead",
@@ -521,7 +532,7 @@ export async function updateLeadStatusAction(
     type: "status_change",
     direction: "outbound",
     subject: "Statut modifié",
-    content: `Nouveau statut: ${lead?.statusId ?? statusId}`,
+    content: from ? `${from} → ${to}` : `Déplacé dans « ${to} »`,
   });
 
   // Capture structurée de la transition (Phase 1) — à côté du createActivity existant.
@@ -1758,6 +1769,20 @@ export async function logCallOutcomeAction(
   }
   if (input.outcome !== "wrong_number") patch.lastContactedAt = new Date();
   await updateLead(leadId, patch);
+
+  // Le rappel devient une tâche pour celui qui a passé l'appel. Sans ça,
+  // `next_follow_up_at` ne vit que dans la file d'« Aujourd'hui » : qui n'ouvre
+  // pas cet écran ne voit jamais qu'il doit rappeler quelqu'un.
+  if (nextFollowUpAt && actor) {
+    const { scheduleFollowUpTask } = await import("@/lib/queries");
+    await scheduleFollowUpTask({
+      leadId,
+      leadName: lead.fullName,
+      assignedTo: actor,
+      dueDate: nextFollowUpAt,
+    });
+    revalidatePath("/tasks");
+  }
 
   revalidatePath("/aujourdhui");
   revalidatePath(`/leads/${leadId}`);

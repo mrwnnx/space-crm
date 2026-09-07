@@ -19,6 +19,8 @@ import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
 export async function generateMetadata({
   params,
 }: {
@@ -69,6 +71,16 @@ export default async function LeadDetailPage({
 
   const sc = lead.status ? statusColor(lead.status.color) : null;
 
+  // Les changements de statut écrits AVANT ce correctif contiennent
+  // l'identifiant interne de la colonne (« Nouveau statut: 6d674394-963f-… »).
+  // On le remplace par son nom à l'affichage — réécrire les lignes en base
+  // laisserait tomber celles dont la colonne a depuis été supprimée.
+  const statusNames = new Map(statuses.map((s) => [s.id, s.name]));
+  const readable = (a: { type: string; content: string | null }) =>
+    a.type === "status_change" && a.content
+      ? a.content.replace(UUID_RE, (id) => statusNames.get(id) ?? id)
+      : a.content;
+
   return (
     <>
       <MarkLeadSeen leadId={lead.id} />
@@ -93,6 +105,7 @@ export default async function LeadDetailPage({
             referenceId={lead.id}
             activities={lead.activities.map((a) => ({
               ...a,
+              content: readable(a),
               createdAt: a.createdAt.toISOString(),
             }))}
             comments={lead.comments.map((c) => ({
