@@ -933,8 +933,11 @@ export async function deleteNote(id: string) {
 
 // ── Tasks ──────────────────────────────────────────────
 
-export async function getTasks() {
+export async function getTasks(assignedTo?: string) {
   return db.query.tasks.findMany({
+    // Comparaison insensible à la casse : `assigned_to` est du texte libre
+    // (le formulaire dit « Email ou nom »), pas une clé étrangère vers un compte.
+    where: assignedTo ? ilike(tasks.assignedTo, assignedTo) : undefined,
     orderBy: [desc(tasks.createdAt)],
   });
 }

@@ -3,6 +3,8 @@ import { getTasks } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { ViewToggle } from "@/components/view-toggle";
 import { NewTaskButton } from "@/components/tasks/new-task-button";
+import { TasksScopeToggle } from "@/components/tasks/tasks-scope-toggle";
+import { currentActor } from "@/lib/auth";
 import { TasksBoard } from "@/components/tasks/tasks-board";
 import { cn, formatDate } from "@/lib/utils";
 import type { Task } from "@/db/schema";
@@ -26,11 +28,17 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; mine?: string }>;
 }) {
-  const { view } = await searchParams;
+  const { view, mine } = await searchParams;
   const isList = view === "list";
-  const tasks = await getTasks();
+  // « Mes tâches » = celles assignées à l'adresse du compte connecté.
+  const actor = await currentActor();
+  const onlyMine = mine === "1";
+  // Le garde de src/proxy.ts assure une session ; si l'adresse manquait quand
+  // même, « Mes tâches » doit ne RIEN montrer, pas tout montrer.
+  const tasks =
+    onlyMine && !actor ? [] : await getTasks(onlyMine ? actor! : undefined);
 
   return (
     <>
@@ -39,6 +47,7 @@ export default async function TasksPage({
         subtitle={`${tasks.length} tâche${tasks.length > 1 ? "s" : ""}`}
         actions={
           <div className="flex items-center gap-2">
+            <TasksScopeToggle mine={onlyMine} />
             <ViewToggle current={isList ? "list" : "kanban"} />
             <NewTaskButton />
           </div>
@@ -47,7 +56,7 @@ export default async function TasksPage({
 
       <div className="flex-1 overflow-hidden">
         {isList ? (
-          <TasksList tasks={tasks} />
+          <TasksList tasks={tasks} onlyMine={onlyMine} actor={actor} />
         ) : (
           <TasksBoard tasks={tasks} />
         )}
@@ -56,13 +65,27 @@ export default async function TasksPage({
   );
 }
 
-function TasksList({ tasks }: { tasks: Task[] }) {
+function TasksList({
+  tasks,
+  onlyMine,
+  actor,
+}: {
+  tasks: Task[];
+  onlyMine: boolean;
+  actor: string | null;
+}) {
   if (tasks.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-10">
-        <p className="text-sm font-medium text-foreground">Aucune tâche</p>
+        <p className="text-sm font-medium text-foreground">
+          {onlyMine ? "Aucune tâche pour toi" : "Aucune tâche"}
+        </p>
+        {/* Le message générique « créez votre première tâche » mentirait ici :
+            il en existe peut-être, simplement assignées à quelqu'un d'autre. */}
         <p className="text-xs text-muted-foreground">
-          Créez votre première tâche pour commencer.
+          {onlyMine
+            ? `Rien n'est assigné à ${actor ?? "ce compte"}.`
+            : "Créez votre première tâche pour commencer."}
         </p>
       </div>
     );
