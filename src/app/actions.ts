@@ -1306,7 +1306,9 @@ export async function logCallAction(
 
   const type = String(formData.get("type") || "outgoing") as "incoming" | "outgoing";
   const status = String(formData.get("status") || "completed") as never;
-  const duration = Number(formData.get("duration") || 0);
+  // L'écran saisit des minutes, call_logs.duration est en secondes.
+  const minutes = Number(formData.get("durationMinutes") || 0);
+  const duration = Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 60) : 0;
   const notes = String(formData.get("notes") || "").trim();
 
   await createCallLog({
@@ -1326,7 +1328,7 @@ export async function logCallAction(
     type: "call",
     direction: type === "incoming" ? "inbound" : "outbound",
     subject: `Appel ${type === "incoming" ? "entrant" : "sortant"}`,
-    content: notes || `Durée: ${duration}s`,
+    content: notes || `Durée : ${Math.round(duration / 60)} min`,
   });
 
   if (referenceType === "lead") {

@@ -13,6 +13,8 @@ type StatusColor = { dot: string; bg: string; text: string } | null;
 
 export function LeadDetailHeader({
   leadId,
+  backHref,
+  backLabel,
   fullName,
   statusId,
   statuses,
@@ -21,6 +23,10 @@ export function LeadDetailHeader({
   statusName,
 }: {
   leadId: string;
+  /** Écran d'où l'on vient : la pipeline de la formation si le lead a été
+   *  ouvert depuis le kanban, la liste des leads sinon. */
+  backHref: string;
+  backLabel: string;
   fullName: string;
   statusId: string | null;
   statuses: LeadStatus[];
@@ -50,7 +56,7 @@ export function LeadDetailHeader({
         setConfirmDelete(false);
         return;
       }
-      router.push("/leads");
+      router.push(backHref);
     });
   }
 
@@ -58,11 +64,11 @@ export function LeadDetailHeader({
     <header className="relative flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-5">
       <div className="flex items-center gap-3">
         <Link
-          href="/leads"
-          className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          href={backHref}
+          className="flex max-w-56 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} />
-          Leads
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} className="shrink-0" />
+          <span className="truncate">{backLabel}</span>
         </Link>
         <div className="h-4 w-px bg-border" />
         <h1 className="text-sm font-semibold text-foreground font-heading">

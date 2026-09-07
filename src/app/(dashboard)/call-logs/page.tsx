@@ -76,7 +76,11 @@ export default async function CallLogsPage() {
                       </td>
                       <td>
                         <span className="text-sm text-muted-foreground">
-                          {log.duration ? `${log.duration}s` : "—"}
+                          {log.duration
+                            ? log.duration < 60
+                              ? `${log.duration} s`
+                              : `${Math.round(log.duration / 60)} min`
+                            : "—"}
                         </span>
                       </td>
                       <td>

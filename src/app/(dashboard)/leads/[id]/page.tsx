@@ -30,13 +30,24 @@ export async function generateMetadata({
 
 export default async function LeadDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
   const lead = await getLeadById(id);
 
   if (!lead) notFound();
+
+  // D'où l'on vient. `?from=<bootcampId>` est posé par les cartes du kanban ;
+  // on ne le suit que s'il désigne bien la formation de ce lead, pour ne pas
+  // renvoyer vers une pipeline qui ne le contient pas.
+  const back =
+    from && lead.bootcamp && from === lead.bootcamp.id
+      ? { href: `/bootcamps/${lead.bootcamp.id}`, label: lead.bootcamp.name }
+      : { href: "/leads", label: "Leads" };
 
   const [statuses, sources, templates, allTags, leadTagIds] = await Promise.all([
     getLeadStatuses(),
@@ -62,6 +73,8 @@ export default async function LeadDetailPage({
 
       <LeadDetailHeader
         leadId={lead.id}
+        backHref={back.href}
+        backLabel={back.label}
         fullName={lead.fullName}
         statusId={lead.statusId}
         statuses={statuses}

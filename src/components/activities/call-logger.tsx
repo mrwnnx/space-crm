@@ -13,7 +13,10 @@ export function CallLogger({
   onClose: () => void;
 }) {
   const [type, setType] = useState<"incoming" | "outgoing">("outgoing");
-  const [duration, setDuration] = useState(0);
+  // Saisie en MINUTES : c'est l'unité dans laquelle on parle d'un appel.
+  // La conversion en secondes (unité de call_logs.duration) est faite par
+  // logCallAction, comme pour l'écran « Aujourd'hui ».
+  const [minutes, setMinutes] = useState(0);
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -21,13 +24,13 @@ export function CallLogger({
     e.preventDefault();
     const formData = new FormData();
     formData.set("type", type);
-    formData.set("duration", String(duration));
+    formData.set("durationMinutes", String(minutes));
     formData.set("notes", notes);
     formData.set("status", "completed");
     startTransition(async () => {
       await logCallAction(referenceType, referenceId, formData);
       setNotes("");
-      setDuration(0);
+      setMinutes(0);
       onClose();
     });
   }
@@ -52,13 +55,13 @@ export function CallLogger({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-muted-foreground">
-          Durée (secondes)
+          Durée (minutes)
         </label>
         <input
           type="number"
           min="0"
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
+          value={minutes}
+          onChange={(e) => setMinutes(Number(e.target.value))}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
       </div>

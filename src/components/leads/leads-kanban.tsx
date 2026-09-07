@@ -5,7 +5,7 @@ import Link from "next/link";
 import { updateLeadStatusAction, reorderStagesAction } from "@/app/actions";
 import { cn, statusColor, initials, formatRelative, actorInitials, actorLabel, isHumanActor } from "@/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { Copy01Icon, Tick02Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
 import { ColumnMenu, AddColumnButton } from "@/components/leads/kanban-column-menu";
 import type {
@@ -53,6 +53,10 @@ export function LeadsKanban({
   const [enrollLead, setEnrollLead] = useState<KanbanLead | null>(null);
   // Colonne en cours de déplacement (réorganisation de l'ordre)
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
+  // Recherche dans la pipeline. Locale : les leads de la formation sont déjà
+  // tous chargés, filtrer à l'affichage évite un aller-retour serveur à chaque
+  // frappe (la page tire 10 requêtes).
+  const [search, setSearch] = useState("");
 
   // Copie locale OPTIMISTE : le drop met à jour l'UI immédiatement ; le serveur
   // suit (revalidatePath → nouvelles props → resync via l'effet ci-dessous).
@@ -123,10 +127,52 @@ export function LeadsKanban({
     startTransition(() => updateLeadStatusAction(leadId, statusId));
   }
 
+  // Filtre d'AFFICHAGE seulement : `localStatuses` reste complet, sinon un drop
+  // pendant une recherche ferait disparaître les cartes masquées.
+  const q = search.trim().toLowerCase();
+  const visibleStatuses = q
+    ? localStatuses.map((s) => ({
+        ...s,
+        leads: s.leads.filter(
+          (l) =>
+            l.fullName.toLowerCase().includes(q) ||
+            (l.email ?? "").toLowerCase().includes(q)
+        ),
+      }))
+    : localStatuses;
+
   return (
-    <div className="flex h-full overflow-x-auto p-4">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex items-center gap-2 px-4 pt-3">
+        <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5">
+          <HugeiconsIcon
+            icon={Search01Icon}
+            size={15}
+            className="text-muted-foreground"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher un nom, un email…"
+            className="w-56 bg-transparent text-sm outline-none placeholder:text-muted-foreground/70"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              title="Effacer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-x-auto p-4">
       <div className="flex h-full gap-3">
-        {localStatuses.map((status) => {
+        {visibleStatuses.map((status) => {
           const sc = statusColor(status.color);
           return (
             <div
@@ -214,10 +260,10 @@ export function LeadsKanban({
 
               <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                 {status.leads.map((lead) => (
-                  <KanbanCard key={lead.id} lead={lead} />
+                  <KanbanCard key={lead.id} lead={lead} bootcampId={bootcamp?.id} />
                 ))}
 
-                {status.leads.length === 0 && (
+                {status.leads.length === 0 && !q && (
                   <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/60">
                     Glisser un lead ici
                   </div>
@@ -232,6 +278,7 @@ export function LeadsKanban({
             <AddColumnButton bootcampId={bootcamp.id} />
           </div>
         )}
+      </div>
       </div>
 
       {/* Popup d'inscription (drag vers colonne converted) */}
@@ -262,7 +309,9 @@ const INTENT_STYLE: Record<string, string> = {
 
 const KanbanCard = memo(function KanbanCard({
   lead,
+  bootcampId,
 }: {
+  bootcampId?: string;
   lead: KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
@@ -277,7 +326,9 @@ const KanbanCard = memo(function KanbanCard({
   const [dragging, setDragging] = useState(false);
   return (
     <Link
-      href={`/leads/${lead.id}`}
+      // `?from=` dit à la fiche d'où l'on vient : son « retour » ramène ici,
+      // dans la pipeline de la formation, et pas dans la liste des leads.
+      href={bootcampId ? `/leads/${lead.id}?from=${bootcampId}` : `/leads/${lead.id}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", lead.id);
