@@ -8,6 +8,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
 import { ColumnMenu, AddColumnButton } from "@/components/leads/kanban-column-menu";
+import type {
+  ColumnAutomation,
+  TemplateOption,
+} from "@/components/leads/column-automation-dialog";
+import { delayLabel } from "@/lib/automation-delays";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
 
 // raw_payload n'est pas chargé par getLeadsKanban (perf) → on l'omet du type.
@@ -33,9 +38,14 @@ type StageWithLeads = LeadStatus & {
 export function LeadsKanban({
   statuses,
   bootcamp,
+  automations = [],
+  emailTemplates = [],
 }: {
   statuses: StageWithLeads[];
   bootcamp?: Bootcamp;
+  // Règles « entrée dans la colonne » de cette formation (0 ou 1 par colonne).
+  automations?: ColumnAutomation[];
+  emailTemplates?: TemplateOption[];
 }) {
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -53,6 +63,9 @@ export function LeadsKanban({
 
   // Index rapide statusId → status (pour connaître le kind de la colonne cible)
   const statusMap = new Map(localStatuses.map((s) => [s.id, s]));
+
+  // Index statusId → règle d'automatisation (au plus une par colonne).
+  const automationMap = new Map(automations.map((a) => [a.statusId, a]));
 
   // Réordonne : déplace la colonne `draggedId` à la place de `targetId`.
   function reorderColumns(draggedId: string, targetId: string) {
@@ -171,6 +184,18 @@ export function LeadsKanban({
                   )}
                 </div>
                 <div className="flex items-center gap-1">
+                  {/* Une colonne qui envoie un email le DIT : sans ce repère,
+                      la règle n'existe que dans la tête de celui qui l'a créée. */}
+                  {automationMap.get(status.id)?.active && (
+                    <span
+                      className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary"
+                      title={`Envoie « ${automationMap.get(status.id)!.templateName} » — ${delayLabel(
+                        automationMap.get(status.id)!.delayMinutes
+                      )}`}
+                    >
+                      ✉ auto
+                    </span>
+                  )}
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">
                     {status.leads.length}
                   </span>
@@ -180,6 +205,8 @@ export function LeadsKanban({
                       statusId={status.id}
                       name={status.name}
                       kind={status.kind}
+                      automation={automationMap.get(status.id) ?? null}
+                      templates={emailTemplates}
                     />
                   )}
                 </div>

@@ -1,15 +1,14 @@
 import "server-only";
 import { db } from "@/db";
 import { campaignRecipients, campaigns } from "@/db/schema";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getCampaignStatus } from "./queries";
 import { resolveCampaignAudience } from "./audience";
 import { renderCampaignHtml, renderCampaignText } from "./template";
+import { DAILY_LIMIT, sentToday } from "@/lib/messaging/quota";
 
 /** Resend accepte au maximum 100 emails par appel à /emails/batch. */
 const BATCH_SIZE = 100;
-/** Plafond quotidien du plan gratuit Resend. */
-const DAILY_LIMIT = 100;
 
 export type SendResult = {
   ok: boolean;
@@ -27,19 +26,6 @@ function baseUrl() {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
     "http://localhost:3001"
   );
-}
-
-/** Envois déjà partis aujourd'hui, toutes campagnes confondues. */
-async function sentToday(): Promise<number> {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(campaignRecipients)
-    .where(
-      and(eq(campaignRecipients.status, "sent"), gte(campaignRecipients.sentAt, start))
-    );
-  return row?.n ?? 0;
 }
 
 /**

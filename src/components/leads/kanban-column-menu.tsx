@@ -8,6 +8,11 @@ import {
   setStageKindAction,
   createStageAction,
 } from "@/app/actions";
+import {
+  ColumnAutomationDialog,
+  type ColumnAutomation,
+  type TemplateOption,
+} from "@/components/leads/column-automation-dialog";
 
 type ActionResult = { error?: string } | { ok?: boolean; warning?: string };
 
@@ -19,17 +24,22 @@ export function ColumnMenu({
   statusId,
   name,
   kind,
+  automation,
+  templates,
 }: {
   bootcampId: string;
   statusId: string;
   name: string;
   kind: "normal" | "converted" | "lost";
+  automation?: ColumnAutomation | null;
+  templates?: TemplateOption[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | null>(null);
+  const [automating, setAutomating] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const isTerminal = kind === "converted" || kind === "lost";
@@ -111,6 +121,18 @@ export function ColumnMenu({
                   Renommer
                 </button>
 
+                {/* L'automatisation se règle DANS la colonne : c'est là qu'on
+                    la voit agir, pas dans un écran séparé. */}
+                <button
+                  className={menuItemCls}
+                  onClick={() => {
+                    setOpen(false);
+                    setAutomating(true);
+                  }}
+                >
+                  {automation ? "Modifier l'automatisation" : "Automatiser cette colonne"}
+                </button>
+
                 {/* Désignation : seulement depuis une colonne NORMALE.
                     Promouvoir une colonne rétrograde l'ancienne → toujours 1 de chaque.
                     Les colonnes terminales sont rename-only (invariant préservé). */}
@@ -155,6 +177,17 @@ export function ColumnMenu({
             )}
           </div>
         </>
+      )}
+
+      {automating && (
+        <ColumnAutomationDialog
+          bootcampId={bootcampId}
+          statusId={statusId}
+          columnName={name}
+          automation={automation ?? null}
+          templates={templates ?? []}
+          onClose={() => setAutomating(false)}
+        />
       )}
     </div>
   );

@@ -250,6 +250,72 @@ export async function setStageKindAction(
   return { ok: true };
 }
 
+// ── Automatisation d'une colonne ───────────────────────
+// « Un lead entre dans cette colonne » → il reçoit un modèle d'email.
+// Une colonne porte AU PLUS une règle : enregistrer écrase la précédente.
+
+export async function saveColumnAutomationAction(
+  bootcampId: string,
+  statusId: string,
+  emailTemplateId: string,
+  delayMinutes: number,
+  active: boolean
+) {
+  await requireUser();
+
+  if (!emailTemplateId) return { error: "Choisis un modèle d'email." };
+  if (!Number.isInteger(delayMinutes) || delayMinutes < 0 || delayMinutes > 43200) {
+    return { error: "Délai invalide (0 à 30 jours)." };
+  }
+
+  const { getEmailTemplateById, getAutomationsByBootcamp, createAutomation, updateAutomation } =
+    await import("@/lib/queries");
+
+  // Un modèle sans objet est refusé À LA CRÉATION DE LA RÈGLE, pas découvert
+  // au premier envoi — sinon la panne n'apparaît que le jour où ça compte.
+  const template = await getEmailTemplateById(emailTemplateId);
+  if (!template) return { error: "Modèle d'email introuvable." };
+  if (!template.subject?.trim()) {
+    return { error: `Le modèle « ${template.name} » n'a pas d'objet : il ne peut pas être envoyé.` };
+  }
+
+  const existing = (await getAutomationsByBootcamp(bootcampId)).find(
+    (a) => a.statusId === statusId
+  );
+
+  if (existing) {
+    await updateAutomation(existing.id, { emailTemplateId, delayMinutes, active });
+  } else {
+    const { currentActor } = await import("@/lib/auth");
+    await createAutomation({
+      bootcampId,
+      statusId,
+      emailTemplateId,
+      delayMinutes,
+      active,
+      createdBy: await currentActor(),
+    });
+  }
+
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+export async function deleteColumnAutomationAction(bootcampId: string, automationId: string) {
+  await requireUser();
+  const { deleteAutomation } = await import("@/lib/queries");
+  await deleteAutomation(automationId);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+/** Journal d'une règle, chargé à l'ouverture du panneau. */
+export async function getColumnAutomationRunsAction(automationId: string) {
+  await requireUser();
+  const { getAutomationRuns } = await import("@/lib/queries");
+  return getAutomationRuns(automationId);
+}
+
 // ── Colonnes (stages) : créer / renommer / supprimer ───
 
 export async function createStageAction(bootcampId: string, name: string) {
@@ -460,6 +526,11 @@ export async function updateLeadStatusAction(
 
   // Capture structurée de la transition (Phase 1) — à côté du createActivity existant.
   await recordStageChange(leadId, oldStatusId, lead?.statusId ?? statusId);
+
+  // Automatisation « entrée dans la colonne ». ATTENDU, jamais en tâche de
+  // fond : en serverless une promesse non attendue est tuée au retour.
+  const { runStatusAutomations } = await import("@/lib/automations");
+  await runStatusAutomations(leadId, lead?.statusId ?? statusId);
 
   const { createNotification } = await import("@/lib/queries");
   await createNotification({
@@ -784,7 +855,15 @@ export async function enrollLeadAction(
     }
   });
 
-  // 8.5 Automatisations de la colonne d'arrivée. APRÈS la transaction : avant,
+  // 8.5 Automatisation de la colonne d'arrivée. APRÈS la transaction : avant,
+  // le nouveau statut n'est pas encore visible depuis une autre connexion.
+  {
+    const { getLeadStatusId } = await import("@/lib/queries");
+    const { runStatusAutomations } = await import("@/lib/automations");
+    const nowStatusId = await getLeadStatusId(leadId);
+    await runStatusAutomations(leadId, nowStatusId);
+  }
+
   // 9. revalidate
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);

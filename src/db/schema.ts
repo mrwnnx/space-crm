@@ -1007,3 +1007,61 @@ export type NewCampaign = typeof campaigns.$inferInsert;
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
 export type NewCampaignRecipient = typeof campaignRecipients.$inferInsert;
 export type CampaignLinkClick = typeof campaignLinkClicks.$inferSelect;
+
+// ── Automatisation d'une colonne ───────────────────────
+// « Un lead entre dans cette colonne » → il reçoit un modèle d'email.
+// Migration 0120. Recréé après le retrait du 2026-09-01, avec deux garde-fous
+// portés par des index uniques : une règle par colonne, un envoi par lead.
+
+export const automationRunStatusEnum = pgEnum("automation_run_status", [
+  "pending", // en file d'attente, échéance pas encore atteinte
+  "sent",
+  "skipped",
+  "failed",
+  "cancelled", // le lead a quitté la colonne avant l'échéance
+]);
+
+export const automations = pgTable("automations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bootcampId: uuid("bootcamp_id")
+    .notNull()
+    .references(() => bootcamps.id, { onDelete: "cascade" }),
+  // Colonne déclencheuse, unique en base : une colonne porte au plus une règle.
+  statusId: uuid("status_id")
+    .notNull()
+    .references(() => leadStatuses.id, { onDelete: "cascade" }),
+  emailTemplateId: uuid("email_template_id")
+    .notNull()
+    .references(() => emailTemplates.id),
+  // 0 = envoi immédiat à l'entrée. Sinon file d'attente, vidée toutes les
+  // ~15 min : la précision est au quart d'heure, pas à la minute.
+  delayMinutes: integer("delay_minutes").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Journal de TOUTES les tentatives, y compris ignorées et échouées. C'est ce
+// qui rend le volume visible : sans lui, un envoi reporté sur le plafond
+// quotidien disparaîtrait sans trace.
+export const automationRuns = pgTable("automation_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  automationId: uuid("automation_id")
+    .notNull()
+    .references(() => automations.id, { onDelete: "cascade" }),
+  leadId: uuid("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  status: automationRunStatusEnum("status").notNull(),
+  reason: text("reason"),
+  // Échéance d'un envoi différé. NULL = envoi immédiat.
+  scheduledAt: timestamp("scheduled_at"),
+  // Date d'envoi RÉELLE, distincte de createdAt (mise en file) : le plafond
+  // quotidien se compte au jour où l'email part, pas au jour où il est programmé.
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type Automation = typeof automations.$inferSelect;
+export type NewAutomation = typeof automations.$inferInsert;
+export type AutomationRun = typeof automationRuns.$inferSelect;

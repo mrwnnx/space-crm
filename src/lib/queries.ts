@@ -33,6 +33,8 @@ import {
   wpConnection,
   allowedEmails,
   emailBranding,
+  automations,
+  automationRuns,
   leadInsights,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
 
@@ -2615,4 +2617,70 @@ export async function getCarriedOrigin(leadId: string) {
     where l.id = ${leadId}
   `);
   return rows[0] ?? null;
+}
+
+// ── Automatisations de colonne ─────────────────────────
+// « Un lead entre dans cette colonne » → il reçoit un modèle d'email.
+// Une colonne porte AU PLUS une règle (index unique sur status_id, 0120).
+
+export async function getAutomationsByBootcamp(bootcampId: string) {
+  return db
+    .select({
+      id: automations.id,
+      statusId: automations.statusId,
+      emailTemplateId: automations.emailTemplateId,
+      delayMinutes: automations.delayMinutes,
+      active: automations.active,
+      templateName: emailTemplates.name,
+      templateSubject: emailTemplates.subject,
+    })
+    .from(automations)
+    .innerJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
+    .where(eq(automations.bootcampId, bootcampId));
+}
+
+export async function createAutomation(data: typeof automations.$inferInsert) {
+  const [row] = await db.insert(automations).values(data).returning();
+  return row;
+}
+
+export async function updateAutomation(
+  id: string,
+  data: Partial<typeof automations.$inferInsert>
+) {
+  const [row] = await db
+    .update(automations)
+    .set(data)
+    .where(eq(automations.id, id))
+    .returning();
+  return row;
+}
+
+export async function deleteAutomation(id: string) {
+  await db.delete(automations).where(eq(automations.id, id));
+}
+
+/**
+ * Journal d'une règle : ce qui est parti, ce qui a été ignoré et POURQUOI.
+ * Sans le motif, un envoi reporté sur le plafond quotidien serait
+ * indiscernable d'un envoi jamais déclenché.
+ */
+export async function getAutomationRuns(automationId: string, limit = 20) {
+  return db
+    .select({
+      id: automationRuns.id,
+      status: automationRuns.status,
+      reason: automationRuns.reason,
+      scheduledAt: automationRuns.scheduledAt,
+      sentAt: automationRuns.sentAt,
+      createdAt: automationRuns.createdAt,
+      leadId: automationRuns.leadId,
+      leadName: leads.fullName,
+      leadEmail: leads.email,
+    })
+    .from(automationRuns)
+    .innerJoin(leads, eq(leads.id, automationRuns.leadId))
+    .where(eq(automationRuns.automationId, automationId))
+    .orderBy(desc(automationRuns.createdAt))
+    .limit(limit);
 }

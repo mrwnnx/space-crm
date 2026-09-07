@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp, getEmailTemplates } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
@@ -56,6 +56,18 @@ export default async function BootcampDetailPage({
     ]);
 
   if (!bootcamp) notFound();
+
+  // Règles d'automatisation des colonnes + modèles d'email de l'écran.
+  // Chargés APRÈS le Promise.all, EN SÉRIE : la page tire déjà 8 requêtes en
+  // parallèle et le pool est à 10 (src/db/index.ts). Deux de plus en parallèle
+  // frôleraient le seuil où le pooler transaction fige les connexions.
+  const columnAutomations = await getAutomationsByBootcamp(id);
+  // Seuls id/nom/objet partent au client : le contenu des modèles n'y sert pas.
+  const emailTemplates = (await getEmailTemplates()).map((t) => ({
+    id: t.id,
+    name: t.name,
+    subject: t.subject,
+  }));
 
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
 
@@ -142,7 +154,12 @@ export default async function BootcampDetailPage({
       {/* Kanban */}
       <div className="flex-1 overflow-hidden">
         {kanbanData.length > 0 ? (
-          <LeadsKanban statuses={kanbanWithFlags} bootcamp={bootcamp} />
+          <LeadsKanban
+            statuses={kanbanWithFlags}
+            bootcamp={bootcamp}
+            automations={columnAutomations}
+            emailTemplates={emailTemplates}
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Aucune colonne dans le pipeline.
