@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getLeadById, getLeadStatuses, getLeadSources, getEmailTemplates, getScheduleForLead, getTags, getTagIdsForLead } from "@/lib/queries";
+import { getLeadById, getLeadStatuses, getLeadSources, getEmailTemplates, getScheduleForLead, getTags, getTagIdsForLead, getCallLogsByReference } from "@/lib/queries";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
@@ -10,6 +10,7 @@ import { DuplicateBanner } from "@/components/leads/duplicate-banner";
 import { getDuplicateInfo } from "@/lib/duplicates";
 import { getReturningForLead, getCarriedOrigin } from "@/lib/queries";
 import { PaymentBlock } from "@/components/leads/payment-block";
+import { CallHistory } from "@/components/leads/call-history";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LinkedTasks } from "@/components/tasks/linked-tasks";
 import { LeadCampaignHistory } from "@/components/campaigns/lead-campaign-history";
@@ -61,6 +62,7 @@ export default async function LeadDetailPage({
   const duplicateInfo = await getDuplicateInfo(lead.id);
   const returning = await getReturningForLead(lead.id);
   const carriedFrom = await getCarriedOrigin(lead.id);
+  const callLogs = await getCallLogsByReference("lead", lead.id);
   const campaignHistory = lead.contactId
     ? await getCampaignsForContact(lead.contactId)
     : [];
@@ -218,6 +220,16 @@ export default async function LeadDetailPage({
               currency={lead.bootcamp?.currency}
             />
           )}
+
+          <CallHistory
+            logs={callLogs.map((c) => ({
+              id: c.id,
+              status: c.status,
+              duration: c.duration,
+              callerId: c.callerId,
+              createdAt: c.createdAt,
+            }))}
+          />
 
           <LeadCampaignHistory rows={campaignHistory} />
 

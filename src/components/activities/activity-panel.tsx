@@ -14,6 +14,7 @@ import { ActivityTimeline } from "@/components/activities/activity-timeline";
 import { EmailComposer } from "@/components/activities/email-composer";
 import { WhatsAppComposer } from "@/components/activities/whatsapp-composer";
 import { CallLogger } from "@/components/activities/call-logger";
+import { CallOutcomeForm } from "@/components/leads/call-outcome-form";
 import { CommentBox } from "@/components/activities/comment-box";
 import type { EmailTemplate } from "@/db/schema";
 
@@ -113,13 +114,23 @@ export function ActivityPanel({
               onClose={() => setChannel(null)}
             />
           )}
-          {channel === "call" && (
-            <CallLogger
-              referenceType={referenceType}
-              referenceId={referenceId}
-              onClose={() => setChannel(null)}
-            />
-          )}
+          {/* Sur un lead, le même formulaire que la file d'appels d'« Aujourd'hui » :
+              ce qui s'est passé, la qualification, la durée, quand rappeler.
+              Un deal garde le journal simple — logCallOutcomeAction n'écrit que
+              sur des leads (qualification, prochaine relance). */}
+          {channel === "call" &&
+            (referenceType === "lead" ? (
+              <CallOutcomeForm
+                leadId={referenceId}
+                onDone={() => setChannel(null)}
+              />
+            ) : (
+              <CallLogger
+                referenceType={referenceType}
+                referenceId={referenceId}
+                onClose={() => setChannel(null)}
+              />
+            ))}
           {channel === "note" && (
             <QuickNoteBox
               referenceType={referenceType}
