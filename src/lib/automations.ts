@@ -268,6 +268,7 @@ type LeadForVars = {
   intendedPlan: string | null;
   bootcamp?: {
     name: string;
+    startDate: string | null;
     currency: string | null;
     priceTotal: string | null;
     monthlyCount: number | null;
@@ -275,6 +276,24 @@ type LeadForVars = {
   } | null;
   contact?: { firstName: string | null; lastName: string | null } | null;
 };
+
+const MOIS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+/**
+ * « 2026-09-28 » → « 28 septembre 2026 ».
+ *
+ * Découpé à la main plutôt que par `new Date` : la colonne est une date sans
+ * heure, et la passer par un Date la fixe à minuit UTC — sur un fuseau négatif
+ * l'email annoncerait la veille.
+ */
+function formatStartDate(value: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? "");
+  if (!m) return "";
+  return `${Number(m[3])} ${MOIS[Number(m[2]) - 1]} ${m[1]}`;
+}
 
 /** Variables utilisables dans l'objet ET dans le corps du modèle. */
 export function buildVariables(lead: LeadForVars): Record<string, string> {
@@ -296,6 +315,9 @@ export function buildVariables(lead: LeadForVars): Record<string, string> {
     fullName: lead.fullName || [firstName, lastName].filter(Boolean).join(" "),
     email: lead.email || "",
     formation: b?.name || "",
+    // Vide si la formation n'a pas de date : la phrase du modèle doit tenir
+    // sans elle, comme pour `offre`.
+    dateDebut: formatStartDate(b?.startDate),
     offre,
   };
 }
@@ -307,5 +329,6 @@ export const AUTOMATION_VARIABLES = [
   "fullName",
   "email",
   "formation",
+  "dateDebut",
   "offre",
 ] as const;

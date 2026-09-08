@@ -66,10 +66,31 @@ export default async function SettingsPage({
             <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
               Email Templates
             </h2>
-            <p className="mb-4 text-xs text-muted-foreground">
-              Modèles d'emails réutilisables. Variables disponibles:{" "}
-              <code className="rounded bg-muted px-1 text-[10px]">{`{{subject}}`}</code>,{" "}
-              <code className="rounded bg-muted px-1 text-[10px]">{`{{content}}`}</code>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Modèles d&apos;emails réutilisables. Variables disponibles:{" "}
+              {[
+                "firstName",
+                "lastName",
+                "fullName",
+                "formation",
+                "dateDebut",
+                "offre",
+                "subject",
+                "content",
+              ].map((v, i) => (
+                <span key={v}>
+                  {i > 0 && ", "}
+                  <code className="rounded bg-muted px-1 text-[10px]">{`{{${v}}}`}</code>
+                </span>
+              ))}
+            </p>
+            {/* Dit franchement où elles sont remplacées : ailleurs elles
+                partent vides, et rien à l'écran ne le signalerait. */}
+            <p className="mb-4 text-[11px] text-muted-foreground/80">
+              Les variables du lead ({`{{firstName}}`}, {`{{formation}}`},{" "}
+              {`{{dateDebut}}`}, {`{{offre}}`}) sont remplacées dans les{" "}
+              <strong className="font-medium">automatisations de colonne</strong>{" "}
+              du pipeline. Une campagne, elle, n&apos;en remplace aucune.
             </p>
             <EmailTemplatesManager
               templates={templates}

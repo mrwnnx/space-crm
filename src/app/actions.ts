@@ -1515,6 +1515,7 @@ const TEST_VARIABLES: Record<string, string> = {
   fullName: "Sana Amri",
   email: "sana.amri@gmail.com",
   formation: "Bootcamp september 2026",
+  dateDebut: "28 septembre 2026",
   offre: "3× 500 TND",
   subject: "Objet du message",
   content: "Le message tapé dans la fiche du lead.",
