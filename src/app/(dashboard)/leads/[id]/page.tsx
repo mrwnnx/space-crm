@@ -61,7 +61,10 @@ export default async function LeadDetailPage({
       : { href: "/leads", label: "Leads" };
 
   const [statuses, sources, templates, allTags, leadTagIds] = await Promise.all([
-    getLeadStatuses(),
+    // Les colonnes de SA formation, pas les 26 de toutes les formations : le
+    // menu de statut permettait de déplacer un lead dans le pipeline d'une
+    // AUTRE formation, où il disparaissait ensuite du kanban.
+    getLeadStatuses(lead.bootcampId ?? undefined),
     getLeadSources(),
     getEmailTemplates(),
     getTags(),
@@ -136,6 +139,8 @@ export default async function LeadDetailPage({
         converted={lead.converted}
         statusColor={sc}
         statusName={lead.status?.name}
+        lead={lead}
+        bootcamp={lead.bootcamp}
       />
 
       {/* Mobile : une seule colonne qui défile normalement. Le découpage en

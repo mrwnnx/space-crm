@@ -7,7 +7,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { updateLeadStatusAction, deleteLeadAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
-import type { LeadStatus } from "@/db/schema";
+import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
+import type { LeadStatus, Lead, Bootcamp } from "@/db/schema";
 
 type StatusColor = { dot: string; bg: string; text: string } | null;
 
@@ -21,6 +22,8 @@ export function LeadDetailHeader({
   converted,
   statusColor,
   statusName,
+  lead,
+  bootcamp,
 }: {
   leadId: string;
   /** Écran d'où l'on vient : la pipeline de la formation si le lead a été
@@ -33,15 +36,31 @@ export function LeadDetailHeader({
   converted: boolean;
   statusColor: StatusColor;
   statusName?: string;
+  /** Le lead et sa formation : nécessaires pour ouvrir la fenêtre d'inscription. */
+  lead?: Omit<Lead, "rawPayload"> | null;
+  bootcamp?: Bootcamp | null;
 }) {
   const router = useRouter();
   const [statusOpen, setStatusOpen] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function changeStatus(newStatusId: string) {
     setStatusOpen(false);
+
+    // Une colonne « converti » ne se rejoint PAS par un simple déplacement :
+    // l'inscription crée l'échéancier et demande le montant réellement
+    // convenu. Le kanban pose déjà ce garde-fou au dépôt ; sans lui ici, un
+    // lead passé « Inscrit » depuis sa fiche devenait converti SANS échéancier
+    // et sans montant — et c'est le seul chemin possible sur mobile.
+    const target = statuses.find((s) => s.id === newStatusId);
+    if (target?.kind === "converted") {
+      if (lead && bootcamp) setEnrolling(true);
+      return;
+    }
+
     startTransition(() => updateLeadStatusAction(leadId, newStatusId));
   }
 
@@ -61,6 +80,7 @@ export function LeadDetailHeader({
   }
 
   return (
+    <>
     <header className="relative flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-5">
       <div className="flex items-center gap-3">
         <Link
@@ -165,6 +185,15 @@ export function LeadDetailHeader({
         </p>
       )}
     </header>
+
+      {enrolling && lead && bootcamp && (
+        <EnrollLeadDialog
+          lead={lead}
+          bootcamp={bootcamp}
+          onClose={() => setEnrolling(false)}
+        />
+      )}
+    </>
   );
 }
 
