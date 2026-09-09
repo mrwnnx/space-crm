@@ -2164,6 +2164,37 @@ export async function getAllowedEmails(): Promise<TeamMember[]> {
   }));
 }
 
+/**
+ * Les comptes qui existent SANS figurer dans la liste d'équipe.
+ *
+ * L'allowlist ne garde que la porte de l'INSCRIPTION : un compte créé avant
+ * elle, ou dont l'adresse a été retirée depuis, continue de se connecter
+ * normalement. Sans cette requête, l'écran Équipe répondait à « qui ai-je
+ * invité » en laissant croire qu'il répondait à « qui peut entrer ».
+ * Constaté le 2026-09-09 : `marwen@etikks.com` avait accès et n'apparaissait
+ * nulle part.
+ */
+export async function getAccountsOutsideAllowlist(): Promise<
+  { email: string; lastSignInAt: Date | null; createdAt: Date }[]
+> {
+  const rows = await db.execute<{
+    email: string;
+    last_sign_in_at: Date | null;
+    created_at: Date;
+  }>(sql`
+    select u.email, u.last_sign_in_at, u.created_at
+    from auth.users u
+    left join allowed_emails a on lower(a.email) = lower(u.email)
+    where a.id is null and u.email is not null
+    order by u.created_at
+  `);
+  return rows.map((r) => ({
+    email: r.email,
+    lastSignInAt: r.last_sign_in_at,
+    createdAt: r.created_at,
+  }));
+}
+
 export async function getAllowedEmailByAddress(email: string) {
   return db.query.allowedEmails.findFirst({
     where: eq(allowedEmails.email, email),

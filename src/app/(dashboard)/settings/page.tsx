@@ -1,4 +1,4 @@
-import { getAllowedEmails, getEmailTemplates, getWpConnectionPublic, getEmailBranding } from "@/lib/queries";
+import { getAllowedEmails, getAccountsOutsideAllowlist, getEmailTemplates, getWpConnectionPublic, getEmailBranding } from "@/lib/queries";
 import { currentActor } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
@@ -31,6 +31,7 @@ export default async function SettingsPage({
   const testEmail =
     current === "emails" || current === "branding" ? ((await currentActor()) ?? "") : "";
   const allowed = current === "team" ? await getAllowedEmails() : [];
+  const outsideAccounts = current === "team" ? await getAccountsOutsideAllowlist() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
 
   return (
@@ -123,7 +124,7 @@ export default async function SettingsPage({
               Retirer un email empêche une future inscription mais ne supprime pas
               un compte déjà créé (ça se fait dans le dashboard Supabase).
             </p>
-            <TeamManager emails={allowed} />
+            <TeamManager emails={allowed} outside={outsideAccounts} />
           </section>
           )}
 

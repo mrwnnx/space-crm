@@ -5,7 +5,20 @@ import { inviteCollaboratorAction, removeAllowedEmailAction } from "@/app/action
 import { formatDate, formatRelative } from "@/lib/utils";
 import type { TeamMember } from "@/lib/queries";
 
-export function TeamManager({ emails }: { emails: TeamMember[] }) {
+export type OutsideAccount = {
+  email: string;
+  lastSignInAt: Date | null;
+  createdAt: Date;
+};
+
+export function TeamManager({
+  emails,
+  outside = [],
+}: {
+  emails: TeamMember[];
+  /** Comptes qui se connectent sans figurer dans la liste. */
+  outside?: OutsideAccount[];
+}) {
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -48,6 +61,14 @@ export function TeamManager({ emails }: { emails: TeamMember[] }) {
               <strong className="tabular-nums">{attente}</strong> sans compte
             </span>
           )}
+          {/* Le chiffre qui compte vraiment : combien de personnes peuvent
+              ouvrir ce CRM, invitation ou pas. */}
+          <span className="ml-auto text-muted-foreground">
+            <strong className="text-foreground tabular-nums">
+              {actifs + outside.length}
+            </strong>{" "}
+            {actifs + outside.length > 1 ? "personnes ont accès" : "personne a accès"}
+          </span>
         </div>
       )}
 
@@ -61,6 +82,48 @@ export function TeamManager({ emails }: { emails: TeamMember[] }) {
           pas créé depuis l&apos;écran de connexion, «&nbsp;mot de passe oublié&nbsp;» ne leur
           enverra rien — il n&apos;y a pas de mot de passe à réinitialiser.
         </p>
+      )}
+
+      {outside.length > 0 && (
+        <div className="space-y-2">
+          <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 px-3 py-2">
+            <p className="text-xs font-semibold text-sky-900 dark:text-sky-300">
+              {outside.length === 1
+                ? "1 compte se connecte sans figurer dans cette liste"
+                : `${outside.length} comptes se connectent sans figurer dans cette liste`}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-sky-800/80 dark:text-sky-300/70">
+              La liste ci-dessus garde la porte de l&apos;<strong>inscription</strong>, pas
+              celle de la <strong>connexion</strong>. Un compte créé avant elle, ou dont
+              l&apos;adresse en a été retirée depuis, continue d&apos;entrer normalement.
+              Pour lui couper l&apos;accès, il faut supprimer le compte depuis le tableau
+              de bord Supabase — le retirer d&apos;ici n&apos;y changerait rien.
+            </p>
+          </div>
+
+          {outside.map((a) => (
+            <div
+              key={a.email}
+              className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-medium text-foreground">{a.email}</p>
+                  <span
+                    title="Compte actif, absent de la liste d'équipe"
+                    className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800"
+                  >
+                    Hors liste
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  compte créé le {formatDate(a.createdAt)} · dernière connexion{" "}
+                  {formatRelative(a.lastSignInAt)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Collaborateurs autorisés */}
