@@ -34,6 +34,7 @@ import {
   allowedEmails,
   emailBranding,
   automations,
+  automationLinkClicks,
   automationRuns,
   leadInsights,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
@@ -2715,6 +2716,47 @@ export async function deleteAutomation(id: string) {
  * Sans le motif, un envoi reporté sur le plafond quotidien serait
  * indiscernable d'un envoi jamais déclenché.
  */
+/**
+ * Ce que l'automatisation a produit : partis, délivrés, ouverts, cliqués.
+ *
+ * ⚠️ Le nombre d'OUVERTURES est structurellement gonflé — Apple et Gmail
+ * préchargent l'image de suivi. Le CLIC, lui, ne ment pas : c'est la seule
+ * de ces mesures sur laquelle décider quelque chose.
+ */
+export async function getAutomationStats(automationId: string) {
+  const [row] = await db
+    .select({
+      envoyes: sql<number>`count(*) filter (where ${automationRuns.status} = 'sent')::int`,
+      delivres: sql<number>`count(*) filter (where ${automationRuns.deliveredAt} is not null)::int`,
+      ouverts: sql<number>`count(*) filter (where ${automationRuns.openedAt} is not null)::int`,
+      ouvertures: sql<number>`coalesce(sum(${automationRuns.openCount}), 0)::int`,
+      cliques: sql<number>`count(*) filter (where ${automationRuns.clickedAt} is not null)::int`,
+      clics: sql<number>`coalesce(sum(${automationRuns.clickCount}), 0)::int`,
+      ignores: sql<number>`count(*) filter (where ${automationRuns.status} = 'skipped')::int`,
+      echecs: sql<number>`count(*) filter (where ${automationRuns.status} = 'failed')::int`,
+    })
+    .from(automationRuns)
+    .where(eq(automationRuns.automationId, automationId));
+
+  const liens = await db
+    .select({
+      url: automationLinkClicks.url,
+      clics: sql<number>`count(*)::int`,
+    })
+    .from(automationLinkClicks)
+    .where(eq(automationLinkClicks.automationId, automationId))
+    .groupBy(automationLinkClicks.url)
+    .orderBy(sql`count(*) desc`);
+
+  return {
+    ...(row ?? {
+      envoyes: 0, delivres: 0, ouverts: 0, ouvertures: 0,
+      cliques: 0, clics: 0, ignores: 0, echecs: 0,
+    }),
+    liens,
+  };
+}
+
 export async function getAutomationRuns(automationId: string, limit = 20) {
   return db
     .select({

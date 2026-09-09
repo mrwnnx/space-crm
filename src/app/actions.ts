@@ -316,6 +316,12 @@ export async function getColumnAutomationRunsAction(automationId: string) {
   return getAutomationRuns(automationId);
 }
 
+export async function getColumnAutomationStatsAction(automationId: string) {
+  await requireUser();
+  const { getAutomationStats } = await import("@/lib/queries");
+  return getAutomationStats(automationId);
+}
+
 // ── Colonnes (stages) : créer / renommer / supprimer ───
 
 export async function createStageAction(bootcampId: string, name: string) {

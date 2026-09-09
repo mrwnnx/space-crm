@@ -1059,9 +1059,33 @@ export const automationRuns = pgTable("automation_runs", {
   // Date d'envoi RÉELLE, distincte de createdAt (mise en file) : le plafond
   // quotidien se compte au jour où l'email part, pas au jour où il est programmé.
   sentAt: timestamp("sent_at"),
+  // ── Suivi Resend (migration 0121) ──
+  // L'identifiant rendu par Resend à l'envoi. C'est LUI qui permet au webhook
+  // de rattacher « ouvert » ou « cliqué » à la bonne ligne : sans lui, les
+  // événements arrivaient et étaient jetés en silence.
+  resendId: text("resend_id"),
+  deliveredAt: timestamp("delivered_at"),
+  // Première réaction + nombre de fois, comme pour les campagnes.
+  openedAt: timestamp("opened_at"),
+  openCount: integer("open_count").notNull().default(0),
+  clickedAt: timestamp("clicked_at"),
+  clickCount: integer("click_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Un clic = une ligne. Agréger par URL répond à « quel lien a marché » —
+// la seule mesure qui dise si la vidéo est réellement regardée.
+export const automationLinkClicks = pgTable("automation_link_clicks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  automationId: uuid("automation_id")
+    .notNull()
+    .references(() => automations.id, { onDelete: "cascade" }),
+  runId: uuid("run_id").references(() => automationRuns.id, { onDelete: "set null" }),
+  url: text("url").notNull(),
+  clickedAt: timestamp("clicked_at").notNull().defaultNow(),
 });
 
 export type Automation = typeof automations.$inferSelect;
 export type NewAutomation = typeof automations.$inferInsert;
 export type AutomationRun = typeof automationRuns.$inferSelect;
+export type AutomationLinkClick = typeof automationLinkClicks.$inferSelect;

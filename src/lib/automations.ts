@@ -234,10 +234,13 @@ async function executeRule(
 
   // sentAt distingue le jour de l'envoi du jour de la mise en file : c'est lui
   // que compte le plafond quotidien.
+  // `resendId` est écrit ICI, dans le même geste que le statut : c'est le seul
+  // fil qui reliera plus tard « ouvert » ou « cliqué » à cette ligne. Sans lui
+  // le webhook reçoit l'événement et n'a nulle part où le ranger.
   if (runId) {
     await db
       .update(automationRuns)
-      .set({ status: "sent", reason: null, sentAt: new Date() })
+      .set({ status: "sent", reason: null, sentAt: new Date(), resendId: res.id ?? null })
       .where(eq(automationRuns.id, runId));
   } else {
     await db.insert(automationRuns).values({
@@ -245,6 +248,7 @@ async function executeRule(
       leadId,
       status: "sent",
       sentAt: new Date(),
+      resendId: res.id ?? null,
     });
   }
 

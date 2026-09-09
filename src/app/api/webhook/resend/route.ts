@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/db";
-import { campaignLinkClicks, campaignRecipients, contacts } from "@/db/schema";
+import {
+  automationLinkClicks,
+  automationRuns,
+  campaignLinkClicks,
+  campaignRecipients,
+  contacts,
+} from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 /**
@@ -85,10 +91,19 @@ export async function POST(request: NextRequest) {
   //    Une ouverture ou un clic s'ajoute à un email déjà "sent" ; les écraser
   //    ferait disparaître l'information d'envoi.
   if (type === "email.delivered" && emailId) {
-    await db
+    const rows = await db
       .update(campaignRecipients)
       .set({ deliveredAt: new Date() })
-      .where(eq(campaignRecipients.resendId, emailId));
+      .where(eq(campaignRecipients.resendId, emailId))
+      .returning({ id: campaignRecipients.id });
+    // Un email d'automatisation n'a pas de ligne de campagne. Avant la
+    // migration 0121, l'événement s'arrêtait ici et disparaissait.
+    if (rows.length === 0) {
+      await db
+        .update(automationRuns)
+        .set({ deliveredAt: new Date() })
+        .where(eq(automationRuns.resendId, emailId));
+    }
     return NextResponse.json({ ok: true, type });
   }
 
@@ -97,42 +112,78 @@ export async function POST(request: NextRequest) {
 
     // L'URL cliquée n'est portée QUE par cet événement : si on ne la garde
     // pas ici, on saura qu'il y a eu un clic mais jamais sur quoi.
-    if (!isOpen) {
-      const link = String(
-        ((data.click ?? {}) as Record<string, unknown>).link ?? ""
-      ).trim();
+    const link = isOpen
+      ? ""
+      : String(((data.click ?? {}) as Record<string, unknown>).link ?? "").trim();
+
+    // Un identifiant Resend vit à UN seul endroit : soit une campagne, soit
+    // une automatisation. On regarde d'abord la campagne, puis l'autre.
+    const [rec] = await db
+      .select({ id: campaignRecipients.id, campaignId: campaignRecipients.campaignId })
+      .from(campaignRecipients)
+      .where(eq(campaignRecipients.resendId, emailId))
+      .limit(1);
+
+    if (rec) {
       if (link) {
-        const [rec] = await db
-          .select({ id: campaignRecipients.id, campaignId: campaignRecipients.campaignId })
-          .from(campaignRecipients)
-          .where(eq(campaignRecipients.resendId, emailId))
-          .limit(1);
-        if (rec) {
-          await db.insert(campaignLinkClicks).values({
-            campaignId: rec.campaignId,
-            recipientId: rec.id,
-            url: link,
-          });
-        }
+        await db.insert(campaignLinkClicks).values({
+          campaignId: rec.campaignId,
+          recipientId: rec.id,
+          url: link,
+        });
       }
+      await db
+        .update(campaignRecipients)
+        .set(
+          isOpen
+            ? {
+                // COALESCE : on garde la PREMIÈRE ouverture, pas la dernière.
+                openedAt: sql`coalesce(${campaignRecipients.openedAt}, now())`,
+                openCount: sql`${campaignRecipients.openCount} + 1`,
+              }
+            : {
+                clickedAt: sql`coalesce(${campaignRecipients.clickedAt}, now())`,
+                clickCount: sql`${campaignRecipients.clickCount} + 1`,
+              }
+        )
+        .where(eq(campaignRecipients.id, rec.id));
+      return NextResponse.json({ ok: true, type, source: "campagne" });
     }
 
-    await db
-      .update(campaignRecipients)
-      .set(
-        isOpen
-          ? {
-              // COALESCE : on garde la PREMIÈRE ouverture, pas la dernière.
-              openedAt: sql`coalesce(${campaignRecipients.openedAt}, now())`,
-              openCount: sql`${campaignRecipients.openCount} + 1`,
-            }
-          : {
-              clickedAt: sql`coalesce(${campaignRecipients.clickedAt}, now())`,
-              clickCount: sql`${campaignRecipients.clickCount} + 1`,
-            }
-      )
-      .where(eq(campaignRecipients.resendId, emailId));
-    return NextResponse.json({ ok: true, type });
+    const [run] = await db
+      .select({ id: automationRuns.id, automationId: automationRuns.automationId })
+      .from(automationRuns)
+      .where(eq(automationRuns.resendId, emailId))
+      .limit(1);
+
+    if (run) {
+      if (link) {
+        await db.insert(automationLinkClicks).values({
+          automationId: run.automationId,
+          runId: run.id,
+          url: link,
+        });
+      }
+      await db
+        .update(automationRuns)
+        .set(
+          isOpen
+            ? {
+                openedAt: sql`coalesce(${automationRuns.openedAt}, now())`,
+                openCount: sql`${automationRuns.openCount} + 1`,
+              }
+            : {
+                clickedAt: sql`coalesce(${automationRuns.clickedAt}, now())`,
+                clickCount: sql`${automationRuns.clickCount} + 1`,
+              }
+        )
+        .where(eq(automationRuns.id, run.id));
+      return NextResponse.json({ ok: true, type, source: "automatisation" });
+    }
+
+    // Identifiant inconnu des deux côtés : un email 1-à-1 depuis une fiche,
+    // ou un test. Rien à ranger, mais on le dit au lieu de faire semblant.
+    return NextResponse.json({ ok: true, type, source: "inconnu" });
   }
 
   // ── Incidents : ceux-là changent bien le statut.
