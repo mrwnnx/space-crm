@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { updateLeadFieldAction, updateLeadContactFieldAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
+import { RescheduleDialog } from "@/components/leads/offer-dialog";
 import type { LeadSource, Bootcamp } from "@/db/schema";
 
 type LeadData = {
@@ -37,11 +39,14 @@ const QUALIF_LABEL: Record<string, string> = {
 export function LeadSidePanel({
   leadId,
   lead,
+  schedule,
   contactId,
   contact,
   sources,
   bootcamp,
 }: {
+  /** Présent seulement si le lead est inscrit : l'argent vit là, pas dans `intendedPlan`. */
+  schedule?: { paid: number; total: number } | null;
   leadId: string;
   lead: LeadData;
   contactId: string | null;
@@ -49,6 +54,8 @@ export function LeadSidePanel({
   sources: LeadSource[];
   bootcamp?: Bootcamp | null;
 }) {
+  const router = useRouter();
+  const [editingOffer, setEditingOffer] = useState(false);
   return (
     <div className="flex flex-col gap-0.5 p-4">
       {(lead.qualification || lead.nextFollowUpAt) && (
@@ -144,15 +151,53 @@ export function LeadSidePanel({
       />
 
       {bootcamp && (
-        <EditableSelect
+        <>
+          <EditableSelect
+            leadId={leadId}
+            field="intendedPlan"
+            label="Offre"
+            value={lead.intendedPlan}
+            options={[
+              ...(bootcamp.priceTotal ? [{ value: "total", label: `Comptant — ${bootcamp.priceTotal} ${bootcamp.currency}` }] : []),
+              ...(bootcamp.monthlyCount && bootcamp.monthlyAmount ? [{ value: "monthly", label: `Facilité — ${bootcamp.monthlyCount}× ${bootcamp.monthlyAmount} ${bootcamp.currency}` }] : []),
+            ]}
+          />
+
+          {/* Une fois inscrit, ce menu ne suffit plus : l'argent est dans
+              l'échéancier. Le dire ICI, là où on vient changer l'offre, plutôt
+              que de laisser croire que le menu a suffi. */}
+          {schedule && (
+            <div className="px-4 pb-3 -mt-1">
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Ce lead est inscrit : son échéancier est de{" "}
+                <strong className="text-foreground">
+                  {schedule.total.toLocaleString("fr-FR")} {bootcamp.currency}
+                </strong>
+                , dont {schedule.paid.toLocaleString("fr-FR")} encaissés. Changer le menu
+                ci-dessus ne le modifie pas.
+              </p>
+              <button
+                onClick={() => setEditingOffer(true)}
+                className="mt-1 text-[11px] font-medium text-primary underline"
+              >
+                Renégocier l&apos;offre et refaire l&apos;échéancier
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {editingOffer && schedule && bootcamp && (
+        <RescheduleDialog
           leadId={leadId}
-          field="intendedPlan"
-          label="Offre envisagée"
-          value={lead.intendedPlan}
-          options={[
-            ...(bootcamp.priceTotal ? [{ value: "total", label: `Comptant — ${bootcamp.priceTotal} ${bootcamp.currency}` }] : []),
-            ...(bootcamp.monthlyCount && bootcamp.monthlyAmount ? [{ value: "monthly", label: `Facilité — ${bootcamp.monthlyCount}× ${bootcamp.monthlyAmount} ${bootcamp.currency}` }] : []),
-          ]}
+          paid={schedule.paid}
+          currency={bootcamp.currency ?? "TND"}
+          currentTotal={schedule.total}
+          onClose={() => setEditingOffer(false)}
+          onDone={() => {
+            setEditingOffer(false);
+            router.refresh();
+          }}
         />
       )}
       <EditableField

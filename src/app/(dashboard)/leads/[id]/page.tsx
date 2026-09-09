@@ -242,6 +242,19 @@ export default async function LeadDetailPage({
 
           <LeadSidePanel
             leadId={lead.id}
+            // L'échéancier remonte jusqu'ici : c'est dans le panneau « Offre »
+            // qu'on vient renégocier, pas dans le bloc Paiement — lequel
+            // n'existe que pour les 2 leads inscrits sur 283.
+            schedule={
+              schedule
+                ? {
+                    total: schedule.items.reduce((n, e) => n + Number(e.amount ?? 0), 0),
+                    paid: schedule.items
+                      .filter((e) => e.isPaid)
+                      .reduce((n, e) => n + Number(e.amount ?? 0), 0),
+                  }
+                : null
+            }
             lead={{
               email: lead.email,
               mobileNo: lead.mobileNo,
