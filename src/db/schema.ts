@@ -267,7 +267,14 @@ export const leads = pgTable("leads", {
   rawPayload: jsonb("raw_payload"), // infos brutes du formulaire d'entrée
   formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead
   intendedPlan: paymentPlanEnum("intended_plan"), // plan envisagé (noté pendant le pipeline, avant inscription)
-  promoCode: text("promo_code"), // code promo de l'inscription (info du lead, pas de la personne)
+  promoCode: text("promo_code"),
+  // ── L'offre NÉGOCIÉE avec ce lead (migration 0124) ──
+  // Distincte du tarif catalogue de la formation : on négocie, et une remise
+  // accordée trois semaines avant l'inscription n'avait aucun endroit où vivre.
+  // Vide = on applique le tarif de la formation.
+  offerTotal: numeric("offer_total"),
+  offerMonthlyCount: integer("offer_monthly_count"),
+  offerMonthlyAmount: numeric("offer_monthly_amount"), // code promo de l'inscription (info du lead, pas de la personne)
   // Qualification issue du DERNIER appel. L'historique complet vit dans
   // call_logs + activities ; ceci est l'état courant, celui qui pilote la file.
   qualification: leadQualificationEnum("qualification"),

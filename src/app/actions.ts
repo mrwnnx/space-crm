@@ -924,6 +924,76 @@ export async function enrollLeadAction(
  * `intended_plan = null` et un échéancier « total » de 1300 : les deux avaient
  * divergé sans que rien ne le signale.
  */
+/**
+ * L'offre négociée avec un lead — sur N'IMPORTE QUEL lead, à tout moment.
+ *
+ * On négocie avant l'inscription, pas seulement pendant. Jusqu'au 2026-09-09 les
+ * montants ne se saisissaient qu'à l'inscription : avant, on ne pouvait choisir
+ * que le TYPE de plan, jamais les montants. Une remise accordée trois semaines
+ * plus tôt n'avait aucun endroit où vivre.
+ *
+ * Si le lead est déjà inscrit, l'échéancier est refait dans la foulée — sinon
+ * l'offre affichée et l'argent réellement dû divergeraient, ce qui est
+ * exactement le problème qu'on répare.
+ */
+export async function setLeadOfferAction(
+  leadId: string,
+  plan: "total" | "monthly",
+  totalAmount: number,
+  monthlyCount: number,
+  monthlyAmount: number
+) {
+  await requireUser();
+
+  if (plan === "total") {
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      return { error: "Saisis un montant total supérieur à zéro." };
+    }
+  } else {
+    if (!Number.isInteger(monthlyCount) || monthlyCount < 1 || monthlyCount > 24) {
+      return { error: "Le nombre d'échéances doit être compris entre 1 et 24." };
+    }
+    if (!Number.isFinite(monthlyAmount) || monthlyAmount <= 0) {
+      return { error: "Saisis un montant par échéance supérieur à zéro." };
+    }
+  }
+
+  const total = plan === "total" ? totalAmount : monthlyCount * monthlyAmount;
+
+  const { updateLead, getScheduleForLead, rescheduleLead } = await import("@/lib/queries");
+
+  await updateLead(leadId, {
+    intendedPlan: plan,
+    offerTotal: plan === "total" ? String(totalAmount) : String(total),
+    offerMonthlyCount: plan === "monthly" ? monthlyCount : null,
+    offerMonthlyAmount: plan === "monthly" ? String(monthlyAmount) : null,
+  });
+
+  // Déjà inscrit : l'argent vit dans l'échéancier, il doit suivre.
+  const schedule = await getScheduleForLead(leadId);
+  if (schedule && schedule.items.length > 0) {
+    const res = await rescheduleLead(leadId, plan, total, plan === "monthly" ? monthlyCount : 1);
+    if (!res.ok) return { error: res.error };
+  }
+
+  const { createActivity } = await import("@/lib/queries");
+  const { currentActor } = await import("@/lib/auth");
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "note",
+    subject: "Offre modifiée",
+    content:
+      plan === "total"
+        ? `Comptant — ${totalAmount}`
+        : `Facilité — ${monthlyCount} × ${monthlyAmount} = ${total}`,
+    createdBy: await currentActor(),
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
 export async function rescheduleLeadAction(
   leadId: string,
   plan: "total" | "monthly",

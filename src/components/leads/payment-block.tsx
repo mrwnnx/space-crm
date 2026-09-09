@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { markEcheancePaidAction, markEcheanceUnpaidAction } from "@/app/actions";
-import { RescheduleDialog } from "@/components/leads/offer-dialog";
+import { OfferDialog } from "@/components/leads/offer-dialog";
 import { cn, formatDate } from "@/lib/utils";
 
 type Echeance = {
@@ -105,16 +105,13 @@ export function PaymentBlock({
       </div>
 
       {editing && (
-        <RescheduleDialog
+        <OfferDialog
           leadId={leadId}
-          paid={paidAmount}
           currency={currency ?? "TND"}
-          currentTotal={summary.total}
+          current={{ plan: null, total: String(summary.total || ""), count: items.length, amount: null }}
+          enrolled
+          paid={paidAmount}
           onClose={() => setEditing(false)}
-          onDone={() => {
-            setEditing(false);
-            router.refresh();
-          }}
         />
       )}
 

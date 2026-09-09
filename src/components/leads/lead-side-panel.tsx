@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateLeadFieldAction, updateLeadContactFieldAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
-import { RescheduleDialog } from "@/components/leads/offer-dialog";
+import { OfferDialog } from "@/components/leads/offer-dialog";
 import type { LeadSource, Bootcamp } from "@/db/schema";
 
 type LeadData = {
@@ -12,6 +12,9 @@ type LeadData = {
   mobileNo: string | null;
   sourceId: string | null;
   intendedPlan: string | null;
+  offerTotal: string | null;
+  offerMonthlyCount: number | null;
+  offerMonthlyAmount: string | null;
   promoCode: string | null;
   motivation: string | null;
   wantsCall: boolean | null;
@@ -151,53 +154,46 @@ export function LeadSidePanel({
       />
 
       {bootcamp && (
-        <>
-          <EditableSelect
-            leadId={leadId}
-            field="intendedPlan"
-            label="Offre"
-            value={lead.intendedPlan}
-            options={[
-              ...(bootcamp.priceTotal ? [{ value: "total", label: `Comptant — ${bootcamp.priceTotal} ${bootcamp.currency}` }] : []),
-              ...(bootcamp.monthlyCount && bootcamp.monthlyAmount ? [{ value: "monthly", label: `Facilité — ${bootcamp.monthlyCount}× ${bootcamp.monthlyAmount} ${bootcamp.currency}` }] : []),
-            ]}
-          />
-
-          {/* Une fois inscrit, ce menu ne suffit plus : l'argent est dans
-              l'échéancier. Le dire ICI, là où on vient changer l'offre, plutôt
-              que de laisser croire que le menu a suffi. */}
-          {schedule && (
-            <div className="px-4 pb-3 -mt-1">
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Ce lead est inscrit : son échéancier est de{" "}
-                <strong className="text-foreground">
-                  {schedule.total.toLocaleString("fr-FR")} {bootcamp.currency}
-                </strong>
-                , dont {schedule.paid.toLocaleString("fr-FR")} encaissés. Changer le menu
-                ci-dessus ne le modifie pas.
-              </p>
-              <button
-                onClick={() => setEditingOffer(true)}
-                className="mt-1 text-[11px] font-medium text-primary underline"
-              >
-                Renégocier l&apos;offre et refaire l&apos;échéancier
-              </button>
-            </div>
-          )}
-        </>
+        <div className="flex items-start justify-between gap-2 px-4 py-2">
+          <span className="shrink-0 text-xs text-muted-foreground">Offre</span>
+          <div className="min-w-0 text-right">
+            <p className="text-xs font-medium text-foreground">
+              {lead.intendedPlan === "total"
+                ? `Comptant — ${lead.offerTotal ?? bootcamp.priceTotal ?? "?"} ${bootcamp.currency}`
+                : lead.intendedPlan === "monthly"
+                  ? `${lead.offerMonthlyCount ?? bootcamp.monthlyCount ?? "?"} × ${
+                      lead.offerMonthlyAmount ?? bootcamp.monthlyAmount ?? "?"
+                    } ${bootcamp.currency}`
+                  : "—"}
+            </p>
+            {/* Dire quand le montant vient du catalogue et non d'une
+                négociation : les deux se ressemblent à l'écran. */}
+            {lead.intendedPlan && !lead.offerTotal && (
+              <p className="text-[10px] text-muted-foreground">tarif de la formation</p>
+            )}
+            <button
+              onClick={() => setEditingOffer(true)}
+              className="mt-0.5 text-[11px] font-medium text-primary underline"
+            >
+              Changer l&apos;offre
+            </button>
+          </div>
+        </div>
       )}
 
-      {editingOffer && schedule && bootcamp && (
-        <RescheduleDialog
+      {editingOffer && bootcamp && (
+        <OfferDialog
           leadId={leadId}
-          paid={schedule.paid}
           currency={bootcamp.currency ?? "TND"}
-          currentTotal={schedule.total}
-          onClose={() => setEditingOffer(false)}
-          onDone={() => {
-            setEditingOffer(false);
-            router.refresh();
+          current={{
+            plan: lead.intendedPlan,
+            total: lead.offerTotal ?? bootcamp.priceTotal,
+            count: lead.offerMonthlyCount ?? bootcamp.monthlyCount,
+            amount: lead.offerMonthlyAmount ?? bootcamp.monthlyAmount,
           }}
+          enrolled={!!schedule}
+          paid={schedule?.paid}
+          onClose={() => setEditingOffer(false)}
         />
       )}
       <EditableField

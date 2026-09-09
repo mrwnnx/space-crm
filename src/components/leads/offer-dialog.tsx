@@ -1,52 +1,65 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { rescheduleLeadAction } from "@/app/actions";
+import { useRouter } from "next/navigation";
+import { setLeadOfferAction } from "@/app/actions";
 
 /**
- * Refaire l'échéancier après coup.
+ * « Changer l'offre » — sur n'importe quel lead, à tout moment.
  *
- * L'écran montre en permanence ce qui est déjà encaissé et ce qui resterait à
- * devoir : c'est là que se rattrape une remise mal saisie, avant de valider.
+ * Deux champs, pas plus : un montant total, ou un nombre d'échéances et le
+ * montant de chacune. C'est exactement ce qui se dit au téléphone quand on
+ * négocie ; l'écran n'a pas à demander autre chose.
+ *
+ * Si le lead est déjà inscrit, l'échéancier est refait derrière — les échéances
+ * déjà payées restent intactes et le reste se répartit sur ce qui est dû.
  */
-export function RescheduleDialog({
+export function OfferDialog({
   leadId,
-  paid,
   currency,
-  currentTotal,
+  current,
+  enrolled,
+  paid,
   onClose,
-  onDone,
 }: {
   leadId: string;
-  paid: number;
   currency: string;
-  currentTotal: number;
+  /** L'offre actuelle, pour pré-remplir plutôt que de faire retaper. */
+  current: { plan: string | null; total: string | null; count: number | null; amount: string | null };
+  /** Le lead a un échéancier : le changement touchera de l'argent réel. */
+  enrolled?: boolean;
+  paid?: number;
   onClose: () => void;
-  onDone: () => void;
 }) {
-  const [plan, setPlan] = useState<"total" | "monthly">("monthly");
-  const [amount, setAmount] = useState(String(currentTotal || ""));
-  const [count, setCount] = useState("3");
+  const router = useRouter();
+  const [plan, setPlan] = useState<"total" | "monthly">(
+    current.plan === "total" ? "total" : "monthly"
+  );
+  const [total, setTotal] = useState(current.total ?? "");
+  const [count, setCount] = useState(current.count ? String(current.count) : "3");
+  const [amount, setAmount] = useState(current.amount ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const newTotal = Number(amount) || 0;
-  const remaining = Math.round((newTotal - paid) * 100) / 100;
-  const nb = plan === "monthly" ? Math.max(1, Number(count) || 1) : 1;
-  const perInstalment = remaining > 0 ? Math.round((remaining / nb) * 100) / 100 : 0;
-  const impossible = newTotal > 0 && remaining < 0;
+  const nb = Math.max(1, Number(count) || 0);
+  const perInstalment = Number(amount) || 0;
+  const computed = plan === "total" ? Number(total) || 0 : nb * perInstalment;
+  const dejaPaye = paid ?? 0;
+  const tropBas = enrolled && computed > 0 && computed < dejaPaye;
 
   function save() {
     setError(null);
     startTransition(async () => {
-      const res = await rescheduleLeadAction(leadId, plan, newTotal, nb);
+      const res = await setLeadOfferAction(leadId, plan, Number(total) || 0, nb, perInstalment);
       if (res?.error) return setError(res.error);
-      onDone();
+      router.refresh();
+      onClose();
     });
   }
 
   const FIELD =
     "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
+  const LABEL = "mb-1 block text-xs font-medium text-muted-foreground";
 
   return (
     <div
@@ -57,84 +70,98 @@ export function RescheduleDialog({
         className="my-8 w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-foreground">Modifier l&apos;offre</h2>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          Les échéances <strong>déjà payées ne bougent pas</strong>. Seul ce qui reste à
-          devoir est recalculé.
-        </p>
+        <h2 className="text-sm font-semibold text-foreground">Changer l&apos;offre</h2>
 
         <div className="mt-4 space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Formule
-            </label>
-            <select
-              value={plan}
-              onChange={(e) => setPlan(e.target.value as "total" | "monthly")}
-              className={FIELD}
-            >
-              <option value="monthly">Facilité (plusieurs fois)</option>
-              <option value="total">Comptant (une fois)</option>
-            </select>
+          {/* Deux boutons plutôt qu'un menu : le choix se voit d'un coup d'œil. */}
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["total", "Comptant"],
+                ["monthly", "Facilité"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setPlan(value)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  plan === value
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Nouveau total convenu ({currency})
-            </label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className={FIELD}
-            />
-          </div>
-
-          {plan === "monthly" && (
+          {plan === "total" ? (
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Mensualités restantes
-              </label>
+              <label className={LABEL}>Montant total ({currency})</label>
               <input
                 type="number"
-                min={1}
-                max={24}
-                value={count}
-                onChange={(e) => setCount(e.target.value)}
+                value={total}
+                onChange={(e) => setTotal(e.target.value)}
+                autoFocus
+                placeholder="1300"
                 className={FIELD}
               />
             </div>
-          )}
-        </div>
-
-        <div className="mt-4 space-y-1 rounded-lg border border-border bg-muted/30 p-3 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Déjà encaissé</span>
-            <span className="font-medium tabular-nums text-foreground">
-              {paid.toLocaleString("fr-FR")} {currency}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Reste à devoir</span>
-            <span
-              className={`font-medium tabular-nums ${
-                impossible ? "text-red-600" : "text-foreground"
-              }`}
-            >
-              {remaining.toLocaleString("fr-FR")} {currency}
-            </span>
-          </div>
-          {plan === "monthly" && remaining > 0 && (
-            <div className="flex justify-between border-t border-border pt-1">
-              <span className="text-muted-foreground">Soit</span>
-              <span className="font-medium tabular-nums text-foreground">
-                {nb} × {perInstalment.toLocaleString("fr-FR")} {currency}
-              </span>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={LABEL}>Nombre d&apos;échéances</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
+                  className={FIELD}
+                />
+              </div>
+              <div>
+                <label className={LABEL}>Montant de chacune</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  autoFocus
+                  placeholder="500"
+                  className={FIELD}
+                />
+              </div>
             </div>
           )}
         </div>
 
-        {impossible && (
+        {computed > 0 && (
+          <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">Total : </span>
+            <strong className="tabular-nums text-foreground">
+              {computed.toLocaleString("fr-FR")} {currency}
+            </strong>
+            {plan === "monthly" && (
+              <span className="text-muted-foreground">
+                {" "}
+                ({nb} × {perInstalment.toLocaleString("fr-FR")})
+              </span>
+            )}
+          </p>
+        )}
+
+        {enrolled && (
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            Ce lead est inscrit : son échéancier sera refait.{" "}
+            <strong className="text-foreground">
+              Les {dejaPaye.toLocaleString("fr-FR")} {currency} déjà encaissés ne bougent
+              pas
+            </strong>{" "}
+            — seul le reste est recalculé.
+          </p>
+        )}
+
+        {tropBas && (
           <p className="mt-2 text-[11px] font-medium text-red-600">
             Ce total est inférieur à ce qu&apos;il a déjà versé.
           </p>
@@ -144,7 +171,7 @@ export function RescheduleDialog({
         <div className="mt-4 flex gap-2">
           <button
             onClick={save}
-            disabled={isPending || impossible || newTotal <= 0}
+            disabled={isPending || computed <= 0 || !!tropBas}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {isPending ? "…" : "Enregistrer"}

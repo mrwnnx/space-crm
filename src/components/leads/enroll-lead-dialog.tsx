@@ -37,9 +37,18 @@ export function EnrollLeadDialog({
 
   // Montants pre-remplis au tarif de la formation : le cas courant reste un
   // clic. Ils sont modifiables parce qu'un prix se negocie.
-  const [totalAmount, setTotalAmount] = useState(bootcamp.priceTotal ?? "");
-  const [monthlyAmount, setMonthlyAmount] = useState(bootcamp.monthlyAmount ?? "");
-  const [monthlyCount, setMonthlyCount] = useState(String(bootcamp.monthlyCount ?? 3));
+  // L'offre NÉGOCIÉE avec ce lead prime sur le tarif de la formation. Sans ça,
+  // une remise saisie trois semaines plus tôt disparaissait à l'inscription et
+  // il fallait la retaper — donc parfois l'oublier.
+  const [totalAmount, setTotalAmount] = useState(
+    lead.offerTotal ?? bootcamp.priceTotal ?? ""
+  );
+  const [monthlyAmount, setMonthlyAmount] = useState(
+    lead.offerMonthlyAmount ?? bootcamp.monthlyAmount ?? ""
+  );
+  const [monthlyCount, setMonthlyCount] = useState(
+    String(lead.offerMonthlyCount ?? bootcamp.monthlyCount ?? 3)
+  );
 
   const num = (v: string) => Number(String(v).replace(",", "."));
   const negotiatedTotal =
