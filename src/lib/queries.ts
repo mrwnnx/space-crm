@@ -2119,10 +2119,49 @@ export async function syncLeadEmailToContact(
 
 // ── Allowed emails (collaborateurs autorisés à créer un compte) ─
 
-export async function getAllowedEmails() {
-  return db.query.allowedEmails.findMany({
-    orderBy: [desc(allowedEmails.createdAt)],
-  });
+export type TeamMember = {
+  id: string;
+  email: string;
+  note: string | null;
+  createdAt: Date;
+  /** Un compte existe-t-il vraiment ? Autorisé ≠ inscrit. */
+  active: boolean;
+  lastSignInAt: Date | null;
+};
+
+/**
+ * Les invités, et lesquels sont réellement entrés.
+ *
+ * `allowed_emails` dit qui a le DROIT de créer un compte ; `auth.users` dit qui
+ * l'a fait. Les confondre a coûté une heure de recherche le 2026-09-09 : une
+ * adresse invitée depuis dix jours attendait un email de réinitialisation qui
+ * ne pouvait pas partir, faute de compte à réinitialiser.
+ */
+export async function getAllowedEmails(): Promise<TeamMember[]> {
+  const rows = await db.execute<{
+    id: string;
+    email: string;
+    note: string | null;
+    created_at: Date;
+    last_sign_in_at: Date | null;
+    active: boolean;
+  }>(sql`
+    select a.id, a.email, a.note, a.created_at,
+           u.last_sign_in_at,
+           (u.id is not null) as active
+    from allowed_emails a
+    left join auth.users u on lower(u.email) = lower(a.email)
+    order by a.created_at desc
+  `);
+
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    note: r.note,
+    createdAt: r.created_at,
+    active: r.active,
+    lastSignInAt: r.last_sign_in_at,
+  }));
 }
 
 export async function getAllowedEmailByAddress(email: string) {
