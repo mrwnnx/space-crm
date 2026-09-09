@@ -33,6 +33,8 @@ type StageWithLeads = LeadStatus & {
     returning?: { formations: string[]; alumni: boolean } | null;
     // A rempli brochure ET inscription.
     multiForm?: boolean;
+    // Ce qu'il a fait de l'email reçu automatiquement.
+    engaged?: { opened: boolean; clicked: boolean; video: boolean } | null;
   })[];
 };
 
@@ -319,6 +321,7 @@ const KanbanCard = memo(function KanbanCard({
     insight?: { summary: string; intent: string; objection: string | null } | null;
     returning?: { formations: string[]; alumni: boolean } | null;
     multiForm?: boolean;
+    engaged?: { opened: boolean; clicked: boolean; video: boolean } | null;
   };
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
@@ -374,6 +377,20 @@ const KanbanCard = memo(function KanbanCard({
               className="mt-1 mr-1 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-800"
             >
               🔥 Brochure + inscription
+            </span>
+          )}
+          {lead.engaged?.clicked && (
+            // Un clic est un acte volontaire, contrairement à une ouverture
+            // que le client mail déclenche tout seul.
+            <span
+              title={
+                lead.engaged.video
+                  ? "A cliqué sur la vidéo dans l'email reçu"
+                  : "A cliqué sur un lien de l'email reçu"
+              }
+              className="mt-1 mr-1 inline-block rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800"
+            >
+              {lead.engaged.video ? "▶ A vu la vidéo" : "↗ A cliqué"}
             </span>
           )}
           {lead.returning && (

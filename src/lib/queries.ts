@@ -2258,6 +2258,9 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     last_call_status: string | null;
     qualification: string | null;
     next_follow_up_at: Date | null;
+    a_ouvert: boolean;
+    a_clique: boolean;
+    a_vu_video: boolean;
   }>(sql`
     select l.id, l.full_name, l.mobile_no, l.email,
            b.id as bootcamp_id, b.name as bootcamp_name, ls.name as status_name,
@@ -2266,7 +2269,10 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
            l.intended_plan::text as intended_plan,
            li.intent::text as intent, li.summary, li.objection,
            l.qualification::text as qualification, l.next_follow_up_at,
-           c.created_at as last_call_at, c.status::text as last_call_status
+           c.created_at as last_call_at, c.status::text as last_call_status,
+           coalesce(eng.opened, false) as a_ouvert,
+           coalesce(eng.clicked, false) as a_clique,
+           coalesce(eng.video, false) as a_vu_video
     from leads l
     join bootcamps b
       on b.id = l.bootcamp_id
@@ -2282,6 +2288,16 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
       where cl.reference_type = 'lead' and cl.reference_id = l.id
       order by cl.created_at desc limit 1
     ) c on true
+    left join lateral (
+      select bool_or(ar.opened_at is not null) as opened,
+             bool_or(ar.clicked_at is not null) as clicked,
+             bool_or(exists (
+               select 1 from automation_link_clicks alc
+               where alc.run_id = ar.id and alc.url ilike '%youtu%'
+             )) as video
+      from automation_runs ar
+      where ar.lead_id = l.id
+    ) eng on true
     where l.mobile_no is not null
   `);
 
@@ -2347,6 +2363,18 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     // l'inscription en connaissant le prix.
     const multiForm = multi.has(r.id);
     if (multiForm) { score += 45; reasons.unshift("brochure puis inscription"); }
+
+    // Ce qu'il a fait de l'email. Le clic est un acte volontaire : il pèse.
+    // L'ouverture ne vaut presque rien — Apple et Gmail préchargent l'image de
+    // suivi et comptent des ouvertures que personne n'a faites. La compter zéro
+    // serait faux aussi, d'où un poids délibérément faible.
+    if (r.a_clique) {
+      score += 40;
+      reasons.unshift(r.a_vu_video ? "a cliqué la vidéo" : "a cliqué dans l'email");
+    } else if (r.a_ouvert) {
+      score += 8;
+      reasons.push("a ouvert l'email");
+    }
     if (!r.seen) { score += 5; }
 
     return {
@@ -2452,6 +2480,46 @@ export async function getReturningForLead(leadId: string): Promise<ReturningInfo
  * dans la fiche existante SANS changer de colonne — il reste donc en
  * « Nouveau ». C'est précisément pour ça que ce marqueur existe.
  */
+/** Ce qu'un lead a fait de l'email qu'il a reçu. */
+export type Engagement = { opened: boolean; clicked: boolean; video: boolean };
+
+/**
+ * Qui a réagi à un email d'automatisation, sur cette formation.
+ *
+ * Le CLIC est un fait ; l'ouverture, un indice faible — Apple et Gmail
+ * préchargent l'image de suivi et gonflent le compte. Les deux sont rendus
+ * séparément pour que l'appelant leur donne le poids qu'il veut.
+ */
+export async function getEngagedByBootcamp(
+  bootcampId: string
+): Promise<Map<string, Engagement>> {
+  const rows = await db.execute<{
+    lead_id: string;
+    opened: boolean;
+    clicked: boolean;
+    video: boolean;
+  }>(sql`
+    select ar.lead_id,
+           bool_or(ar.opened_at is not null) as opened,
+           bool_or(ar.clicked_at is not null) as clicked,
+           bool_or(exists (
+             select 1 from automation_link_clicks alc
+             where alc.run_id = ar.id and alc.url ilike '%youtu%'
+           )) as video
+    from automation_runs ar
+    join leads l on l.id = ar.lead_id
+    where l.bootcamp_id = ${bootcampId}
+    group by ar.lead_id
+  `);
+
+  const out = new Map<string, Engagement>();
+  for (const r of rows) {
+    if (!r.opened && !r.clicked) continue;
+    out.set(r.lead_id, { opened: r.opened, clicked: r.clicked, video: r.video });
+  }
+  return out;
+}
+
 export async function getMultiFormByBootcamp(bootcampId: string): Promise<Set<string>> {
   const sources = await db.query.formSources.findMany({
     where: and(eq(formSources.bootcampId, bootcampId), eq(formSources.active, true)),

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp, getEmailTemplates } from "@/lib/queries";
+import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp,
+  getEngagedByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp, getEmailTemplates } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
@@ -46,6 +47,7 @@ export default async function BootcampDetailPage({
         insights: await getInsightsByBootcamp(id),
         returning: await getReturningByBootcamp(id),
         multiForm: await getMultiFormByBootcamp(id),
+        engaged: await getEngagedByBootcamp(id),
       }))(),
       // Formations pouvant recevoir un report + les candidats vers la première.
       (async () => {
@@ -83,6 +85,7 @@ export default async function BootcampDetailPage({
       insight: aiData.insights.get(l.id) ?? null,
       returning: aiData.returning.get(l.id) ?? null,
       multiForm: aiData.multiForm.has(l.id),
+      engaged: aiData.engaged.get(l.id) ?? null,
     })),
   }));
 

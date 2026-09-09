@@ -7,6 +7,7 @@ import {
   campaignLinkClicks,
   campaignRecipients,
   contacts,
+  leads,
 } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -151,7 +152,11 @@ export async function POST(request: NextRequest) {
     }
 
     const [run] = await db
-      .select({ id: automationRuns.id, automationId: automationRuns.automationId })
+      .select({
+        id: automationRuns.id,
+        automationId: automationRuns.automationId,
+        leadId: automationRuns.leadId,
+      })
       .from(automationRuns)
       .where(eq(automationRuns.resendId, emailId))
       .limit(1);
@@ -178,6 +183,17 @@ export async function POST(request: NextRequest) {
               }
         )
         .where(eq(automationRuns.id, run.id));
+
+      // Un CLIC passe le lead en « hot ». C'est un acte volontaire, le seul
+      // signal d'intérêt qu'on obtienne sans décrocher le téléphone. Une
+      // OUVERTURE ne le fait pas : Apple et Gmail la déclenchent tout seuls,
+      // et une file d'appels remplie de faux chauds ne serait plus suivie.
+      if (!isOpen) {
+        await db
+          .update(leads)
+          .set({ temperature: "hot", updatedAt: new Date() })
+          .where(eq(leads.id, run.leadId));
+      }
       return NextResponse.json({ ok: true, type, source: "automatisation" });
     }
 
