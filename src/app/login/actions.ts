@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { allowedEmails } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email"));
@@ -56,6 +56,30 @@ export async function requestPasswordReset(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) redirect("/login?mode=forgot&error=email_manquant");
 
+  // ── Le cul-de-sac vécu le 2026-09-09 ──
+  //
+  // Supabase ne réinitialise PAS un mot de passe qui n'existe pas : il répond
+  // « ok » et n'envoie rien. Marwen a testé avec `themarwen.tn@gmail.com` —
+  // invitée depuis le 28/08, mais sans compte — et a attendu un email qui ne
+  // pouvait pas partir. On distingue donc les trois cas.
+  //
+  // Ça ne dévoile rien de plus que le formulaire d'inscription, qui répond
+  // déjà `error=unauthorized` sur une adresse absente de l'allowlist.
+  const [invited] = await db
+    .select({ id: allowedEmails.id })
+    .from(allowedEmails)
+    .where(eq(allowedEmails.email, email))
+    .limit(1);
+  // Sans `mode=forgot` : ces deux messages renvoient vers « Créer un compte »,
+  // qui n'existe que sur l'écran principal. Un conseil qui désigne un bouton
+  // invisible ne vaut rien.
+  if (!invited) redirect("/login?error=non_invitee");
+
+  const existing = await db.execute(
+    sql`select 1 from auth.users where lower(email) = ${email} limit 1`
+  );
+  if (existing.length === 0) redirect("/login?error=pas_de_compte");
+
   const base =
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
@@ -66,9 +90,6 @@ export async function requestPasswordReset(formData: FormData) {
     redirectTo: `${base}/auth/callback?next=/reset-password`,
   });
 
-  // Réponse IDENTIQUE que le compte existe ou non : l'écran de connexion est
-  // public, et distinguer les deux cas donnerait à n'importe qui le moyen de
-  // savoir qui fait partie de l'équipe.
   redirect("/login?mode=forgot&sent=1");
 }
 
