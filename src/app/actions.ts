@@ -254,6 +254,29 @@ export async function setStageKindAction(
 // « Un lead entre dans cette colonne » → il reçoit un modèle d'email.
 // Une colonne porte AU PLUS une règle : enregistrer écrase la précédente.
 
+export async function saveStageTagAction(
+  bootcampId: string,
+  statusId: string,
+  tagId: string
+) {
+  await requireUser();
+  if (!tagId) return { error: "Choisis un tag." };
+
+  const { upsertStageTag } = await import("@/lib/queries");
+  const { currentActor } = await import("@/lib/auth");
+  await upsertStageTag(statusId, tagId, await currentActor());
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
+export async function deleteStageTagAction(bootcampId: string, statusId: string) {
+  await requireUser();
+  const { deleteStageTag } = await import("@/lib/queries");
+  await deleteStageTag(statusId);
+  revalidatePath(`/bootcamps/${bootcampId}`);
+  return { ok: true };
+}
+
 export async function saveColumnAutomationAction(
   bootcampId: string,
   statusId: string,

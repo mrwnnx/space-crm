@@ -14,6 +14,11 @@ import {
   type TemplateOption,
 } from "@/components/leads/column-automation-dialog";
 import { AutomationStatsDialog } from "@/components/leads/automation-stats-dialog";
+import {
+  ColumnTagDialog,
+  type StageTagRule,
+  type TagOption,
+} from "@/components/leads/column-tag-dialog";
 
 type ActionResult = { error?: string } | { ok?: boolean; warning?: string };
 
@@ -26,6 +31,8 @@ export function ColumnMenu({
   name,
   kind,
   automation,
+  tagRule,
+  tags,
   templates,
 }: {
   bootcampId: string;
@@ -33,6 +40,9 @@ export function ColumnMenu({
   name: string;
   kind: "normal" | "converted" | "lost";
   automation?: ColumnAutomation | null;
+  /** Règle « les entrants reçoivent ce tag », si la colonne en a une. */
+  tagRule?: StageTagRule | null;
+  tags?: TagOption[];
   templates?: TemplateOption[];
 }) {
   const router = useRouter();
@@ -42,6 +52,7 @@ export function ColumnMenu({
   const [error, setError] = useState<string | null>(null);
   const [automating, setAutomating] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [tagging, setTagging] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const isTerminal = kind === "converted" || kind === "lost";
@@ -135,6 +146,16 @@ export function ColumnMenu({
                   {automation ? "Modifier l'automatisation" : "Automatiser cette colonne"}
                 </button>
 
+                <button
+                  className={menuItemCls}
+                  onClick={() => {
+                    setOpen(false);
+                    setTagging(true);
+                  }}
+                >
+                  {tagRule ? `Tag des entrants : ${tagRule.tagName}` : "Taguer les entrants"}
+                </button>
+
                 {/* Lire les résultats ne doit pas obliger à ouvrir le
                     formulaire qui les produit. */}
                 {automation && (
@@ -193,6 +214,17 @@ export function ColumnMenu({
             )}
           </div>
         </>
+      )}
+
+      {tagging && (
+        <ColumnTagDialog
+          bootcampId={bootcampId}
+          statusId={statusId}
+          columnName={name}
+          rule={tagRule ?? null}
+          tags={tags ?? []}
+          onClose={() => setTagging(false)}
+        />
       )}
 
       {showStats && automation && (

@@ -14,6 +14,7 @@ import type {
 } from "@/components/leads/column-automation-dialog";
 import { delayLabel } from "@/lib/automation-delays";
 import { AutomationStatsBadge } from "@/components/leads/automation-stats-dialog";
+import type { StageTagRule, TagOption } from "@/components/leads/column-tag-dialog";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
 
 // raw_payload n'est pas chargé par getLeadsKanban (perf) → on l'omet du type.
@@ -43,12 +44,17 @@ export function LeadsKanban({
   bootcamp,
   automations = [],
   emailTemplates = [],
+  stageTags = [],
+  tags = [],
 }: {
   statuses: StageWithLeads[];
   bootcamp?: Bootcamp;
   // Règles « entrée dans la colonne » de cette formation (0 ou 1 par colonne).
   automations?: ColumnAutomation[];
   emailTemplates?: TemplateOption[];
+  // Règles « les entrants reçoivent ce tag » (0 ou 1 par colonne).
+  stageTags?: StageTagRule[];
+  tags?: TagOption[];
 }) {
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -73,6 +79,7 @@ export function LeadsKanban({
 
   // Index statusId → règle d'automatisation (au plus une par colonne).
   const automationMap = new Map(automations.map((a) => [a.statusId, a]));
+  const tagRuleMap = new Map(stageTags.map((r) => [r.statusId, r]));
 
   // Réordonne : déplace la colonne `draggedId` à la place de `targetId`.
   function reorderColumns(draggedId: string, targetId: string) {
@@ -254,6 +261,8 @@ export function LeadsKanban({
                       kind={status.kind}
                       automation={automationMap.get(status.id) ?? null}
                       templates={emailTemplates}
+                      tagRule={tagRuleMap.get(status.id) ?? null}
+                      tags={tags}
                     />
                   )}
                 </div>

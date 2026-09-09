@@ -23,6 +23,11 @@ const InsightSchema = z.object({
     .describe(
       "L'obstacle le plus probable à son inscription, en 5 mots maximum (ex. « prix », « manque de temps », « niveau de départ »). Vide si aucun ne ressort."
     ),
+  recommendation: z
+    .string()
+    .describe(
+      "Ce que le commercial devrait faire au prochain contact, en UNE phrase de 20 mots maximum, à l'impératif. Parle de l'action et de l'angle, pas de généralités : « Rappelle-le et pars de son budget, il a choisi le paiement en trois fois. » Vide si tu n'as vraiment rien pour trancher."
+    ),
 });
 
 const SYSTEM = `Tu qualifies des candidats à une formation UX/UI en Tunisie (The Space Academy).
@@ -83,7 +88,16 @@ export async function analyzeLead(lead: Parameters<typeof buildInput>[0] & { id:
     where: eq(leadInsights.leadId, lead.id),
   });
   // Rien n'a changé depuis la dernière lecture : inutile de repayer.
-  if (existing && existing.sourceHash === sourceHash && existing.model === MODEL) {
+  //
+  // `recommendation` fait partie de la condition : les analyses faites avant
+  // l'ajout du champ ont le bon hash et le bon modèle, elles ne seraient donc
+  // JAMAIS reprises et resteraient sans recommandation pour toujours.
+  if (
+    existing &&
+    existing.sourceHash === sourceHash &&
+    existing.model === MODEL &&
+    existing.recommendation !== null
+  ) {
     return { outcome: "inchangé" };
   }
 
@@ -118,6 +132,7 @@ export async function analyzeLead(lead: Parameters<typeof buildInput>[0] & { id:
       summary: parsed.summary.trim(),
       intent: parsed.intent,
       objection: parsed.objection.trim() || null,
+      recommendation: parsed.recommendation.trim() || null,
       sourceHash,
       model: MODEL,
       createdAt: new Date(),

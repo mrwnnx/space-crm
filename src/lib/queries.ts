@@ -36,8 +36,10 @@ import {
   automations,
   automationLinkClicks,
   automationRuns,
+  stageTags,
   leadInsights,
 } from "@/db/schema";import { eq, desc, asc, ilike, or, and, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 // ── Bootcamps (Formations) ─────────────────────────────
 
@@ -2480,6 +2482,217 @@ export async function getReturningForLead(leadId: string): Promise<ReturningInfo
  * dans la fiche existante SANS changer de colonne — il reste donc en
  * « Nouveau ». C'est précisément pour ça que ce marqueur existe.
  */
+// ── Chronologie complète d'un lead ─────────────────────
+
+export type TimelineEvent = {
+  at: Date;
+  /** Famille d'événement — décide de la pastille à l'écran. */
+  kind: "form" | "stage" | "call" | "email" | "engagement" | "payment" | "note";
+  label: string;
+  detail?: string | null;
+  /** Qui l'a fait. Null = le lead lui-même ou la machine. */
+  actor?: string | null;
+};
+
+/**
+ * Tout ce qui est arrivé à ce lead, dans l'ordre, à la minute près.
+ *
+ * Sept sources fusionnées en mémoire plutôt qu'en SQL : chacune a ses colonnes
+ * de date et son vocabulaire, et une union SQL les aurait forcées dans un
+ * moule commun illisible. Le volume par lead est de quelques dizaines de
+ * lignes — le tri se fait ici sans coût.
+ */
+export async function getLeadTimeline(leadId: string): Promise<TimelineEvent[]> {
+  const out: TimelineEvent[] = [];
+
+  // 1. L'arrivée : quel formulaire, et quand.
+  const [lead] = await db
+    .select({
+      createdAt: leads.createdAt,
+      sourceName: formSources.name,
+      wantsCall: leads.wantsCall,
+      promoCode: leads.promoCode,
+      intendedPlan: leads.intendedPlan,
+    })
+    .from(leads)
+    .leftJoin(formSources, eq(formSources.id, leads.formSourceId))
+    .where(eq(leads.id, leadId))
+    .limit(1);
+
+  if (lead) {
+    const bits: string[] = [];
+    if (lead.intendedPlan)
+      bits.push(lead.intendedPlan === "total" ? "paiement comptant" : "paiement en plusieurs fois");
+    if (lead.promoCode) bits.push(`code « ${lead.promoCode} »`);
+    if (lead.wantsCall) bits.push("a demandé à être rappelé");
+    out.push({
+      at: lead.createdAt,
+      kind: "form",
+      label: lead.sourceName ? `A rempli « ${lead.sourceName} »` : "Arrivé dans le CRM",
+      detail: bits.join(" · ") || null,
+    });
+  }
+
+  // 2. Les changements de colonne.
+  const from = alias(leadStatuses, "from_status");
+  const to = alias(leadStatuses, "to_status");
+  const moves = await db
+    .select({
+      at: stageHistory.changedAt,
+      fromName: from.name,
+      toName: to.name,
+      by: stageHistory.changedBy,
+    })
+    .from(stageHistory)
+    .leftJoin(from, eq(from.id, stageHistory.fromStatusId))
+    .leftJoin(to, eq(to.id, stageHistory.toStatusId))
+    .where(eq(stageHistory.leadId, leadId));
+  for (const m of moves) {
+    out.push({
+      at: m.at,
+      kind: "stage",
+      label: m.fromName ? `${m.fromName} → ${m.toName ?? "?"}` : `Placé dans « ${m.toName ?? "?"} »`,
+      actor: m.by,
+    });
+  }
+
+  // 3. Les appels.
+  const calls = await db
+    .select({
+      at: callLogs.createdAt,
+      status: callLogs.status,
+      duration: callLogs.duration,
+      by: callLogs.callerId,
+    })
+    .from(callLogs)
+    .where(and(eq(callLogs.referenceType, "lead"), eq(callLogs.referenceId, leadId)));
+  const CALL_LABEL: Record<string, string> = {
+    completed: "Appel abouti",
+    no_answer: "Appel sans réponse",
+    busy: "Occupé",
+    failed: "Appel échoué",
+    initiated: "Appel lancé",
+  };
+  for (const c of calls) {
+    const min = c.duration ? Math.round(c.duration / 60) : 0;
+    out.push({
+      at: c.at,
+      kind: "call",
+      label: CALL_LABEL[c.status] ?? `Appel — ${c.status}`,
+      detail: min > 0 ? `${min} min` : null,
+      actor: c.by,
+    });
+  }
+
+  // 4. Les emails d'automatisation, et ce qu'il en a fait.
+  const runs = await db
+    .select({
+      id: automationRuns.id,
+      status: automationRuns.status,
+      reason: automationRuns.reason,
+      sentAt: automationRuns.sentAt,
+      createdAt: automationRuns.createdAt,
+      deliveredAt: automationRuns.deliveredAt,
+      openedAt: automationRuns.openedAt,
+      openCount: automationRuns.openCount,
+      clickedAt: automationRuns.clickedAt,
+      templateName: emailTemplates.name,
+    })
+    .from(automationRuns)
+    .innerJoin(automations, eq(automations.id, automationRuns.automationId))
+    .innerJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
+    .where(eq(automationRuns.leadId, leadId));
+
+  for (const r of runs) {
+    if (r.status === "sent" && r.sentAt) {
+      out.push({
+        at: r.sentAt,
+        kind: "email",
+        label: `Email automatique envoyé — « ${r.templateName} »`,
+      });
+    } else if (r.status !== "sent") {
+      out.push({
+        at: r.createdAt,
+        kind: "email",
+        label: `Email automatique non envoyé — « ${r.templateName} »`,
+        detail: r.reason,
+      });
+    }
+    if (r.deliveredAt)
+      out.push({ at: r.deliveredAt, kind: "email", label: "Email arrivé dans sa boîte" });
+    if (r.openedAt)
+      out.push({
+        at: r.openedAt,
+        kind: "engagement",
+        label: "A ouvert l'email",
+        // Dit sur place pourquoi ce chiffre ne vaut pas grand-chose.
+        detail:
+          r.openCount > 1
+            ? `${r.openCount} ouvertures comptées — les clients mail en inventent`
+            : "chiffre peu fiable : les clients mail préchargent l'image",
+      });
+    if (r.clickedAt) out.push({ at: r.clickedAt, kind: "engagement", label: "A CLIQUÉ dans l'email" });
+  }
+
+  // 5. Sur quel lien exactement.
+  const clicks = await db
+    .select({ at: automationLinkClicks.clickedAt, url: automationLinkClicks.url })
+    .from(automationLinkClicks)
+    .innerJoin(automationRuns, eq(automationRuns.id, automationLinkClicks.runId))
+    .where(eq(automationRuns.leadId, leadId));
+  for (const c of clicks) {
+    out.push({
+      at: c.at,
+      kind: "engagement",
+      label: /youtu/i.test(c.url) ? "A ouvert la vidéo" : "A ouvert un lien",
+      detail: c.url.replace(/^https?:\/\//, ""),
+    });
+  }
+
+  // 6. Les emails 1-à-1 et autres échanges déjà journalisés.
+  const acts = await db
+    .select({
+      at: activities.createdAt,
+      type: activities.type,
+      subject: activities.subject,
+      by: activities.createdBy,
+    })
+    .from(activities)
+    .where(and(eq(activities.referenceType, "lead"), eq(activities.referenceId, leadId)));
+  const ACT_LABEL: Record<string, string> = {
+    email: "Email envoyé à la main",
+    whatsapp: "Message WhatsApp",
+    sms: "SMS",
+    call: "Appel journalisé",
+    note: "Note",
+  };
+  for (const a of acts) {
+    // L'envoi automatique est déjà couvert par `automation_runs`, en plus riche.
+    if (a.by === "automation") continue;
+    // L'arrivée par formulaire est déjà l'événement n°1, en mieux nommé.
+    if (a.type === "webhook_in") continue;
+    const base = ACT_LABEL[String(a.type)] ?? String(a.type);
+    out.push({
+      at: a.at,
+      kind: a.type === "call" ? "call" : "email",
+      label: a.subject ? `${base} — « ${a.subject} »` : base,
+      actor: a.by,
+    });
+  }
+
+  // 7. Les paiements réellement encaissés.
+  const paid = await db
+    .select({ at: paymentSchedules.paidAt, amount: paymentSchedules.amount })
+    .from(paymentSchedules)
+    .where(and(eq(paymentSchedules.leadId, leadId), eq(paymentSchedules.isPaid, true)));
+  for (const p of paid) {
+    if (!p.at) continue;
+    out.push({ at: p.at, kind: "payment", label: "Paiement encaissé", detail: `${p.amount ?? "?"} TND` });
+  }
+
+  return out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+}
+
 /** Ce qu'un lead a fait de l'email qu'il a reçu. */
 export type Engagement = { opened: boolean; clicked: boolean; video: boolean };
 
@@ -2490,6 +2703,38 @@ export type Engagement = { opened: boolean; clicked: boolean; video: boolean };
  * préchargent l'image de suivi et gonflent le compte. Les deux sont rendus
  * séparément pour que l'appelant leur donne le poids qu'il veut.
  */
+/** L'engagement d'UN lead — même définition que la version par formation. */
+export async function getEngagementForLead(leadId: string): Promise<Engagement | null> {
+  const rows = await db.execute<{ opened: boolean; clicked: boolean; video: boolean }>(sql`
+    select bool_or(ar.opened_at is not null) as opened,
+           bool_or(ar.clicked_at is not null) as clicked,
+           bool_or(exists (
+             select 1 from automation_link_clicks alc
+             where alc.run_id = ar.id and alc.url ilike '%youtu%'
+           )) as video
+    from automation_runs ar
+    where ar.lead_id = ${leadId}
+  `);
+  const r = rows[0];
+  if (!r || (!r.opened && !r.clicked)) return null;
+  return { opened: r.opened, clicked: r.clicked, video: r.video };
+}
+
+/** La lecture IA d'un lead, recommandation comprise. */
+export async function getInsightForLead(leadId: string) {
+  const [row] = await db
+    .select({
+      summary: leadInsights.summary,
+      intent: leadInsights.intent,
+      objection: leadInsights.objection,
+      recommendation: leadInsights.recommendation,
+    })
+    .from(leadInsights)
+    .where(eq(leadInsights.leadId, leadId))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function getEngagedByBootcamp(
   bootcampId: string
 ): Promise<Map<string, Engagement>> {
@@ -2520,7 +2765,11 @@ export async function getEngagedByBootcamp(
   return out;
 }
 
-export async function getMultiFormByBootcamp(bootcampId: string): Promise<Set<string>> {
+export async function getMultiFormByBootcamp(
+  bootcampId: string,
+  /** Restreint le scan à UN lead. Une fiche n'a pas besoin des 191 autres. */
+  onlyLeadId?: string
+): Promise<Set<string>> {
   const sources = await db.query.formSources.findMany({
     where: and(eq(formSources.bootcampId, bootcampId), eq(formSources.active, true)),
   });
@@ -2547,6 +2796,7 @@ export async function getMultiFormByBootcamp(bootcampId: string): Promise<Set<st
     where l.bootcamp_id = ${bootcampId}
       and l.raw_payload is not null
       and jsonb_typeof(bv) = 'object'
+      ${onlyLeadId ? sql`and l.id = ${onlyLeadId}` : sql``}
     group by l.id
   `);
 
@@ -2736,6 +2986,42 @@ export async function getCarriedOrigin(leadId: string) {
     where l.id = ${leadId}
   `);
   return rows[0] ?? null;
+}
+
+// ── Tag posé à l'entrée dans une colonne ───────────────
+
+/** Les règles de tag de la formation, indexées par colonne. */
+export async function getStageTagsByBootcamp(bootcampId: string) {
+  return db
+    .select({
+      id: stageTags.id,
+      statusId: stageTags.statusId,
+      tagId: stageTags.tagId,
+      active: stageTags.active,
+      tagName: tags.name,
+      tagColor: tags.color,
+    })
+    .from(stageTags)
+    .innerJoin(tags, eq(tags.id, stageTags.tagId))
+    .innerJoin(leadStatuses, eq(leadStatuses.id, stageTags.statusId))
+    .where(eq(leadStatuses.bootcampId, bootcampId));
+}
+
+/** Pose ou remplace la règle d'une colonne. L'unicité est garantie en base. */
+export async function upsertStageTag(statusId: string, tagId: string, by: string | null) {
+  const [row] = await db
+    .insert(stageTags)
+    .values({ statusId, tagId, createdBy: by })
+    .onConflictDoUpdate({
+      target: stageTags.statusId,
+      set: { tagId, active: true },
+    })
+    .returning();
+  return row;
+}
+
+export async function deleteStageTag(statusId: string) {
+  await db.delete(stageTags).where(eq(stageTags.statusId, statusId));
 }
 
 // ── Automatisations de colonne ─────────────────────────

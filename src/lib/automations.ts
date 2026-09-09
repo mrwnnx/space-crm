@@ -53,6 +53,12 @@ export async function runStatusAutomations(
 ): Promise<void> {
   if (!statusId) return;
 
+  // Le tag d'abord, et HORS du try/catch de l'email : il ne dépend d'aucune
+  // règle d'envoi, et il doit être posé même si aucun email n'est configuré
+  // sur cette colonne — sinon le `return` ci-dessous l'empêcherait.
+  const { applyStageTag } = await import("@/lib/stage-tags");
+  await applyStageTag(leadId, statusId);
+
   try {
     // Une colonne porte au plus une règle (index unique sur status_id).
     const rule = await db.query.automations.findFirst({

@@ -990,6 +990,10 @@ export const leadInsights = pgTable("lead_insights", {
   summary: text("summary").notNull(),
   intent: leadIntentEnum("intent").notNull(),
   objection: text("objection"),
+  // « Ce que je ferais à ta place. » Distincte de `objection`, qui constate un
+  // frein : celle-ci dit quoi FAIRE. Nullable — les analyses antérieures n'en
+  // ont pas, et l'écran retombe alors sur la recommandation déduite des faits.
+  recommendation: text("recommendation"),
   // Empreinte de ce qui a été analysé : si rien n'a changé, on ne repaie pas.
   sourceHash: text("source_hash").notNull(),
   model: text("model").notNull(),
@@ -1007,6 +1011,27 @@ export type NewCampaign = typeof campaigns.$inferInsert;
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
 export type NewCampaignRecipient = typeof campaignRecipients.$inferInsert;
 export type CampaignLinkClick = typeof campaignLinkClicks.$inferSelect;
+
+// ── « Ceux qui entrent dans cette colonne reçoivent ce tag » ──
+// Migration 0123. Indépendant de l'automatisation d'email : une colonne peut
+// taguer sans envoyer, envoyer sans taguer, ou les deux.
+
+export const stageTags = pgTable("stage_tags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // Unique en base : un double clic ne crée pas deux règles pour une colonne.
+  statusId: uuid("status_id")
+    .notNull()
+    .unique()
+    .references(() => leadStatuses.id, { onDelete: "cascade" }),
+  tagId: uuid("tag_id")
+    .notNull()
+    .references(() => tags.id, { onDelete: "cascade" }),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type StageTag = typeof stageTags.$inferSelect;
 
 // ── Automatisation d'une colonne ───────────────────────
 // « Un lead entre dans cette colonne » → il reçoit un modèle d'email.

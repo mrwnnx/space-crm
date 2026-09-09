@@ -1,6 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLeadById, getLeadStatuses, getLeadSources, getEmailTemplates, getScheduleForLead, getTags, getTagIdsForLead, getCallLogsByReference } from "@/lib/queries";
+import {
+  getLeadTimeline,
+  getInsightForLead,
+  getEngagementForLead,
+  getMultiFormByBootcamp,
+} from "@/lib/queries";
+import { recommend } from "@/lib/lead-recommendation";
+import { LeadTabs } from "@/components/leads/lead-tabs";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
@@ -81,6 +89,39 @@ export default async function LeadDetailPage({
       ? a.content.replace(UUID_RE, (id) => statusNames.get(id) ?? id)
       : a.content;
 
+  // ── Ce qui alimente les onglets « Score » et « Activité ».
+  const [insight, engagement, multiSet, timeline] = await Promise.all([
+    getInsightForLead(lead.id),
+    getEngagementForLead(lead.id),
+    // Restreint à CE lead : sans le 3e argument, la fiche scannait le
+    // raw_payload des 191 autres pour répondre par oui ou non.
+    lead.bootcampId
+      ? getMultiFormByBootcamp(lead.bootcampId, lead.id)
+      : Promise.resolve(new Set<string>()),
+    getLeadTimeline(lead.id),
+  ]);
+
+  const lastCall = callLogs[0] ?? null;
+  const reco = recommend({
+    converted: lead.status?.kind === "converted",
+    lost: lead.status?.kind === "lost",
+    qualification: lead.qualification,
+    nextFollowUpAt: lead.nextFollowUpAt,
+    clicked: engagement?.clicked ?? false,
+    clickedVideo: engagement?.video ?? false,
+    wantsCall: lead.wantsCall ?? false,
+    multiForm: multiSet.has(lead.id),
+    lastCallAt: lastCall?.createdAt ?? null,
+    lastCallStatus: lastCall?.status ?? null,
+    objection: insight?.objection ?? null,
+    stageDays: Math.floor(
+      (Date.now() - new Date(lead.stageEnteredAt ?? lead.createdAt).getTime()) / 86400000
+    ),
+    unsubscribed: !!lead.contact?.unsubscribedAt,
+    bounced: !!lead.contact?.bouncedAt,
+    hasPhone: !!lead.mobileNo,
+  });
+
   return (
     <>
       <MarkLeadSeen leadId={lead.id} />
@@ -98,8 +139,12 @@ export default async function LeadDetailPage({
       />
 
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-        {/* Main: Activity panel */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Main: 3 lectures du lead — agir, décider, comprendre. */}
+        <LeadTabs
+          insight={insight}
+          recommendation={reco}
+          timeline={timeline}
+          exchanges={
           <ActivityPanel
             referenceType="lead"
             referenceId={lead.id}
@@ -117,7 +162,8 @@ export default async function LeadDetailPage({
             leadWhatsapp={lead.contact?.whatsapp ?? lead.mobileNo}
             templates={templates}
           />
-        </div>
+          }
+        />
 
         {/* Panneau infos — à GAUCHE sur desktop.
             `lg:order-first` plutôt qu'un déplacement dans le DOM : sur mobile
