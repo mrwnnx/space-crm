@@ -13,6 +13,7 @@ import {
   type ColumnAutomation,
   type TemplateOption,
 } from "@/components/leads/column-automation-dialog";
+import { AutomationStatsDialog } from "@/components/leads/automation-stats-dialog";
 
 type ActionResult = { error?: string } | { ok?: boolean; warning?: string };
 
@@ -40,6 +41,7 @@ export function ColumnMenu({
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | null>(null);
   const [automating, setAutomating] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const isTerminal = kind === "converted" || kind === "lost";
@@ -133,6 +135,20 @@ export function ColumnMenu({
                   {automation ? "Modifier l'automatisation" : "Automatiser cette colonne"}
                 </button>
 
+                {/* Lire les résultats ne doit pas obliger à ouvrir le
+                    formulaire qui les produit. */}
+                {automation && (
+                  <button
+                    className={menuItemCls}
+                    onClick={() => {
+                      setOpen(false);
+                      setShowStats(true);
+                    }}
+                  >
+                    Statistiques
+                  </button>
+                )}
+
                 {/* Désignation : seulement depuis une colonne NORMALE.
                     Promouvoir une colonne rétrograde l'ancienne → toujours 1 de chaque.
                     Les colonnes terminales sont rename-only (invariant préservé). */}
@@ -177,6 +193,15 @@ export function ColumnMenu({
             )}
           </div>
         </>
+      )}
+
+      {showStats && automation && (
+        <AutomationStatsDialog
+          automationId={automation.id}
+          columnName={name}
+          templateName={automation.templateName}
+          onClose={() => setShowStats(false)}
+        />
       )}
 
       {automating && (

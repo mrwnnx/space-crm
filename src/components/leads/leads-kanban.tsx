@@ -13,6 +13,7 @@ import type {
   TemplateOption,
 } from "@/components/leads/column-automation-dialog";
 import { delayLabel } from "@/lib/automation-delays";
+import { AutomationStatsBadge } from "@/components/leads/automation-stats-dialog";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
 
 // raw_payload n'est pas chargé par getLeadsKanban (perf) → on l'omet du type.
@@ -233,14 +234,12 @@ export function LeadsKanban({
                   {/* Une colonne qui envoie un email le DIT : sans ce repère,
                       la règle n'existe que dans la tête de celui qui l'a créée. */}
                   {automationMap.get(status.id)?.active && (
-                    <span
-                      className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary"
-                      title={`Envoie « ${automationMap.get(status.id)!.templateName} » — ${delayLabel(
-                        automationMap.get(status.id)!.delayMinutes
-                      )}`}
-                    >
-                      ✉ auto
-                    </span>
+                    <AutomationStatsBadge
+                      automationId={automationMap.get(status.id)!.id}
+                      columnName={status.name}
+                      templateName={automationMap.get(status.id)!.templateName}
+                      delay={delayLabel(automationMap.get(status.id)!.delayMinutes)}
+                    />
                   )}
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">
                     {status.leads.length}
