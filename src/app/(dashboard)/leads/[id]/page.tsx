@@ -138,7 +138,11 @@ export default async function LeadDetailPage({
         statusName={lead.status?.name}
       />
 
-      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+      {/* Mobile : une seule colonne qui défile normalement. Le découpage en
+          deux panneaux à hauteur fixe ne commence qu'à `lg` — sur téléphone il
+          écrasait la zone des onglets à zéro et bloquait le défilement, rendant
+          la fiche inutilisable (constaté le 2026-09-09). */}
+      <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* Main: 3 lectures du lead — agir, décider, comprendre. */}
         <LeadTabs
           insight={insight}
@@ -170,7 +174,7 @@ export default async function LeadDetailPage({
             (colonne unique) l'activité reste en premier et les infos en dessous,
             comme avant. La bordure passe de gauche à droite puisque le panneau
             change de côté. */}
-        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-border bg-card lg:order-first lg:w-80 lg:border-r lg:border-t-0">
+        <div className="flex w-full flex-col border-t border-border bg-card lg:order-first lg:w-80 lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-t-0">
           <div className="flex items-center gap-3 border-b border-border p-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
               {initials(lead.fullName)}

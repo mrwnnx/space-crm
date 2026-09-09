@@ -74,7 +74,7 @@ export function ActivityPanel({
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col lg:h-full">
       {/* Channel selector bar */}
       <div className="flex items-center gap-1 border-b border-border px-4 py-2">
         {CHANNELS.map((ch) => (

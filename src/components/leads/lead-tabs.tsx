@@ -70,7 +70,7 @@ export function LeadTabs({
   const tone = TONE[recommendation.tone];
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex flex-col lg:flex-1 lg:overflow-hidden">
       <div className="flex shrink-0 gap-1 border-b border-border px-4 pt-3">
         {(
           [
@@ -100,7 +100,7 @@ export function LeadTabs({
       {tab === "exchanges" && exchanges}
 
       {tab === "score" && (
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="space-y-4 p-4 lg:flex-1 lg:overflow-y-auto">
           <div className={cn("rounded-xl border p-4", tone.ring)}>
             <p className={cn("text-[10px] font-semibold uppercase tracking-wide", tone.cls)}>
               {tone.label}
@@ -170,7 +170,7 @@ export function LeadTabs({
       )}
 
       {tab === "activity" && (
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="p-4 lg:flex-1 lg:overflow-y-auto">
           {timeline.length === 0 ? (
             <p className="text-xs text-muted-foreground">Rien encore.</p>
           ) : (
