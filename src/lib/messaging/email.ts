@@ -7,10 +7,16 @@ export async function sendEmail({
   to,
   subject,
   html,
+  headers,
+  replyTo,
 }: {
   to: string;
   subject: string;
   html: string;
+  /** En-têtes bruts. Sert au désabonnement en un clic exigé par Gmail. */
+  headers?: Record<string, string>;
+  /** Adresse de réponse. Un `noreply@` sans retour possible est un signal négatif. */
+  replyTo?: string;
 }): Promise<{ ok: boolean; error?: string; id?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -28,6 +34,10 @@ export async function sendEmail({
       from,
       to,
       subject,
+      ...(headers ? { headers } : {}),
+      ...(replyTo || process.env.EMAIL_REPLY_TO
+        ? { replyTo: replyTo || process.env.EMAIL_REPLY_TO! }
+        : {}),
       // Enveloppe posée ICI, au seul point de sortie réel : sans balise
       // viewport, tous les clients mobiles dézooment et le texte arrive
       // minuscule. Idempotente — un HTML déjà complet ressort intact.

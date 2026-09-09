@@ -222,14 +222,50 @@ async function executeRule(
 
   // L'objet est du texte brut : substitution simple, sans échappement HTML.
   const subject = renderTemplate(template.subject, vars);
-  const html = renderEmailTemplate(template.content, vars, branding ?? undefined, {
-    enabled: template.buttonEnabled,
-    label: template.buttonLabel,
-    url: template.buttonUrl,
-    position: template.buttonPosition,
-  });
+  // ── Désabonnement : exigé par Gmail, et absent jusqu'ici de ce chemin.
+  //
+  // Les campagnes posent l'en-tête `List-Unsubscribe` depuis toujours ; les
+  // automatisations partaient sans rien — ni en-tête, ni lien dans le corps.
+  // Gmail exige le désabonnement en UN CLIC des expéditeurs de volume depuis
+  // février 2024 : son absence suffit à envoyer l'email en spam (constaté sur
+  // un vrai compte Gmail le 2026-09-09).
+  const token = lead.contact?.unsubscribeToken;
+  const root =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3001";
+  const unsubUrl = token ? `${root}/unsubscribe/${token}` : "";
 
-  const res = await sendEmail({ to: lead.email, subject, html });
+  const footerExtra = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#9ca3af">Vous recevez cet email parce que vous avez demandé des informations sur une formation Space Academy.<br><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline">Se désabonner</a></p>`
+    : undefined;
+
+  const html = renderEmailTemplate(
+    template.content,
+    vars,
+    branding ?? undefined,
+    {
+      enabled: template.buttonEnabled,
+      label: template.buttonLabel,
+      url: template.buttonUrl,
+      position: template.buttonPosition,
+    },
+    footerExtra
+  );
+
+  const res = await sendEmail({
+    to: lead.email,
+    subject,
+    html,
+    // Sans jeton on n'invente pas d'en-tête : un `List-Unsubscribe` qui ne
+    // désabonne rien est pire que pas d'en-tête du tout.
+    headers: unsubUrl
+      ? {
+          "List-Unsubscribe": `<${unsubUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+      : undefined,
+  });
   if (!res.ok) return log("failed", res.error ?? "Échec d'envoi");
 
   // sentAt distingue le jour de l'envoi du jour de la mise en file : c'est lui

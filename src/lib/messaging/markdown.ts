@@ -350,10 +350,15 @@ export function renderEmailTemplate(
   source: string,
   variables: Record<string, string>,
   branding?: Branding,
-  button?: MainButton
+  button?: MainButton,
+  /** Ajouté au pied de page commun — le lien de désabonnement, propre au destinataire. */
+  footerExtra?: string
 ): string {
   const body = markdownToEmailHtml(composeSource(source, button), branding);
-  return fillVariables(wrapWithBranding(body, branding), variables);
+  return fillVariables(
+    wrapWithBranding(body, branding, footerExtra ? { footerExtra } : undefined),
+    variables
+  );
 }
 
 /**

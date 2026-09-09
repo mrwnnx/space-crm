@@ -244,7 +244,7 @@ function Stat({
 }
 
 /**
- * Le badge « ✉ auto » de l'en-tête de colonne, devenu cliquable.
+ * Le badge « auto » de l'en-tête de colonne, devenu cliquable.
  *
  * Pas d'icône en plus : l'en-tête d'une colonne est déjà chargé (nom, badge,
  * compteur, menu). Le repère qui dit « cette colonne envoie » est aussi celui
@@ -269,7 +269,7 @@ export function AutomationStatsBadge({
         title={`Envoie « ${templateName} » — ${delay}. Cliquer pour voir les résultats.`}
         className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary transition-colors hover:bg-primary/20"
       >
-        ✉ auto
+        auto
       </button>
       {open && (
         <AutomationStatsDialog
