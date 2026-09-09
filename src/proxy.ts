@@ -22,6 +22,14 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  // Retour du lien magique : la session n'existe PAS ENCORE quand on arrive
+  // ici — c'est justement cette route qui l'ouvre. Sans cette sortie, le
+  // visiteur est renvoyé vers /login avant l'échange du code, et le lien reçu
+  // par email ne connecte jamais personne.
+  if (pathname.startsWith("/auth/callback")) {
+    return response;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
