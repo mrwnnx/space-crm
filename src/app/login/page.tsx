@@ -29,6 +29,8 @@ function LoginContent({
         ? "Ce lien a déjà servi ou a expiré. Demande-en un nouveau."
         : error === "lien_invalide"
           ? "Ce lien est incomplet. Demande-en un nouveau."
+          : error === "lien_autre_appareil"
+            ? "Ce lien a été ouvert sur un autre appareil que celui qui l'a demandé, ou il a déjà servi. Redemande-en un depuis l'appareil où tu veux te connecter."
           : error === "non_invitee"
         ? "Cette adresse n'est pas invitée. Demande à l'administrateur de l'ajouter."
         : error === "pas_de_compte"
