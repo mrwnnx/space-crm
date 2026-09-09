@@ -1547,10 +1547,16 @@ export async function sendTestEmailAction(
 
   // Rendu STRICTEMENT identique à un envoi réel : même convertisseur, même
   // habillage. Un test qui passerait par un autre chemin ne prouverait rien.
+  // La date de l'exemple suit la langue du texte, comme l'envoi réel : sinon le
+  // test afficherait « 28 septembre » là où le lead lira « 28 سبتمبر ».
+  const vars = /[\u0600-\u06FF]/.test(`${subject}${content}`)
+    ? { ...TEST_VARIABLES, dateDebut: "28 سبتمبر 2026" }
+    : TEST_VARIABLES;
+
   const res = await sendEmail({
     to: address,
-    subject: renderTemplate(subject, TEST_VARIABLES),
-    html: renderEmailTemplate(content, TEST_VARIABLES, branding ?? undefined, button),
+    subject: renderTemplate(subject, vars),
+    html: renderEmailTemplate(content, vars, branding ?? undefined, button),
   });
 
   if (!res.ok) return { ok: false, message: res.error ?? "Échec d'envoi." };

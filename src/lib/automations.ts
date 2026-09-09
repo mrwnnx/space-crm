@@ -213,7 +213,9 @@ async function executeRule(
   // entre la mise en file et l'échéance, une campagne a pu consommer la journée.
   if ((await sentToday()) >= DAILY_LIMIT) return postpone(rule, leadId, runId);
 
-  const vars = buildVariables(lead);
+  // La langue de la date suit celle du modèle — objet compris, car un objet
+  // arabe sur un corps français reste un email arabe pour le lecteur.
+  const vars = buildVariables(lead, isArabic(`${template.subject ?? ""}${template.content}`));
   const { sendEmail, renderTemplate } = await import("@/lib/messaging/email");
   const { renderEmailTemplate } = await import("@/lib/messaging/markdown");
   const branding = await getEmailBranding();
@@ -282,21 +284,43 @@ const MOIS = [
   "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
 
+// Mois tels qu'on les dit en Tunisie : formes héritées du français, PAS les
+// formes du Moyen-Orient (يناير، فبراير…) qui sonneraient étrangères ici.
+const MOIS_AR = [
+  "جانفي", "فيفري", "مارس", "أفريل", "ماي", "جوان",
+  "جويلية", "أوت", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+];
+
+/** Le modèle est-il écrit en arabe ? Une seule lettre arabe suffit. */
+export function isArabic(text: string): boolean {
+  return /[\u0600-\u06FF]/.test(text);
+}
+
 /**
- * « 2026-09-28 » → « 28 septembre 2026 ».
+ * « 2026-09-28 » → « 28 septembre 2026 », ou « 28 سبتمبر 2026 » en arabe.
  *
  * Découpé à la main plutôt que par `new Date` : la colonne est une date sans
  * heure, et la passer par un Date la fixe à minuit UTC — sur un fuseau négatif
  * l'email annoncerait la veille.
+ *
+ * Les chiffres restent en 28 / 2026 et non ٢٨ / ٢٠٢٦ : c'est ce qui s'écrit
+ * en Tunisie.
  */
-function formatStartDate(value: string | null | undefined): string {
+function formatStartDate(value: string | null | undefined, arabe = false): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? "");
   if (!m) return "";
-  return `${Number(m[3])} ${MOIS[Number(m[2]) - 1]} ${m[1]}`;
+  const mois = (arabe ? MOIS_AR : MOIS)[Number(m[2]) - 1];
+  return `${Number(m[3])} ${mois} ${m[1]}`;
 }
 
-/** Variables utilisables dans l'objet ET dans le corps du modèle. */
-export function buildVariables(lead: LeadForVars): Record<string, string> {
+/**
+ * Variables utilisables dans l'objet ET dans le corps du modèle.
+ *
+ * `arabe` vient du modèle lui-même, pas du lead : c'est la langue du texte qui
+ * décide de la langue de la date. Un même `{{dateDebut}}` sert donc les deux,
+ * sans que personne ait à choisir une seconde variable.
+ */
+export function buildVariables(lead: LeadForVars, arabe = false): Record<string, string> {
   const firstName = lead.firstName || lead.contact?.firstName || "";
   const lastName = lead.lastName || lead.contact?.lastName || "";
   const b = lead.bootcamp;
@@ -317,7 +341,7 @@ export function buildVariables(lead: LeadForVars): Record<string, string> {
     formation: b?.name || "",
     // Vide si la formation n'a pas de date : la phrase du modèle doit tenir
     // sans elle, comme pour `offre`.
-    dateDebut: formatStartDate(b?.startDate),
+    dateDebut: formatStartDate(b?.startDate, arabe),
     offre,
   };
 }

@@ -25,6 +25,16 @@ const SAMPLE: Record<string, string> = {
   content: "Le message tapé dans la fiche du lead.",
 };
 
+/**
+ * Les mêmes exemples, mais la date suit la langue du texte — exactement comme
+ * l'envoi réel (`buildVariables`). Un aperçu qui montrerait la date en français
+ * sur un modèle arabe mentirait sur ce qui part.
+ */
+function sampleFor(text: string): Record<string, string> {
+  if (!/[\u0600-\u06FF]/.test(text)) return SAMPLE;
+  return { ...SAMPLE, dateDebut: "28 سبتمبر 2026" };
+}
+
 const FIELD =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
 const LABEL = "mb-1 block text-xs font-medium text-muted-foreground";
@@ -294,7 +304,7 @@ function TemplateEditor({
               dangerouslySetInnerHTML={{
                 __html: renderEmailTemplate(
                   content,
-                  SAMPLE,
+                  sampleFor(`${subject}${content}`),
                   branding ?? undefined,
                   mainButton
                 ),
