@@ -1479,6 +1479,73 @@ export async function detachTagFromLead(leadId: string, tagId: string) {
  * calculé (sum(amount) where is_paid) : une remise remonte donc juste dans les
  * rapports, sans colonne supplémentaire.
  */
+/**
+ * Refaire l'échéancier d'un lead DÉJÀ inscrit — la négociation d'après-coup.
+ *
+ * Ce qui est encaissé ne se réécrit pas : les échéances payées restent intactes,
+ * telles quelles, avec leur montant et leur date. Le chiffre d'affaires se
+ * calcule sur `sum(amount) where is_paid` — y toucher réécrirait l'histoire
+ * comptable pour rattraper une remise accordée aujourd'hui.
+ *
+ * Seules les échéances NON payées sont remplacées, et elles se partagent ce qui
+ * reste à devoir : `nouveau total − déjà encaissé`.
+ */
+export async function rescheduleLead(
+  leadId: string,
+  plan: "total" | "monthly",
+  newTotal: number,
+  monthlyCount: number
+): Promise<{ ok: true; paid: number; remaining: number } | { ok: false; error: string }> {
+  const rows = await db.query.paymentSchedules.findMany({
+    where: eq(paymentSchedules.leadId, leadId),
+  });
+  if (rows.length === 0) return { ok: false, error: "Ce lead n'a pas d'échéancier." };
+
+  const paid = rows
+    .filter((r) => r.isPaid)
+    .reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+
+  const remaining = Math.round((newTotal - paid) * 100) / 100;
+  if (remaining < 0) {
+    return {
+      ok: false,
+      error: `Il a déjà versé ${paid} — un total de ${newTotal} serait inférieur à ce qu'il a payé.`,
+    };
+  }
+
+  const count = plan === "monthly" ? Math.max(1, monthlyCount) : 1;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(paymentSchedules)
+      .where(and(eq(paymentSchedules.leadId, leadId), eq(paymentSchedules.isPaid, false)));
+
+    if (remaining === 0) return; // Soldé : plus rien à devoir.
+
+    // Le reste se divise à l'unité près, et le dernier versement absorbe
+    // l'arrondi — sinon 700 / 3 laisserait un centime dans la nature.
+    const base = Math.floor((remaining / count) * 100) / 100;
+    const last = Math.round((remaining - base * (count - 1)) * 100) / 100;
+
+    const start = new Date();
+    const values = Array.from({ length: count }, (_, i) => ({
+      leadId,
+      plan,
+      amount: String(i === count - 1 ? last : base),
+      // La 1re échéance est due aujourd'hui, les suivantes le 1er du mois.
+      dueDate: (i === 0
+        ? start
+        : new Date(start.getFullYear(), start.getMonth() + i, 1)
+      )
+        .toISOString()
+        .slice(0, 10),
+    }));
+    await tx.insert(paymentSchedules).values(values);
+  });
+
+  return { ok: true, paid, remaining };
+}
+
 export async function generateScheduleForLead(
   leadId: string,
   plan: "total" | "monthly",

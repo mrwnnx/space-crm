@@ -916,6 +916,55 @@ export async function enrollLeadAction(
 
 // ── Payment schedule actions (Phase 3b) ────────────────
 
+/**
+ * Changer l'offre d'un lead DÉJÀ inscrit.
+ *
+ * Le champ « Offre envisagée » de la fiche ne sert plus une fois inscrit :
+ * c'est l'échéancier qui porte l'argent. Constaté le 2026-09-09 — un lead avait
+ * `intended_plan = null` et un échéancier « total » de 1300 : les deux avaient
+ * divergé sans que rien ne le signale.
+ */
+export async function rescheduleLeadAction(
+  leadId: string,
+  plan: "total" | "monthly",
+  totalAmount: number,
+  monthlyCount: number
+) {
+  await requireUser();
+
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    return { error: "Le montant doit être supérieur à zéro." };
+  }
+  if (plan === "monthly" && (!Number.isInteger(monthlyCount) || monthlyCount < 1 || monthlyCount > 24)) {
+    return { error: "Le nombre de mensualités doit être compris entre 1 et 24." };
+  }
+
+  const { rescheduleLead } = await import("@/lib/queries");
+  const res = await rescheduleLead(leadId, plan, totalAmount, plan === "monthly" ? monthlyCount : 1);
+  if (!res.ok) return { error: res.error };
+
+  // Le champ de la fiche suit l'échéancier : les laisser diverger est
+  // exactement ce qui a produit le problème d'origine.
+  const { updateLead } = await import("@/lib/queries");
+  await updateLead(leadId, { intendedPlan: plan });
+
+  const { createActivity } = await import("@/lib/queries");
+  const { currentActor } = await import("@/lib/auth");
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "note",
+    subject: "Offre modifiée",
+    content:
+      `Nouvel échéancier : ${plan === "total" ? "comptant" : `${monthlyCount} mensualités`}, ` +
+      `${totalAmount} au total. Déjà encaissé : ${res.paid}. Reste à devoir : ${res.remaining}.`,
+    createdBy: await currentActor(),
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true, paid: res.paid, remaining: res.remaining };
+}
+
 export async function markEcheancePaidAction(echeanceId: string) {
   await requireUser();
   const { markEcheancePaid, getScheduleForLead } = await import("@/lib/queries");
