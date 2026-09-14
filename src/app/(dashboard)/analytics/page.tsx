@@ -1,4 +1,3 @@
-import { getBootcamps } from "@/lib/queries";
 import {
   conversionStats,
   funnelByStage,
@@ -9,20 +8,16 @@ import { AnalyticsClient } from "./analytics-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function AnalyticsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ bootcamp?: string }>;
-}) {
-  const { bootcamp } = await searchParams;
-  const bootcampId = bootcamp || null;
-
-  const [allBootcamps, stats, funnel, bySource, byTemp] = await Promise.all([
-    getBootcamps(),
-    conversionStats(bootcampId ?? undefined),
-    funnelByStage(bootcampId ?? undefined),
-    conversionBySource(bootcampId ?? undefined),
-    conversionByTemperature(bootcampId ?? undefined),
+/**
+ * La vue GÉNÉRALE, toutes formations confondues — pour comparer les sessions.
+ * Les statistiques d'une formation vivent dans la formation elle-même.
+ */
+export default async function AnalyticsPage() {
+  const [stats, funnel, bySource, byTemp] = await Promise.all([
+    conversionStats(),
+    funnelByStage(),
+    conversionBySource(),
+    conversionByTemperature(),
   ]);
 
   const smallSample = stats.convertedCount < 10 && stats.convertedCount > 0;
@@ -34,8 +29,6 @@ export default async function AnalyticsPage({
       bySource={bySource}
       byTemp={byTemp}
       smallSample={smallSample}
-      bootcampId={bootcampId}
-      bootcamps={allBootcamps.map((b) => ({ id: b.id, name: b.name }))}
     />
   );
 }

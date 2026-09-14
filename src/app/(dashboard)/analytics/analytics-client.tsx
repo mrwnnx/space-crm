@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 
@@ -31,26 +30,13 @@ export function AnalyticsClient({
   bySource,
   byTemp,
   smallSample,
-  bootcampId,
-  bootcamps,
 }: {
   stats: Stats;
   funnel: Funnel;
   bySource: SourceRow[];
   byTemp: { hot: TempRow; cold: TempRow };
   smallSample: boolean;
-  bootcampId: string | null;
-  bootcamps: { id: string; name: string }[];
 }) {
-  const router = useRouter();
-
-  function switchBootcamp(id: string) {
-    const sp = new URLSearchParams();
-    if (id) sp.set("bootcamp", id);
-    const qs = sp.toString();
-    router.push(`/analytics${qs ? `?${qs}` : ""}`);
-  }
-
   function pct(v: number) {
     return `${(v * 100).toFixed(1)} %`;
   }
@@ -63,24 +49,10 @@ export function AnalyticsClient({
 
   return (
     <>
-      <PageHeader
-        title="Analytics"
-        subtitle={bootcampId
-          ? `Formation : ${bootcamps.find((b) => b.id === bootcampId)?.name || "—"}`
-          : "Toutes formations"}
-        actions={
-          <select
-            value={bootcampId || ""}
-            onChange={(e) => switchBootcamp(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-ring"
-          >
-            <option value="">Toutes les formations</option>
-            {bootcamps.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        }
-      />
+      {/* Plus de filtre par formation : les statistiques d'UNE formation vivent
+          dans la formation (/bootcamps/[id]/statistiques). Une même question à
+          deux endroits finit par donner deux réponses différentes. */}
+      <PageHeader title="Analytics" subtitle="Toutes formations confondues" />
       <div className="flex-1 overflow-y-auto p-5">
         {smallSample && (
           <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">

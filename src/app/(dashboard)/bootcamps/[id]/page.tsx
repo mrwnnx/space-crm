@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft01Icon, Clock01Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Clock01Icon, Analytics01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp,
   getEngagedByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp,
@@ -140,6 +140,15 @@ export default async function BootcampDetailPage({
         <ImportFormsButton bootcampId={bootcamp.id} linkedCount={elementorSources.length} />
 
         <AnalyzeLeadsButton bootcampId={bootcamp.id} pending={aiData.pending} compact />
+
+        <Link
+          href={`/bootcamps/${bootcamp.id}/statistiques`}
+          title="Statistiques de cette formation"
+          aria-label="Statistiques de cette formation"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <HugeiconsIcon icon={Analytics01Icon} size={16} />
+        </Link>
 
         <Link
           href={`/bootcamps/${bootcamp.id}/historique`}

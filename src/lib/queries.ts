@@ -3444,3 +3444,192 @@ export async function getHistoryActorCounts(sinceDays?: number, bootcampId?: str
   `);
   return rows.map((r) => ({ actor: r.actor, n: r.n }));
 }
+
+// ── Statistiques d'une formation ───────────────────────
+// Tout est cadré sur UNE formation et couvre TOUTE sa vie : une formation a un
+// début et une fin, elle EST la période. Seul le rythme garde une fenêtre de 7
+// jours, parce qu'un histogramme en a besoin — ce n'est pas un filtre.
+
+export type FormationStats = {
+  socle: { leads: number; veulentAppel: number; appels: number; inscrits: number };
+  rythme: { jour: string; arrivees: number; appels: number }[];
+  colonnes: { name: string; position: number; n: number }[];
+  delais: { min: number; moyen: number; max: number; surCombien: number } | null;
+  sejours: { name: string; passages: number; mediane: number }[];
+  gens: { actor: string | null; appels: number; aboutis: number; deplacements: number; commentaires: number }[];
+  argent: { encaisse: number; reste: number; enRetard: number; parMoyen: { method: string | null; n: number }[]; sansJustificatif: number };
+  emails: { envoyes: number; ouverts: number; cliques: number; liens: { url: string; n: number }[] };
+};
+
+export async function getFormationStats(bootcampId: string): Promise<FormationStats> {
+  const B = bootcampId;
+
+  const [socleRows, rythmeRows, colonnesRows, delaisRows, sejoursRows,
+         appelsRows, deplRows, commRows, argentRows, moyenRows, emailRows, liensRows] =
+    await Promise.all([
+      db.execute<{ leads: number; veulent: number; appels: number; inscrits: number }>(sql`
+        select
+          (select count(*)::int from leads where bootcamp_id = ${B}) as leads,
+          (select count(*)::int from leads where bootcamp_id = ${B} and wants_call) as veulent,
+          (select count(*)::int from call_logs c join leads l on l.id = c.reference_id
+            where c.reference_type = 'lead' and l.bootcamp_id = ${B}) as appels,
+          (select count(*)::int from leads where bootcamp_id = ${B} and converted) as inscrits
+      `),
+
+      // Un axe de 7 jours PLEIN : sans generate_series, une journée sans rien
+      // disparaîtrait du graphique au lieu d'y valoir zéro — et c'est justement
+      // les journées à zéro appel qui racontent quelque chose.
+      db.execute<{ jour: string; arrivees: number; appels: number }>(sql`
+        with jours as (
+          select generate_series(current_date - 6, current_date, '1 day')::date as j
+        )
+        select to_char(jours.j, 'DD/MM') as jour,
+               (select count(*)::int from leads
+                 where bootcamp_id = ${B} and created_at::date = jours.j) as arrivees,
+               (select count(*)::int from call_logs c join leads l on l.id = c.reference_id
+                 where c.reference_type = 'lead' and l.bootcamp_id = ${B}
+                   and c.created_at::date = jours.j) as appels
+          from jours order by jours.j
+      `),
+
+      db.execute<{ name: string; position: number; n: number }>(sql`
+        select s.name, s.position, count(l.id)::int as n
+          from lead_statuses s
+          left join leads l on l.status_id = s.id and l.bootcamp_id = ${B}
+         where s.bootcamp_id = ${B}
+         group by s.name, s.position order by s.position
+      `),
+
+      db.execute<{ min: number; moyen: number; max: number; sur: number }>(sql`
+        select round(min(extract(epoch from (converted_at - created_at))/86400)::numeric, 1) as min,
+               round(avg(extract(epoch from (converted_at - created_at))/86400)::numeric, 1) as moyen,
+               round(max(extract(epoch from (converted_at - created_at))/86400)::numeric, 1) as max,
+               count(*)::int as sur
+          from leads
+         where bootcamp_id = ${B} and converted and converted_at is not null
+      `),
+
+      // Temps passé dans une colonne = écart avec le déplacement SUIVANT du même
+      // lead. Médiane et non moyenne : un lead oublié trois mois fausserait tout.
+      db.execute<{ name: string; passages: number; mediane: number }>(sql`
+        select s.name, count(*)::int as passages,
+               round(percentile_cont(0.5) within group (
+                 order by extract(epoch from (suivant.changed_at - h.changed_at))/86400
+               )::numeric, 1) as mediane
+          from stage_history h
+          join leads l on l.id = h.lead_id and l.bootcamp_id = ${B}
+          join lead_statuses s on s.id = h.to_status_id
+          left join lateral (
+            select changed_at from stage_history x
+             where x.lead_id = h.lead_id and x.changed_at > h.changed_at
+             order by x.changed_at limit 1
+          ) suivant on true
+         where suivant.changed_at is not null
+         group by s.name order by passages desc
+      `),
+
+      db.execute<{ actor: string | null; appels: number; aboutis: number }>(sql`
+        select c.caller_id as actor, count(*)::int as appels,
+               count(*) filter (where c.status = 'completed')::int as aboutis
+          from call_logs c join leads l on l.id = c.reference_id
+         where c.reference_type = 'lead' and l.bootcamp_id = ${B}
+         group by c.caller_id
+      `),
+
+      db.execute<{ actor: string | null; n: number }>(sql`
+        select h.changed_by as actor, count(*)::int as n
+          from stage_history h join leads l on l.id = h.lead_id
+         where l.bootcamp_id = ${B} group by h.changed_by
+      `),
+
+      db.execute<{ actor: string | null; n: number }>(sql`
+        select cm.created_by as actor, count(*)::int as n
+          from comments cm join leads l on l.id = cm.reference_id
+         where cm.reference_type = 'lead' and l.bootcamp_id = ${B}
+         group by cm.created_by
+      `),
+
+      db.execute<{ encaisse: string; reste: string; retard: number; sans_just: number }>(sql`
+        select coalesce(sum(p.amount) filter (where p.is_paid), 0)::text as encaisse,
+               coalesce(sum(p.amount) filter (where not p.is_paid), 0)::text as reste,
+               count(*) filter (where not p.is_paid and p.due_date < now())::int as retard,
+               count(*) filter (where p.is_paid and p.proof_path is null)::int as sans_just
+          from payment_schedules p join leads l on l.id = p.lead_id
+         where l.bootcamp_id = ${B}
+      `),
+
+      db.execute<{ method: string | null; n: number }>(sql`
+        select p.method, count(*)::int as n
+          from payment_schedules p join leads l on l.id = p.lead_id
+         where l.bootcamp_id = ${B} and p.is_paid
+         group by p.method order by n desc
+      `),
+
+      db.execute<{ envoyes: number; ouverts: number; cliques: number }>(sql`
+        select count(*)::int as envoyes,
+               count(*) filter (where r.opened_at is not null)::int as ouverts,
+               count(*) filter (where r.clicked_at is not null)::int as cliques
+          from automation_runs r join automations a on a.id = r.automation_id
+         where a.bootcamp_id = ${B} and r.sent_at is not null
+      `),
+
+      db.execute<{ url: string; n: number }>(sql`
+        select k.url, count(*)::int as n
+          from automation_link_clicks k join automations a on a.id = k.automation_id
+         where a.bootcamp_id = ${B}
+         group by k.url order by n desc limit 6
+      `),
+    ]);
+
+  // Les trois mesures « par personne » viennent de trois tables : on les
+  // rassemble ici plutôt qu'en SQL, où trois FULL JOIN sur une clé qui peut
+  // être NULL donneraient des lignes fantômes.
+  const parActeur = new Map<string, FormationStats["gens"][number]>();
+  const ligne = (a: string | null) => {
+    const k = a ?? "__inconnu__";
+    if (!parActeur.has(k))
+      parActeur.set(k, { actor: a, appels: 0, aboutis: 0, deplacements: 0, commentaires: 0 });
+    return parActeur.get(k)!;
+  };
+  for (const r of appelsRows) { const l = ligne(r.actor); l.appels = r.appels; l.aboutis = r.aboutis; }
+  for (const r of deplRows) ligne(r.actor).deplacements = r.n;
+  for (const r of commRows) ligne(r.actor).commentaires = r.n;
+
+  const d = delaisRows[0];
+  const a = argentRows[0];
+  const e = emailRows[0];
+
+  return {
+    socle: {
+      leads: socleRows[0]?.leads ?? 0,
+      veulentAppel: socleRows[0]?.veulent ?? 0,
+      appels: socleRows[0]?.appels ?? 0,
+      inscrits: socleRows[0]?.inscrits ?? 0,
+    },
+    rythme: rythmeRows.map((r) => ({ jour: r.jour, arrivees: r.arrivees, appels: r.appels })),
+    colonnes: colonnesRows.map((r) => ({ name: r.name, position: r.position, n: r.n })),
+    delais: d && d.sur > 0
+      ? { min: Number(d.min), moyen: Number(d.moyen), max: Number(d.max), surCombien: d.sur }
+      : null,
+    sejours: sejoursRows.map((r) => ({
+      name: r.name, passages: r.passages, mediane: Number(r.mediane ?? 0),
+    })),
+    gens: [...parActeur.values()]
+      // L'import et les automatisations ne sont pas des « gens ».
+      .filter((g) => g.actor !== "webhook" && g.actor !== "automation")
+      .sort((x, y) => y.appels + y.deplacements - (x.appels + x.deplacements)),
+    argent: {
+      encaisse: Number(a?.encaisse ?? 0),
+      reste: Number(a?.reste ?? 0),
+      enRetard: a?.retard ?? 0,
+      parMoyen: moyenRows.map((r) => ({ method: r.method, n: r.n })),
+      sansJustificatif: a?.sans_just ?? 0,
+    },
+    emails: {
+      envoyes: e?.envoyes ?? 0,
+      ouverts: e?.ouverts ?? 0,
+      cliques: e?.cliques ?? 0,
+      liens: liensRows.map((r) => ({ url: r.url, n: r.n })),
+    },
+  };
+}
