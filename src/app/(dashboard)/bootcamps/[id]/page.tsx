@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Clock01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp,
   getEngagedByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp,
@@ -8,6 +8,8 @@ import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootca
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
+import { AnalyzeLeadsButton } from "@/components/bootcamps/analyze-leads-button";
+import { ImportFormsButton } from "@/components/bootcamps/import-forms-button";
 import { BootcampMenu } from "@/components/bootcamps/bootcamp-menu";
 
 export const dynamic = "force-dynamic";
@@ -132,6 +134,22 @@ export default async function BootcampDetailPage({
             </p>
           )}
         </div>
+        {/* Trois gestes assez fréquents pour mériter la barre plutôt que le
+            menu : importer, faire lire les nouveaux leads par l'IA, et voir
+            ce qui a été fait sur cette formation. */}
+        <ImportFormsButton bootcampId={bootcamp.id} linkedCount={elementorSources.length} />
+
+        <AnalyzeLeadsButton bootcampId={bootcamp.id} pending={aiData.pending} compact />
+
+        <Link
+          href={`/bootcamps/${bootcamp.id}/historique`}
+          title="Historique de cette formation"
+          aria-label="Historique de cette formation"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <HugeiconsIcon icon={Clock01Icon} size={16} />
+        </Link>
+
         <NewLeadButton
           sources={sources}
           lockedBootcamp={{ id: bootcamp.id, name: bootcamp.name }}

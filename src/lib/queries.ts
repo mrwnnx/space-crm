@@ -3292,3 +3292,155 @@ export async function getAutomationRuns(automationId: string, limit = 20) {
     .orderBy(desc(automationRuns.createdAt))
     .limit(limit);
 }
+
+// ── Historique de la pipeline ──────────────────────────
+// « Qu'est-ce qui a été fait, et par qui ». Même idée que getLeadTimeline, mais
+// pour TOUS les leads à la fois — donc la fusion se fait en SQL et non en
+// mémoire : c'est la base qui trie et qui pagine.
+//
+// Six sources, choisies pour ne PAS se recouvrir :
+//   stage_history   les déplacements (429 lignes — plus complet que le type
+//                   `status_change` d'activities, qui n'en garde que 79)
+//   call_logs       les appels, avec leur durée
+//   activities      seulement 'email', 'note' et 'webhook_in' : 'call' et
+//                   'status_change' feraient doublon avec les deux ci-dessus
+//   comments        les commentaires
+//   tasks           les tâches créées
+//   payment_schedules  les encaissements
+
+export type HistoryKind =
+  | "stage" | "call" | "email" | "note" | "arrival" | "comment" | "task" | "payment";
+
+export type HistoryEvent = {
+  at: Date;
+  kind: HistoryKind;
+  actor: string | null;
+  leadId: string | null;
+  leadName: string | null;
+  bootcampName: string | null;
+  a: string | null;
+  b: string | null;
+  num: number | null;
+};
+
+export type HistoryFilters = {
+  actors?: string[];        // adresses brutes ; vide = tout le monde
+  kinds?: HistoryKind[];    // vide = tous les types
+  bootcampId?: string;
+  sinceDays?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export async function getPipelineHistory(f: HistoryFilters = {}): Promise<HistoryEvent[]> {
+  const limit = Math.min(f.limit ?? 60, 200);
+  const offset = Math.max(f.offset ?? 0, 0);
+
+  // Les filtres s'appliquent APRÈS la fusion : écrits dans chaque branche, il
+  // faudrait les répéter six fois et une omission passerait inaperçue.
+  const conds = [sql`true`];
+  // `sql.join` et pas un tableau brut : Drizzle n'expanse pas une liste tout
+  // seul, et un `in` mal formé passerait le typage pour échouer à l'exécution.
+  if (f.actors?.length) {
+    conds.push(sql`e.actor in (${sql.join(f.actors.map((a) => sql`${a}`), sql`, `)})`);
+  }
+  if (f.kinds?.length) {
+    conds.push(sql`e.kind in (${sql.join(f.kinds.map((k) => sql`${k}`), sql`, `)})`);
+  }
+  if (f.bootcampId) conds.push(sql`l.bootcamp_id = ${f.bootcampId}`);
+  if (f.sinceDays) conds.push(sql`e.at > now() - ${`${f.sinceDays} days`}::interval`);
+
+  const rows = await db.execute<{
+    at: Date; kind: HistoryKind; actor: string | null;
+    lead_id: string | null; lead_name: string | null; bootcamp_name: string | null;
+    a: string | null; b: string | null; num: number | null;
+  }>(sql`
+    with e as (
+      select sh.changed_at as at, 'stage' as kind, sh.changed_by as actor, sh.lead_id,
+             f.name as a, t.name as b, null::numeric as num
+        from stage_history sh
+        left join lead_statuses f on f.id = sh.from_status_id
+        left join lead_statuses t on t.id = sh.to_status_id
+
+      union all
+      -- Le cast ::text est obligatoire : call_logs.status et
+      -- activities.direction sont des enums, et Postgres refuse d'unir un
+      -- enum avec du texte. (Pas de backtick ici : on est dans un gabarit JS.)
+      select c.created_at, 'call', c.caller_id, c.reference_id,
+             c.status::text, null, c.duration::numeric
+        from call_logs c where c.reference_type = 'lead'
+
+      union all
+      select a.created_at,
+             case a.type when 'webhook_in' then 'arrival' when 'note' then 'note' else 'email' end,
+             a.created_by, a.reference_id, a.subject, a.direction::text, null
+        from activities a
+       where a.reference_type = 'lead' and a.type in ('email', 'note', 'webhook_in')
+
+      union all
+      select cm.created_at, 'comment', cm.created_by, cm.reference_id,
+             left(cm.content, 140), null, null
+        from comments cm where cm.reference_type = 'lead'
+
+      union all
+      select tk.created_at, 'task', tk.created_by, tk.reference_id,
+             tk.title, tk.assigned_to, null
+        from tasks tk where tk.reference_type = 'lead'
+
+      union all
+      select ps.paid_at, 'payment', ps.received_by, ps.lead_id,
+             ps.method, ps.proof_path, ps.amount
+        from payment_schedules ps where ps.is_paid and ps.paid_at is not null
+    )
+    select e.at, e.kind, e.actor, e.lead_id,
+           l.full_name as lead_name, b.name as bootcamp_name,
+           e.a, e.b, e.num
+      from e
+      left join leads l on l.id = e.lead_id
+      left join bootcamps b on b.id = l.bootcamp_id
+     where ${sql.join(conds, sql` and `)}
+     order by e.at desc
+     limit ${limit} offset ${offset}
+  `);
+
+  return rows.map((r) => ({
+    at: r.at,
+    kind: r.kind,
+    actor: r.actor,
+    leadId: r.lead_id,
+    leadName: r.lead_name,
+    bootcampName: r.bootcamp_name,
+    a: r.a,
+    b: r.b,
+    num: r.num === null ? null : Number(r.num),
+  }));
+}
+
+/**
+ * Combien d'actions par personne, pour la barre de filtres.
+ * Le compte suit exactement le même périmètre que le fil : sinon la pastille
+ * annoncerait 613 là où l'écran n'en montre que 40.
+ */
+export async function getHistoryActorCounts(sinceDays?: number, bootcampId?: string) {
+  const rows = await db.execute<{ actor: string | null; n: number }>(sql`
+    with e as (
+      select changed_at as at, changed_by as actor, lead_id from stage_history
+      union all select created_at, caller_id, reference_id from call_logs
+        where reference_type = 'lead'
+      union all select created_at, created_by, reference_id from activities
+        where reference_type = 'lead' and type in ('email', 'note', 'webhook_in')
+      union all select created_at, created_by, reference_id from comments
+        where reference_type = 'lead'
+      union all select created_at, created_by, reference_id from tasks
+        where reference_type = 'lead'
+      union all select paid_at, received_by, lead_id from payment_schedules
+        where is_paid and paid_at is not null
+    )
+    select e.actor, count(*)::int as n
+      from e left join leads l on l.id = e.lead_id
+     where ${sinceDays ? sql`e.at > now() - ${`${sinceDays} days`}::interval` : sql`true`}
+       and ${bootcampId ? sql`l.bootcamp_id = ${bootcampId}` : sql`true`}
+     group by e.actor order by n desc
+  `);
+  return rows.map((r) => ({ actor: r.actor, n: r.n }));
+}
