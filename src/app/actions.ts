@@ -1795,6 +1795,68 @@ export async function getStatsAdviceAction(bootcampId: string, block: string) {
   };
 }
 
+// ── Assistant conversationnel (lot 1 : lecture seule) ──
+
+/** Le fil de l'utilisateur courant, pour rouvrir le panneau là où il l'a laissé. */
+export async function getAssistantHistoryAction() {
+  const user = await requireUser();
+  const { assistantMessages } = await import("@/db/schema");
+  const { eq, asc } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+
+  const rows = await db
+    .select()
+    .from(assistantMessages)
+    .where(eq(assistantMessages.userEmail, user.email ?? ""))
+    .orderBy(asc(assistantMessages.createdAt));
+
+  // Les 40 derniers suffisent à retrouver le fil ; au-delà on charge une
+  // conversation que personne ne fera défiler.
+  return rows.slice(-40).map((m) => ({ role: m.role, content: m.content }));
+}
+
+export async function askAssistantAction(question: string, contexte: string | null) {
+  const user = await requireUser();
+  const texte = question.trim();
+  if (!texte) return { error: "Question vide." };
+  if (texte.length > 4000) return { error: "Question trop longue." };
+
+  const email = user.email ?? "";
+  const { assistantMessages } = await import("@/db/schema");
+  const { eq, asc } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+  const { askAssistant } = await import("@/lib/ai/assistant");
+
+  const passe = await db
+    .select()
+    .from(assistantMessages)
+    .where(eq(assistantMessages.userEmail, email))
+    .orderBy(asc(assistantMessages.createdAt));
+
+  const res = await askAssistant(
+    passe.slice(-10).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+    texte,
+    contexte
+  );
+
+  // La question est enregistrée même si la réponse échoue : sinon on ne
+  // comprend plus, en relisant le fil, à quoi l'erreur répondait.
+  await db.insert(assistantMessages).values({ userEmail: email, role: "user", content: texte });
+  const reponse = res.ok ? res.reponse : res.message;
+  await db.insert(assistantMessages).values({ userEmail: email, role: "assistant", content: reponse });
+
+  return { ok: true, reponse, outils: res.ok ? res.outils : [], echec: !res.ok };
+}
+
+export async function clearAssistantAction() {
+  const user = await requireUser();
+  const { assistantMessages } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+  await db.delete(assistantMessages).where(eq(assistantMessages.userEmail, user.email ?? ""));
+  return { ok: true };
+}
+
 export async function getTeamAction() {
   await requireUser();
   const { getAllowedEmails } = await import("@/lib/queries");

@@ -1136,3 +1136,17 @@ export type Automation = typeof automations.$inferSelect;
 export type NewAutomation = typeof automations.$inferInsert;
 export type AutomationRun = typeof automationRuns.$inferSelect;
 export type AutomationLinkClick = typeof automationLinkClicks.$inferSelect;
+
+// ── Assistant conversationnel ──────────────────────────
+// Migration 0127. Un fil par utilisateur : Marwen et Fatma ne partagent pas
+// leurs échanges. Les appels d'outils ne sont PAS conservés — seul ce qui a été
+// dit et répondu a besoin de survivre au rafraîchissement.
+export const assistantMessages = pgTable("assistant_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userEmail: text("user_email").notNull(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type AssistantMessage = typeof assistantMessages.$inferSelect;
