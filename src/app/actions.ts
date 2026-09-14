@@ -1759,6 +1759,42 @@ export async function inviteCollaboratorAction(
  * s'ouvre depuis le kanban ET depuis la fiche, et traverser deux composants
  * entiers pour quatre adresses ne vaut pas le détour.
  */
+/**
+ * Le conseil derrière une pastille ✦ des statistiques.
+ *
+ * Trois couches, dans cet ordre : une RÈGLE a détecté l'écart, une REQUÊTE
+ * fournit les gens concernés, et le modèle n'écrit que le « quoi faire ».
+ * Si le modèle tombe, le constat et la liste restent — ils ne dépendent que de
+ * la base, et c'est le plus utile des trois.
+ */
+export async function getStatsAdviceAction(bootcampId: string, block: string) {
+  await requireUser();
+  const { getFormationStats, getGapTargets, getBootcampById } = await import("@/lib/queries");
+  const { detectGaps } = await import("@/lib/stats-gaps");
+
+  const [stats, bootcamp] = await Promise.all([
+    getFormationStats(bootcampId),
+    getBootcampById(bootcampId),
+  ]);
+  const gap = detectGaps(stats).find((g) => g.block === block);
+  if (!gap) return { error: "Plus rien à signaler sur ce bloc." };
+
+  const cibles = gap.cibles
+    ? await getGapTargets(bootcampId, gap.cibles, gap.cibleArg)
+    : [];
+
+  const { adviseOnGap } = await import("@/lib/ai/stats-advice");
+  const res = await adviseOnGap(gap, cibles, { formation: bootcamp?.name ?? "" });
+
+  return {
+    ok: true,
+    constat: gap.constat,
+    cibles,
+    conseils: res.ok ? res.advice.conseils : [],
+    avertissement: res.ok ? null : res.message,
+  };
+}
+
 export async function getTeamAction() {
   await requireUser();
   const { getAllowedEmails } = await import("@/lib/queries");

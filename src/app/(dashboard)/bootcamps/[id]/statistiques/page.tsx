@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { getBootcampById, getFormationStats } from "@/lib/queries";
+import { detectGaps, gapFor, type Gap, type GapBlock } from "@/lib/stats-gaps";
+import { StatsAdvice } from "@/components/bootcamps/stats-advice";
 import { actorName } from "@/lib/actors";
 import { formatDate } from "@/lib/utils";
 
@@ -30,20 +32,40 @@ function Card({
   sub,
   children,
   verdict,
+  gap,
+  bootcampId,
 }: {
   title: string;
   sub?: string;
   children: React.ReactNode;
-  /** Ce que le bloc a compris. Un chiffre qu'on doit interpréter seul n'est jamais relu. */
+  /** Lecture informative, sans écart à corriger (« Les gens »). */
   verdict?: React.ReactNode;
+  /** L'écart détecté par la règle. Sa présence fait apparaître la pastille ✦. */
+  gap?: Gap;
+  bootcampId?: string;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <h2 className="font-heading text-sm font-semibold text-foreground">{title}</h2>
+      <h2 className="flex items-center gap-2 font-heading text-sm font-semibold text-foreground">
+        {title}
+        {gap && bootcampId && (
+          <StatsAdvice
+            bootcampId={bootcampId}
+            block={gap.block}
+            title={title}
+            constat={gap.constat}
+          />
+        )}
+      </h2>
       {sub && <p className="mt-0.5 mb-3 text-[11px] text-muted-foreground">{sub}</p>}
       {children}
-      {verdict && (
+      {gap && (
         <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-500">
+          {gap.constat}
+        </p>
+      )}
+      {!gap && verdict && (
+        <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
           {verdict}
         </p>
       )}
@@ -101,6 +123,11 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
   const [bootcamp, s] = await Promise.all([getBootcampById(id), getFormationStats(id)]);
   if (!bootcamp) notFound();
 
+  // Les règles tournent UNE fois ici. La pastille, le bandeau ambre et le
+  // conseil lisent tous les trois le même résultat.
+  const gaps = detectGaps(s);
+  const g = (b: GapBlock) => gapFor(gaps, b);
+
   const devise = bootcamp.currency ?? "TND";
   const maxJour = Math.max(1, ...s.rythme.map((r) => Math.max(r.arrivees, r.appels)));
   const maxCol = Math.max(1, ...s.colonnes.map((c) => c.n));
@@ -109,8 +136,6 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
 
   const totalArrivees = s.rythme.reduce((a, r) => a + r.arrivees, 0);
   const totalAppels = s.rythme.reduce((a, r) => a + r.appels, 0);
-  const joursSansAppel = s.rythme.filter((r) => r.appels === 0).length;
-  const plusGrosseJournee = s.rythme.reduce((m, r) => (r.arrivees > m.arrivees ? r : m), s.rythme[0]);
   const colBloquante = [...s.colonnes].sort((a, b) => b.n - a.n)[0];
   const goulot = [...s.sejours].sort((a, b) => b.passages - a.passages)[0];
   const aboutisTotal = s.gens.reduce((a, g) => a + g.aboutis, 0);
@@ -161,13 +186,11 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
         <Card
           title="Le rythme"
           sub="Ce qui entre, et ce qu'on traite — les 7 derniers jours"
+          gap={g("rythme")}
+          bootcampId={id}
           verdict={
             <>
               <strong>{totalArrivees} leads entrés, {totalAppels} appels passés</strong> sur ces 7 jours.
-              {joursSansAppel > 0 && (
-                <> {joursSansAppel} journée{joursSansAppel > 1 ? "s" : ""} à zéro appel, dont celle
-                où {plusGrosseJournee?.arrivees} personnes sont arrivées.</>
-              )}
             </>
           }
         >
@@ -213,14 +236,8 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
           <Card
             title="Où ils sont"
             sub="Répartition dans les colonnes"
-            verdict={
-              colBloquante && s.socle.leads > 0 && colBloquante.n / s.socle.leads > 0.5 ? (
-                <>
-                  <strong>{colBloquante.n} sur {s.socle.leads} n&apos;ont jamais bougé de «&nbsp;{colBloquante.name}&nbsp;».</strong>{" "}
-                  Le goulot n&apos;est pas dans la pipeline, il est à son entrée.
-                </>
-              ) : undefined
-            }
+            gap={g("colonnes")}
+            bootcampId={id}
           >
             <div className="space-y-1.5">
               {s.colonnes.map((c) => (
@@ -242,14 +259,8 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
           <Card
             title="Le temps"
             sub={s.delais ? `De l'arrivée à l'inscription · sur ${s.delais.surCombien} inscrit${s.delais.surCombien > 1 ? "s" : ""}` : "De l'arrivée à l'inscription"}
-            verdict={
-              goulot ? (
-                <>
-                  Le vrai goulot est <strong>«&nbsp;{goulot.name}&nbsp;» : {goulot.mediane} j, {goulot.passages} fois</strong> —
-                  c&apos;est le nombre de passages qui compte, pas la durée seule.
-                </>
-              ) : undefined
-            }
+            gap={g("temps")}
+            bootcampId={id}
           >
             {s.delais ? (
               <div className="flex flex-wrap gap-5">
@@ -348,14 +359,8 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
           <Card
             title="L'argent"
             sub={`Échéancier des ${s.socle.inscrits} inscrit${s.socle.inscrits > 1 ? "s" : ""}`}
-            verdict={
-              s.argent.sansJustificatif > 0 ? (
-                <>
-                  <strong>{s.argent.sansJustificatif} encaissement{s.argent.sansJustificatif > 1 ? "s" : ""} sans justificatif.</strong>{" "}
-                  À rattraper depuis la fiche du lead, en décochant puis recochant l&apos;échéance.
-                </>
-              ) : undefined
-            }
+            gap={g("argent")}
+            bootcampId={id}
           >
             <div className="flex flex-wrap gap-5">
               <Big value={dt(s.argent.encaisse)} unit={devise} label="encaissé" />
@@ -392,14 +397,8 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
           <Card
             title="Les emails"
             sub="Automatisations de cette formation"
-            verdict={
-              s.emails.envoyes > 0 && pc(s.emails.ouverts, s.emails.envoyes) < 15 ? (
-                <>
-                  <strong>{pc(s.emails.ouverts, s.emails.envoyes)} % d&apos;ouverture.</strong>{" "}
-                  En dessous de 15 %, c&apos;est la délivrabilité qu&apos;il faut regarder avant le texte.
-                </>
-              ) : undefined
-            }
+            gap={g("emails")}
+            bootcampId={id}
           >
             {s.emails.envoyes === 0 ? (
               <p className="text-[11.5px] text-muted-foreground">

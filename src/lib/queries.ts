@@ -3633,3 +3633,91 @@ export async function getFormationStats(bootcampId: string): Promise<FormationSt
     },
   };
 }
+
+// ── Les gens à qui s'adresser derrière un écart ────────
+// L'intérêt d'un conseil n'est pas la phrase, c'est la liste. Elle sort d'une
+// requête, pas d'un modèle : personne ne peut inventer un nom.
+
+export type GapTarget = {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  raison: string;
+};
+
+export async function getGapTargets(
+  bootcampId: string,
+  kind: "jamais_appeles" | "colonne_bloquante" | "colonne_lente" | "paiements",
+  arg?: string
+): Promise<GapTarget[]> {
+  const B = bootcampId;
+
+  if (kind === "jamais_appeles") {
+    // Ceux qui ont DEMANDÉ qu'on les rappelle et qu'on n'a jamais appelés,
+    // les plus récents d'abord — un engagement frais se rappelle mieux.
+    const rows = await db.execute<{ id: string; full_name: string | null; mobile_no: string | null; jours: number; a_clique: boolean }>(sql`
+      select l.id, l.full_name, l.mobile_no,
+             extract(day from now() - l.created_at)::int as jours,
+             exists (select 1 from automation_runs r
+                      where r.lead_id = l.id and r.clicked_at is not null) as a_clique
+        from leads l
+       where l.bootcamp_id = ${B} and l.wants_call and not l.converted
+         and l.mobile_no is not null
+         and not exists (select 1 from call_logs c
+                          where c.reference_type = 'lead' and c.reference_id = l.id)
+       order by a_clique desc, l.created_at desc
+       limit 20
+    `);
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.full_name,
+      phone: r.mobile_no,
+      raison: [r.a_clique ? "a cliqué la vidéo" : null, `inscrit il y a ${r.jours} j`]
+        .filter(Boolean)
+        .join(" · "),
+    }));
+  }
+
+  if (kind === "colonne_bloquante" || kind === "colonne_lente") {
+    const rows = await db.execute<{ id: string; full_name: string | null; mobile_no: string | null; jours: number; veut: boolean }>(sql`
+      select l.id, l.full_name, l.mobile_no,
+             extract(day from now() - coalesce(l.stage_entered_at, l.created_at))::int as jours,
+             coalesce(l.wants_call, false) as veut
+        from leads l join lead_statuses s on s.id = l.status_id
+       where l.bootcamp_id = ${B} and s.name = ${arg ?? ""} and not l.converted
+       order by coalesce(l.stage_entered_at, l.created_at) asc
+       limit 20
+    `);
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.full_name,
+      phone: r.mobile_no,
+      raison: [`${r.jours} j sans bouger`, r.veut ? "a demandé un appel" : null]
+        .filter(Boolean)
+        .join(" · "),
+    }));
+  }
+
+  // paiements : ce qui est en retard d'abord, puis ce qui manque de preuve.
+  const rows = await db.execute<{ id: string; full_name: string | null; mobile_no: string | null; amount: string | null; retard: boolean; sans_preuve: boolean }>(sql`
+    select l.id, l.full_name, l.mobile_no, p.amount::text,
+           (not p.is_paid and p.due_date < now()) as retard,
+           (p.is_paid and p.proof_path is null) as sans_preuve
+      from payment_schedules p join leads l on l.id = p.lead_id
+     where l.bootcamp_id = ${B}
+       and ((not p.is_paid and p.due_date < now()) or (p.is_paid and p.proof_path is null))
+     order by retard desc, p.due_date asc
+     limit 20
+  `);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.full_name,
+    phone: r.mobile_no,
+    raison: [
+      r.amount ? `${Number(r.amount).toLocaleString("fr-FR")}` : null,
+      r.retard ? "échéance dépassée" : "encaissé sans justificatif",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  }));
+}
