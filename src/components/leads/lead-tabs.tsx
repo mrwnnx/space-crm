@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { AskAssistantButton } from "@/components/assistant/ask-assistant-button";
 import type { Recommendation } from "@/lib/lead-recommendation";
 import type { TimelineEvent } from "@/lib/queries";
 
@@ -122,6 +123,14 @@ export function LeadTabs({
               Déduit de ses actes — ne dépend d&apos;aucune IA.
             </p>
           </div>
+
+          {/* La lecture IA ci-dessous est un instantané, parfois ancien. Ce
+              bouton en demande une fraîche, qui lit tout le fil à l'instant. */}
+          <AskAssistantButton
+            question="Analyse ce lead : où il en est, ce qui le bloque, et ce que je dis au téléphone."
+            label="Demander une analyse à l'assistant"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          />
 
           {insight ? (
             <div className="rounded-xl border border-border p-4">

@@ -20,6 +20,7 @@ import {
   GraduationCapIcon,
   Tag01Icon,
   Mail01Icon,
+  AiMagicIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -32,6 +33,7 @@ type NavItem = {
 
 const primaryNav: NavItem[] = [
   { href: "/aujourdhui", label: "Aujourd'hui", icon: Call02Icon },
+  { href: "/assistant", label: "Assistant", icon: AiMagicIcon },
   { href: "/dashboard", label: "Dashboard", icon: Analytics01Icon },
   { href: "/bootcamps", label: "Formations", icon: GraduationCapIcon },
   { href: "/leads", label: "Leads", icon: User02Icon },
