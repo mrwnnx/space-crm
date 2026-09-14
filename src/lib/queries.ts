@@ -3721,3 +3721,20 @@ export async function getGapTargets(
       .join(" · "),
   }));
 }
+
+/**
+ * Les leads de cette formation qui ont AU MOINS un appel enregistré.
+ *
+ * Le kanban a besoin de l'inverse — « jamais appelé » — pour son filtre. On
+ * rend l'ensemble des appelés plutôt que des non-appelés : c'est le plus petit
+ * des deux (20 contre 246 sur september), donc le moins lourd à transporter.
+ */
+export async function getCalledByBootcamp(bootcampId: string): Promise<Set<string>> {
+  const rows = await db.execute<{ id: string }>(sql`
+    select distinct l.id
+      from leads l
+      join call_logs c on c.reference_type = 'lead' and c.reference_id = l.id
+     where l.bootcamp_id = ${bootcampId}
+  `);
+  return new Set(rows.map((r) => r.id));
+}

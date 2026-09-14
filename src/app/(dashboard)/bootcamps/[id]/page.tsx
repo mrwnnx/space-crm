@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft01Icon, Clock01Icon, Analytics01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp,
-  getEngagedByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp,
+  getEngagedByBootcamp, getCalledByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp,
   getStageTagsByBootcamp, getEmailTemplates } from "@/lib/queries";
 import { LeadsKanban } from "@/components/leads/leads-kanban";
 import { cn, formatDate, statusColor } from "@/lib/utils";
@@ -51,6 +51,7 @@ export default async function BootcampDetailPage({
         returning: await getReturningByBootcamp(id),
         multiForm: await getMultiFormByBootcamp(id),
         engaged: await getEngagedByBootcamp(id),
+        called: await getCalledByBootcamp(id),
       }))(),
       // Formations pouvant recevoir un report + les candidats vers la première.
       (async () => {
@@ -90,6 +91,7 @@ export default async function BootcampDetailPage({
       returning: aiData.returning.get(l.id) ?? null,
       multiForm: aiData.multiForm.has(l.id),
       engaged: aiData.engaged.get(l.id) ?? null,
+      called: aiData.called.has(l.id),
     })),
   }));
 
@@ -193,6 +195,9 @@ export default async function BootcampDetailPage({
             emailTemplates={emailTemplates}
             stageTags={stageTagRules}
             tags={tags.map((t) => ({ id: t.id, name: t.name }))}
+            formSources={formSources
+              .filter((f) => f.active)
+              .map((f) => ({ id: f.id, name: f.name }))}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

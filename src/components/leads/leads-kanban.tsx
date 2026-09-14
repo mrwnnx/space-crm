@@ -13,6 +13,15 @@ import type {
   TemplateOption,
 } from "@/components/leads/column-automation-dialog";
 import { delayLabel } from "@/lib/automation-delays";
+import {
+  FILTRES,
+  TRIS,
+  GROUPE_LABEL,
+  comparer,
+  passe,
+  type TriId,
+  type Groupe,
+} from "@/lib/kanban-filters";
 import { AutomationStatsBadge } from "@/components/leads/automation-stats-dialog";
 import type { StageTagRule, TagOption } from "@/components/leads/column-tag-dialog";
 import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/schema";
@@ -36,6 +45,8 @@ type StageWithLeads = LeadStatus & {
     multiForm?: boolean;
     // Ce qu'il a fait de l'email reçu automatiquement.
     engaged?: { opened: boolean; clicked: boolean; video: boolean } | null;
+    // Au moins un appel enregistré.
+    called?: boolean;
   })[];
 };
 
@@ -46,6 +57,7 @@ export function LeadsKanban({
   emailTemplates = [],
   stageTags = [],
   tags = [],
+  formSources = [],
 }: {
   statuses: StageWithLeads[];
   bootcamp?: Bootcamp;
@@ -55,6 +67,8 @@ export function LeadsKanban({
   // Règles « les entrants reçoivent ce tag » (0 ou 1 par colonne).
   stageTags?: StageTagRule[];
   tags?: TagOption[];
+  /** Les formulaires de cette formation : une pastille par formulaire. */
+  formSources?: { id: string; name: string }[];
 }) {
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -66,6 +80,20 @@ export function LeadsKanban({
   // tous chargés, filtrer à l'affichage évite un aller-retour serveur à chaque
   // frappe (la page tire 10 requêtes).
   const [search, setSearch] = useState("");
+  // Filtres et tri : tout est déjà chargé, donc tout se fait à l'affichage.
+  const [actifs, setActifs] = useState<Set<string>>(new Set());
+  const [sourceId, setSourceId] = useState<string | null>(null);
+  const [tri, setTri] = useState<TriId>("recent");
+  const [ouvert, setOuvert] = useState(false);
+
+  function basculer(id: string) {
+    setActifs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Copie locale OPTIMISTE : le drop met à jour l'UI immédiatement ; le serveur
   // suit (revalidatePath → nouvelles props → resync via l'effet ci-dessous).
@@ -140,16 +168,28 @@ export function LeadsKanban({
   // Filtre d'AFFICHAGE seulement : `localStatuses` reste complet, sinon un drop
   // pendant une recherche ferait disparaître les cartes masquées.
   const q = search.trim().toLowerCase();
-  const visibleStatuses = q
-    ? localStatuses.map((s) => ({
-        ...s,
-        leads: s.leads.filter(
-          (l) =>
+  const filtreActif = actifs.size > 0 || !!sourceId;
+  const visibleStatuses = localStatuses.map((s) => ({
+    ...s,
+    leads: s.leads
+      .filter(
+        (l) =>
+          (!q ||
             l.fullName.toLowerCase().includes(q) ||
-            (l.email ?? "").toLowerCase().includes(q)
-        ),
-      }))
-    : localStatuses;
+            (l.email ?? "").toLowerCase().includes(q)) &&
+          passe(l, actifs, sourceId)
+      )
+      .slice()
+      .sort(comparer(tri)),
+  }));
+
+  // Les compteurs se lisent sur TOUS les leads, pas sur ceux qui restent :
+  // une pastille qui affiche « 0 » parce qu'un autre filtre est actif ne dit
+  // plus rien de la base.
+  const tousLesLeads = localStatuses.flatMap((s) => s.leads);
+  const compte = (test: (l: (typeof tousLesLeads)[number]) => boolean) =>
+    tousLesLeads.filter(test).length;
+  const totalVisible = visibleStatuses.reduce((n, s) => n + s.leads.length, 0);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -178,7 +218,119 @@ export function LeadsKanban({
             </button>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => setOuvert((v) => !v)}
+          className={cn(
+            "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+            filtreActif
+              ? "border-primary bg-primary/10 text-foreground"
+              : "border-border text-muted-foreground hover:bg-muted"
+          )}
+        >
+          Filtrer
+          {filtreActif && (
+            <span className="ml-1.5 tabular-nums">{actifs.size + (sourceId ? 1 : 0)}</span>
+          )}
+        </button>
+
+        <select
+          value={tri}
+          onChange={(e) => setTri(e.target.value as TriId)}
+          title="Trier les cartes dans chaque colonne"
+          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground outline-none focus:border-ring"
+        >
+          {TRIS.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+
+        {filtreActif && (
+          <>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {totalVisible} lead{totalVisible > 1 ? "s" : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setActifs(new Set());
+                setSourceId(null);
+              }}
+              className="text-xs text-muted-foreground underline transition-colors hover:text-foreground"
+            >
+              Tout effacer
+            </button>
+          </>
+        )}
       </div>
+
+      {ouvert && (
+        <div className="mx-4 mt-2 space-y-3 rounded-xl border border-border bg-card p-3">
+          {formSources.length > 1 && (
+            <div>
+              <p className="mb-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Formulaire d&apos;origine
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {formSources.map((f) => {
+                  const n = compte((l) => l.formSourceId === f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setSourceId(sourceId === f.id ? null : f.id)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                        sourceId === f.id
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      {f.name}
+                      <span className="ml-1.5 tabular-nums opacity-60">{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {(["demande", "fait", "traitement"] as Groupe[]).map((groupe) => (
+            <div key={groupe}>
+              <p className="mb-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {GROUPE_LABEL[groupe]}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {FILTRES.filter((f) => f.groupe === groupe).map((f) => {
+                  const n = compte(f.test);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => basculer(f.id)}
+                      disabled={n === 0 && !actifs.has(f.id)}
+                      title={n === 0 ? "Aucun lead ne correspond" : undefined}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                        actifs.has(f.id)
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted",
+                        n === 0 && !actifs.has(f.id) && "opacity-40"
+                      )}
+                    >
+                      {f.label}
+                      <span className="ml-1.5 tabular-nums opacity-60">{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-x-auto p-4">
       <div className="flex h-full gap-3">
