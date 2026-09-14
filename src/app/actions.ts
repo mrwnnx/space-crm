@@ -800,6 +800,10 @@ export async function enrollLeadAction(
   input: {
     plan: "total" | "monthly";
     firstPaymentReceived: boolean;
+    // Qui a encaissé ce premier versement — email d'un membre ou 'banque'.
+    receivedBy?: string;
+    // Comment il est arrivé — 'especes' | 'virement' | 'cheque'.
+    method?: string;
     // Montants NÉGOCIÉS. Absents → tarif de la formation.
     totalAmount?: string;
     monthlyCount?: number;
@@ -872,6 +876,10 @@ export async function enrollLeadAction(
   const { leads: leadsTable } = await import("@/db/schema");
   const { eq: eqOp } = await import("drizzle-orm");
 
+  // Remonte hors de la transaction : le dialogue d'inscription s'en sert pour
+  // attacher le justificatif à la bonne échéance juste après.
+  let firstEcheanceId: string | null = null;
+
   await db.transaction(async (tx) => {
     // 5. Déplace le lead vers le stage converted (insère stage_history en interne)
     await moveLeadToStage(leadId, convertedStage.id, tx);
@@ -891,7 +899,12 @@ export async function enrollLeadAction(
 
     // 8. 1er paiement encaissé → marque la première échéance
     if (input.firstPaymentReceived) {
-      await markFirstEcheancePaid(leadId, tx);
+      firstEcheanceId = await markFirstEcheancePaid(
+        leadId,
+        tx,
+        input.receivedBy ?? null,
+        input.method ?? null
+      );
     }
   });
 
@@ -911,7 +924,7 @@ export async function enrollLeadAction(
 
   // 10. Retourne le statut paiement dérivé
   const status = await paymentStatus(leadId);
-  return { ok: true, paymentStatus: status };
+  return { ok: true, paymentStatus: status, firstEcheanceId };
 }
 
 // ── Payment schedule actions (Phase 3b) ────────────────
@@ -1035,20 +1048,113 @@ export async function rescheduleLeadAction(
   return { ok: true, paid: res.paid, remaining: res.remaining };
 }
 
-export async function markEcheancePaidAction(echeanceId: string) {
+/**
+ * Pointer une échéance comme encaissée : qui a reçu l'argent, et la preuve.
+ *
+ * L'ordre compte. L'échéance est marquée payée AVANT la tentative d'envoi du
+ * fichier : un stockage indisponible ne doit jamais empêcher d'enregistrer un
+ * encaissement. Le justificatif manquant se voit sur la fiche et se rattrape ;
+ * un paiement qu'on n'a pas pu pointer se perd.
+ */
+export async function markEcheancePaidAction(formData: FormData) {
   await requireUser();
   const { markEcheancePaid, getScheduleForLead } = await import("@/lib/queries");
   const { paymentSchedules } = await import("@/db/schema");
   const { eq } = await import("drizzle-orm");
   const { db } = await import("@/db");
 
-  const [ech] = await db.select({ leadId: paymentSchedules.leadId }).from(paymentSchedules).where(eq(paymentSchedules.id, echeanceId)).limit(1);
+  const echeanceId = String(formData.get("echeanceId") || "");
+  const receivedByRaw = String(formData.get("receivedBy") || "").trim();
+  const receivedBy = receivedByRaw || null;
+  const methodRaw = String(formData.get("method") || "").trim();
+  const method = ["especes", "virement", "cheque"].includes(methodRaw) ? methodRaw : null;
+
+  const [ech] = await db
+    .select({ leadId: paymentSchedules.leadId })
+    .from(paymentSchedules)
+    .where(eq(paymentSchedules.id, echeanceId))
+    .limit(1);
   if (!ech) return { error: "Échéance introuvable" };
 
-  await markEcheancePaid(echeanceId);
+  await markEcheancePaid(echeanceId, db, receivedBy, method);
+
+  let warning: string | undefined;
+  const file = formData.get("proof");
+  if (file instanceof File && file.size > 0) {
+    const { uploadPaymentProof } = await import("@/lib/payment-proof");
+    const up = await uploadPaymentProof(ech.leadId, echeanceId, file);
+    if (up.ok) {
+      await db
+        .update(paymentSchedules)
+        .set({ proofPath: up.path, proofName: up.name, proofUploadedAt: new Date() })
+        .where(eq(paymentSchedules.id, echeanceId));
+    } else {
+      warning = `Paiement enregistré, mais le justificatif n'est pas parti : ${up.message}`;
+    }
+  }
+
   const schedule = await getScheduleForLead(ech.leadId);
   revalidatePath(`/leads/${ech.leadId}`);
-  return { ok: true, status: schedule.summary.status };
+  return { ok: true, status: schedule.summary.status, warning };
+}
+
+/**
+ * Ajouter ou remplacer le justificatif d'une échéance déjà pointée.
+ * Sert à rattraper les « sans justificatif », et à l'inscription une fois la
+ * première échéance créée.
+ */
+export async function attachPaymentProofAction(formData: FormData) {
+  await requireUser();
+  const { paymentSchedules } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+  const { uploadPaymentProof } = await import("@/lib/payment-proof");
+
+  const echeanceId = String(formData.get("echeanceId") || "");
+  const file = formData.get("proof");
+  if (!(file instanceof File) || file.size === 0) return { error: "Aucun fichier." };
+
+  const [ech] = await db
+    .select({ leadId: paymentSchedules.leadId })
+    .from(paymentSchedules)
+    .where(eq(paymentSchedules.id, echeanceId))
+    .limit(1);
+  if (!ech) return { error: "Échéance introuvable" };
+
+  const up = await uploadPaymentProof(ech.leadId, echeanceId, file);
+  if (!up.ok) return { error: up.message };
+
+  await db
+    .update(paymentSchedules)
+    .set({ proofPath: up.path, proofName: up.name, proofUploadedAt: new Date() })
+    .where(eq(paymentSchedules.id, echeanceId));
+
+  revalidatePath(`/leads/${ech.leadId}`);
+  return { ok: true };
+}
+
+/**
+ * Le lien de lecture d'un justificatif. Fabriqué à la demande et périmé en
+ * quelques minutes : l'adresse ne doit jamais vivre dans le HTML de la page,
+ * où elle resterait valable après le départ de son lecteur.
+ */
+export async function getProofUrlAction(echeanceId: string) {
+  await requireUser();
+  const { paymentSchedules } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { db } = await import("@/db");
+  const { signedProofUrl } = await import("@/lib/payment-proof");
+
+  const [ech] = await db
+    .select({ proofPath: paymentSchedules.proofPath })
+    .from(paymentSchedules)
+    .where(eq(paymentSchedules.id, echeanceId))
+    .limit(1);
+  if (!ech?.proofPath) return { error: "Aucun justificatif." };
+
+  const url = await signedProofUrl(ech.proofPath);
+  if (!url) return { error: "Justificatif introuvable dans le stockage." };
+  return { ok: true, url };
 }
 
 export async function markEcheanceUnpaidAction(echeanceId: string) {
@@ -1644,6 +1750,23 @@ export async function inviteCollaboratorAction(
   }
 
   return { ok: true, message: `Invitation envoyée à ${email}.` };
+}
+
+/**
+ * La liste fermée du « encaissé par ».
+ *
+ * Exposée en action plutôt que passée en prop : la fenêtre d'inscription
+ * s'ouvre depuis le kanban ET depuis la fiche, et traverser deux composants
+ * entiers pour quatre adresses ne vaut pas le détour.
+ */
+export async function getTeamAction() {
+  await requireUser();
+  const { getAllowedEmails } = await import("@/lib/queries");
+  const members = await getAllowedEmails();
+  // Seulement les comptes ACTIFS. Une adresse invitée qui n'a jamais créé son
+  // compte ne peut encaisser l'argent de personne : la proposer ouvrirait la
+  // porte à attribuer un versement à quelqu'un qui n'est pas encore là.
+  return members.filter((m) => m.active).map((m) => ({ email: m.email }));
 }
 
 export async function removeAllowedEmailAction(id: string) {

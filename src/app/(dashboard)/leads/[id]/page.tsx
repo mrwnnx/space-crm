@@ -16,7 +16,7 @@ import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { DuplicateBanner } from "@/components/leads/duplicate-banner";
 import { getDuplicateInfo } from "@/lib/duplicates";
-import { getReturningForLead, getCarriedOrigin } from "@/lib/queries";
+import { getReturningForLead, getCarriedOrigin, getAllowedEmails } from "@/lib/queries";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { CallHistory } from "@/components/leads/call-history";
 import { ActivityPanel } from "@/components/activities/activity-panel";
@@ -72,6 +72,12 @@ export default async function LeadDetailPage({
   ]);
 
   const schedule = lead.converted ? await getScheduleForLead(lead.id) : null;
+  // La liste fermée du « encaissé par » : uniquement les comptes ACTIFS — une
+  // adresse invitée qui n'a jamais créé son compte n'encaisse rien. Chargée
+  // seulement quand il y a un échéancier.
+  const team = schedule
+    ? (await getAllowedEmails()).filter((m) => m.active).map((m) => ({ email: m.email }))
+    : [];
   const duplicateInfo = await getDuplicateInfo(lead.id);
   const returning = await getReturningForLead(lead.id);
   const carriedFrom = await getCarriedOrigin(lead.id);
@@ -299,9 +305,13 @@ export default async function LeadDetailPage({
                 amount: e.amount,
                 isPaid: e.isPaid,
                 paidAt: e.paidAt,
+                receivedBy: e.receivedBy,
+                method: e.method,
+                proofName: e.proofName,
               }))}
               summary={schedule.summary}
               currency={lead.bootcamp?.currency}
+              team={team}
             />
           )}
 

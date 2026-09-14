@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { enrollLeadAction } from "@/app/actions";
+import {
+  enrollLeadAction,
+  attachPaymentProofAction,
+  getTeamAction,
+} from "@/app/actions";
+import { PaymentMethodPicker } from "@/components/leads/payment-method-picker";
 import type { Bootcamp, Lead } from "@/db/schema";
 
-type EnrollResult = { ok: true; paymentStatus: string } | { error: string };
+type EnrollResult =
+  | { ok: true; paymentStatus: string; firstEcheanceId: string | null }
+  | { error: string };
 
 export function EnrollLeadDialog({
   lead,
@@ -34,6 +41,26 @@ export function EnrollLeadDialog({
     return availablePlans.length === 1 ? availablePlans[0].value : (availablePlans[0]?.value ?? "total");
   });
   const [firstPaymentReceived, setFirstPaymentReceived] = useState(true);
+
+  // Qui encaisse ce premier versement, et ce qui le prouve. Demandé ICI parce
+  // que c'est le seul moment où l'argent change de main sous les yeux de celui
+  // qui remplit le formulaire — le rattraper plus tard, personne ne le fait.
+  const [receivedBy, setReceivedBy] = useState("");
+  const [method, setMethod] = useState("");
+  const [team, setTeam] = useState<{ email: string }[]>([]);
+
+  // Un virement arrive sur le compte : « Virement » propose le compte bancaire.
+  function pickMethod(v: string) {
+    setMethod(v);
+    if (v === "virement" && !receivedBy) setReceivedBy("banque");
+    if (v !== "virement" && receivedBy === "banque") setReceivedBy("");
+  }
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  useEffect(() => {
+    getTeamAction().then(setTeam).catch(() => setTeam([]));
+  }, []);
 
   // Montants pre-remplis au tarif de la formation : le cas courant reste un
   // clic. Ils sont modifiables parce qu'un prix se negocie.
@@ -65,15 +92,32 @@ export function EnrollLeadDialog({
       const result = (await enrollLeadAction(lead.id, {
         plan,
         firstPaymentReceived,
+        receivedBy: firstPaymentReceived ? receivedBy || undefined : undefined,
+        method: firstPaymentReceived ? method || undefined : undefined,
         totalAmount: plan === "total" ? totalAmount : undefined,
         monthlyAmount: plan === "monthly" ? monthlyAmount : undefined,
         monthlyCount: plan === "monthly" ? Number(monthlyCount) : undefined,
       })) as EnrollResult;
       if ("error" in result) {
         setError(result.error);
-      } else {
-        onClose();
+        return;
       }
+
+      // Le justificatif part APRÈS, sur l'échéance que l'inscription vient de
+      // créer. Un envoi qui échoue ne remet pas l'inscription en cause : elle
+      // est faite, et la fiche affichera « sans justificatif ».
+      const file = fileRef.current?.files?.[0];
+      if (file && result.firstEcheanceId) {
+        const fd = new FormData();
+        fd.set("echeanceId", result.firstEcheanceId);
+        fd.set("proof", file);
+        const up = await attachPaymentProofAction(fd);
+        if ("error" in up && up.error) {
+          setError(`Inscription faite, mais le justificatif n'est pas parti : ${up.error}`);
+          return;
+        }
+      }
+      onClose();
     });
   }
 
@@ -201,17 +245,69 @@ export function EnrollLeadDialog({
             </div>
 
             {/* 1er paiement encaissé */}
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={firstPaymentReceived}
-                onChange={(e) => setFirstPaymentReceived(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              <span className="text-sm text-foreground">
-                1er paiement encaissé
-              </span>
-            </label>
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={firstPaymentReceived}
+                  onChange={(e) => setFirstPaymentReceived(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <span className="text-sm text-foreground">
+                  1er paiement encaissé
+                </span>
+              </label>
+
+              {firstPaymentReceived && (
+                <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                  <div>
+                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                      Moyen de paiement
+                    </span>
+                    <PaymentMethodPicker value={method} onChange={pickMethod} />
+                  </div>
+
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                      Encaissé par
+                    </span>
+                    <select
+                      value={receivedBy}
+                      onChange={(e) => setReceivedBy(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                    >
+                      <option value="">— à préciser —</option>
+                      <option value="banque">Compte bancaire (virement)</option>
+                      {team.map((m) => (
+                        <option key={m.email} value={m.email}>
+                          {m.email}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div>
+                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                      Justificatif (facultatif)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="w-full rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted"
+                    >
+                      {fileName ?? "Photo du reçu ou PDF"}
+                    </button>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/heic,image/webp,application/pdf"
+                      onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
 
             {error && (
               <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400">

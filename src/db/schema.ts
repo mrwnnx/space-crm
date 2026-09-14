@@ -544,6 +544,21 @@ export const paymentSchedules = pgTable("payment_schedules", {
   amount: numeric("amount"),
   isPaid: boolean("is_paid").notNull().default(false),
   paidAt: timestamp("paid_at"),
+  // ── Qui a encaissé, et la preuve (migration 0125) ──
+  // Portés par l'ÉCHÉANCE, pas par le lead : quelqu'un qui paie en trois fois
+  // peut verser le premier en espèces à Fatma et le deuxième par virement.
+  // Email d'un membre de l'équipe, ou 'banque' pour un virement sur le compte.
+  // Pas de clé étrangère : retirer quelqu'un de l'équipe ne doit pas effacer
+  // la trace de ce qu'il a encaissé.
+  receivedBy: text("received_by"),
+  // Comment l'argent est arrivé : 'especes' | 'virement' | 'cheque'.
+  // Le MOYEN dit comment il est arrivé, le DÉTENTEUR où il se trouve.
+  method: text("method"),
+  // Chemin DANS le bucket privé, jamais une URL : l'adresse signée se fabrique
+  // à la lecture et expire. Un justificatif de virement porte un RIB.
+  proofPath: text("proof_path"),
+  proofName: text("proof_name"),
+  proofUploadedAt: timestamp("proof_uploaded_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

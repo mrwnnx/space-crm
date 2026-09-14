@@ -1593,25 +1593,47 @@ export async function generateScheduleForLead(
 
 // Marque une échéance précise comme payée.
 // exec = db par défaut ; passer un tx Drizzle pour exécuter dans une transaction.
-export async function markEcheancePaid(id: string, exec: DbExecutor = db) {
+export async function markEcheancePaid(
+  id: string,
+  exec: DbExecutor = db,
+  receivedBy?: string | null,
+  method?: string | null
+) {
   await exec
     .update(paymentSchedules)
-    .set({ isPaid: true, paidAt: new Date() })
+    .set({
+      isPaid: true,
+      paidAt: new Date(),
+      receivedBy: receivedBy ?? null,
+      method: method ?? null,
+    })
     .where(eq(paymentSchedules.id, id));
 }
 
 // Marque la PREMIÈRE échéance d'un lead comme payée (utilisé par enrollLeadAction).
 // exec = db par défaut ; passer un tx Drizzle pour exécuter dans une transaction.
-export async function markFirstEcheancePaid(leadId: string, exec: DbExecutor = db) {
+export async function markFirstEcheancePaid(
+  leadId: string,
+  exec: DbExecutor = db,
+  receivedBy?: string | null,
+  method?: string | null
+): Promise<string | null> {
   const schedules = await exec.query.paymentSchedules.findMany({
     where: eq(paymentSchedules.leadId, leadId),
     orderBy: [asc(paymentSchedules.createdAt)],
   });
-  if (schedules.length === 0) return;
+  if (schedules.length === 0) return null;
   await exec
     .update(paymentSchedules)
-    .set({ isPaid: true, paidAt: new Date() })
+    .set({
+      isPaid: true,
+      paidAt: new Date(),
+      receivedBy: receivedBy ?? null,
+      method: method ?? null,
+    })
     .where(eq(paymentSchedules.id, schedules[0].id));
+  // L'id remonte pour que l'appelant puisse y attacher un justificatif.
+  return schedules[0].id;
 }
 
 // Retourne l'échéancier d'un lead ordonné par dueDate + résumé.
@@ -1629,9 +1651,12 @@ export async function getScheduleForLead(leadId: string) {
 
 // Marque une échéance comme non payée (correction).
 export async function markEcheanceUnpaid(id: string, exec: DbExecutor = db) {
+  // `proofPath` et `proofName` sont volontairement conservés : décocher est le
+  // plus souvent une correction de clic, et on ne détruit pas une preuve de
+  // paiement pour ça. Le justificatif est reproposé au prochain pointage.
   await exec
     .update(paymentSchedules)
-    .set({ isPaid: false, paidAt: null })
+    .set({ isPaid: false, paidAt: null, receivedBy: null, method: null })
     .where(eq(paymentSchedules.id, id));
 }
 
