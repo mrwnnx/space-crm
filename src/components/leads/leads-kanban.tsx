@@ -398,7 +398,11 @@ export function LeadsKanban({
                     <AutomationStatsBadge
                       automationId={automationMap.get(status.id)!.id}
                       columnName={status.name}
-                      templateName={automationMap.get(status.id)!.templateName}
+                      templateName={
+                        automationMap.get(status.id)!.templateName ??
+                        automationMap.get(status.id)!.whatsappTemplate ??
+                        "—"
+                      }
                       delay={delayLabel(automationMap.get(status.id)!.delayMinutes)}
                     />
                   )}

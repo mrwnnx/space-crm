@@ -205,12 +205,66 @@ async function executeRule(
   const lead = await getLeadById(leadId);
   if (!lead) return log("cancelled", "Lead introuvable");
 
+  // ── Canal WhatsApp ────────────────────────────────────────────────
+  // Traité avant les garde-fous email : ceux-ci portent sur l'adresse et le
+  // désabonnement, qui n'ont pas de sens ici.
+  if (rule.channel === "whatsapp") {
+    if (!rule.whatsappTemplate) return log("failed", "Aucun modèle WhatsApp sur la règle");
+    if (!lead.mobileNo) return log("skipped", "Aucun numéro de téléphone sur le lead");
+
+    // Le plafond est celui du COMPTE : WhatsApp et email s'y partagent la
+    // journée, comme les campagnes.
+    if ((await sentToday()) >= DAILY_LIMIT) return postpone(rule, leadId, runId);
+
+    const vars = buildVariables(lead, false);
+    // Meta ne connaît pas les noms : ses modèles portent {{1}}, {{2}}…
+    // C'est l'ORDRE de cette liste qui fait la correspondance.
+    const noms = (rule.whatsappVariables as string[]) ?? [];
+    const valeurs = noms.map((n) => vars[n] ?? "");
+
+    const { sendWhatsAppTemplate } = await import("@/lib/messaging/whatsapp");
+    const envoi = await sendWhatsAppTemplate({
+      to: lead.mobileNo,
+      template: rule.whatsappTemplate,
+      langue: rule.whatsappLanguage,
+      variables: valeurs,
+    });
+    if (!envoi.ok) return log("failed", envoi.error);
+
+    if (runId) {
+      await db
+        .update(automationRuns)
+        .set({ status: "sent", reason: null, sentAt: new Date(), whatsappId: envoi.id })
+        .where(eq(automationRuns.id, runId));
+    } else {
+      await db.insert(automationRuns).values({
+        automationId: rule.id,
+        leadId,
+        status: "sent",
+        sentAt: new Date(),
+        whatsappId: envoi.id,
+      });
+    }
+
+    await createActivity({
+      referenceType: "lead",
+      referenceId: leadId,
+      type: "whatsapp",
+      direction: "outbound",
+      subject: `WhatsApp automatique — modèle « ${rule.whatsappTemplate} »`,
+      content: valeurs.length ? `Variables : ${valeurs.join(" · ")}` : "Modèle sans variable",
+      createdBy: "automation",
+    });
+    return "sent";
+  }
+
   // Garde-fous repris des campagnes : on n'écrit jamais à quelqu'un qui s'est
   // désabonné ni à une adresse morte.
   if (!lead.email) return log("skipped", "Aucune adresse email sur le lead");
   if (lead.contact?.unsubscribedAt) return log("skipped", "Contact désabonné");
   if (lead.contact?.bouncedAt) return log("skipped", "Adresse en rebond");
 
+  if (!rule.emailTemplateId) return log("failed", "Aucun modèle d'email sur la règle");
   const template = await getEmailTemplateById(rule.emailTemplateId);
   if (!template) return log("failed", "Modèle d'email introuvable");
   if (!template.subject?.trim()) return log("skipped", "Le modèle n'a pas d'objet");

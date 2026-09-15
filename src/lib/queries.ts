@@ -3191,18 +3191,25 @@ export async function deleteStageTag(statusId: string) {
 // Une colonne porte AU PLUS une règle (index unique sur status_id, 0120).
 
 export async function getAutomationsByBootcamp(bootcampId: string) {
+  // ⚠️ leftJoin et non innerJoin : une règle WhatsApp n'a pas de modèle
+  // d'email, et une jointure interne la ferait disparaître de l'écran — la
+  // règle continuerait d'envoyer sans que personne puisse la voir ni l'arrêter.
   return db
     .select({
       id: automations.id,
       statusId: automations.statusId,
+      channel: automations.channel,
       emailTemplateId: automations.emailTemplateId,
+      whatsappTemplate: automations.whatsappTemplate,
+      whatsappLanguage: automations.whatsappLanguage,
+      whatsappVariables: automations.whatsappVariables,
       delayMinutes: automations.delayMinutes,
       active: automations.active,
       templateName: emailTemplates.name,
       templateSubject: emailTemplates.subject,
     })
     .from(automations)
-    .innerJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
+    .leftJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
     .where(eq(automations.bootcampId, bootcampId));
 }
 

@@ -13,14 +13,37 @@ import { AUTOMATION_DELAYS } from "@/lib/automation-delays";
 export type ColumnAutomation = {
   id: string;
   statusId: string;
-  emailTemplateId: string;
+  /** 'email' | 'whatsapp' */
+  channel: string;
+  /** Nul sur une règle WhatsApp. */
+  emailTemplateId: string | null;
+  whatsappTemplate: string | null;
+  whatsappLanguage: string;
+  /** Les noms des variables du CRM, dans l'ordre attendu par Meta. */
+  whatsappVariables: unknown;
   delayMinutes: number;
   active: boolean;
-  templateName: string;
+  /** Nuls sur une règle WhatsApp (jointure externe). */
+  templateName: string | null;
   templateSubject: string | null;
 };
 
 export type TemplateOption = { id: string; name: string; subject: string | null };
+
+/**
+ * Les variables que le CRM sait remplir — celles de `buildVariables`.
+ * Tenue à la main : une liste dérivée du serveur obligerait à importer un
+ * module serveur dans un composant client.
+ */
+const VARIABLES = [
+  "firstName",
+  "lastName",
+  "fullName",
+  "formation",
+  "dateDebut",
+  "offre",
+  "email",
+] as const;
 
 export function ColumnAutomationDialog({
   bootcampId,
@@ -38,7 +61,17 @@ export function ColumnAutomationDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const [canal, setCanal] = useState<"email" | "whatsapp">(
+    automation?.channel === "whatsapp" ? "whatsapp" : "email"
+  );
   const [templateId, setTemplateId] = useState(automation?.emailTemplateId ?? "");
+  const [waTemplate, setWaTemplate] = useState(automation?.whatsappTemplate ?? "");
+  const [waLangue, setWaLangue] = useState(automation?.whatsappLanguage ?? "fr");
+  const [waVars, setWaVars] = useState<string[]>(
+    Array.isArray(automation?.whatsappVariables)
+      ? (automation!.whatsappVariables as string[])
+      : []
+  );
   const [delay, setDelay] = useState(automation?.delayMinutes ?? 0);
   const [active, setActive] = useState(automation?.active ?? true);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +85,11 @@ export function ColumnAutomationDialog({
         statusId,
         templateId,
         delay,
-        active
+        active,
+        canal,
+        canal === "whatsapp"
+          ? { template: waTemplate, langue: waLangue, variables: waVars }
+          : undefined
       );
       if ("error" in res && res.error) {
         setError(res.error);
@@ -85,11 +122,113 @@ export function ColumnAutomationDialog({
           Automatiser « {columnName} »
         </h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          Chaque lead qui entre dans cette colonne reçoit cet email — <strong>une seule
+          Chaque lead qui entre dans cette colonne reçoit ce message — <strong>une seule
           fois</strong>, quel que soit le chemin&nbsp;: glisser-déposer, inscription, ou
           import du site.
         </p>
 
+        {/* Le canal se choisit AVANT le modèle : c'est lui qui décide de ce que
+            le reste de la fenêtre demande. */}
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          {(
+            [
+              ["email", "Email"],
+              ["whatsapp", "WhatsApp"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setCanal(v)}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                canal === v
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {canal === "whatsapp" && (
+          <div className="mb-4 space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground">
+                Nom du modèle approuvé par Meta
+              </label>
+              <input
+                value={waTemplate}
+                onChange={(e) => setWaTemplate(e.target.value.toLowerCase())}
+                placeholder="brochure_programme"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              />
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                Minuscules, chiffres et underscores uniquement. Le modèle doit exister et être
+                approuvé dans le WhatsApp Manager — sinon l&apos;envoi échoue au premier lead.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground">Langue</label>
+              <input
+                value={waLangue}
+                onChange={(e) => setWaLangue(e.target.value)}
+                placeholder="fr"
+                className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Exactement le code déclaré avec le modèle : <code>fr</code>, <code>en_US</code>,
+                <code>ar</code>…
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground">
+                Variables, dans l&apos;ordre
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {VARIABLES.map((v) => {
+                  const rang = waVars.indexOf(v);
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() =>
+                        setWaVars((prev) =>
+                          prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
+                        )
+                      }
+                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                        rang >= 0
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {rang >= 0 && (
+                        <span className="mr-1 font-mono font-semibold">{`{{${rang + 1}}}`}</span>
+                      )}
+                      {v}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                Meta ne connaît pas les noms : ses modèles portent{" "}
+                <code>{"{{1}}"}</code>, <code>{"{{2}}"}</code>… C&apos;est l&apos;ordre de
+                sélection qui fait la correspondance. Clique pour ajouter ou retirer.
+              </p>
+            </div>
+
+            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-500">
+              Un lead sans numéro de téléphone est ignoré, comme une règle email ignore un lead
+              sans adresse.
+            </p>
+          </div>
+        )}
+
+        {canal === "email" && (
+        <>
         <label className="mb-1 block text-xs font-medium text-foreground">
           Modèle d&apos;email
         </label>
@@ -124,6 +263,9 @@ export function ColumnAutomationDialog({
           </>
         )}
 
+        </>
+        )}
+
         <label className="mb-1 block text-xs font-medium text-foreground">
           Quand l&apos;envoyer
         </label>
@@ -141,7 +283,7 @@ export function ColumnAutomationDialog({
         <p className="mb-3 text-[11px] text-muted-foreground">
           {delay === 0
             ? "Part au moment où le lead entre dans la colonne."
-            : "Précision au quart d'heure : la file part toutes les ~15 min. L'email est annulé si le lead a quitté la colonne entre-temps."}
+            : "Précision au quart d'heure : la file part toutes les ~15 min. L'envoi est annulé si le lead a quitté la colonne entre-temps."}
         </p>
 
         <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-foreground">

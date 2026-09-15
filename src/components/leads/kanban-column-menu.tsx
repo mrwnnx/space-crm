@@ -231,7 +231,7 @@ export function ColumnMenu({
         <AutomationStatsDialog
           automationId={automation.id}
           columnName={name}
-          templateName={automation.templateName}
+          templateName={automation.templateName ?? automation.whatsappTemplate ?? "—"}
           onClose={() => setShowStats(false)}
         />
       )}

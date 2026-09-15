@@ -282,11 +282,13 @@ export async function saveColumnAutomationAction(
   statusId: string,
   emailTemplateId: string,
   delayMinutes: number,
-  active: boolean
+  active: boolean,
+  /** Canal de la règle. Absent = email, pour ne pas casser les appels existants. */
+  canal: "email" | "whatsapp" = "email",
+  whatsapp?: { template: string; langue: string; variables: string[] }
 ) {
   await requireUser();
 
-  if (!emailTemplateId) return { error: "Choisis un modèle d'email." };
   if (!Number.isInteger(delayMinutes) || delayMinutes < 0 || delayMinutes > 43200) {
     return { error: "Délai invalide (0 à 30 jours)." };
   }
@@ -294,12 +296,47 @@ export async function saveColumnAutomationAction(
   const { getEmailTemplateById, getAutomationsByBootcamp, createAutomation, updateAutomation } =
     await import("@/lib/queries");
 
-  // Un modèle sans objet est refusé À LA CRÉATION DE LA RÈGLE, pas découvert
-  // au premier envoi — sinon la panne n'apparaît que le jour où ça compte.
-  const template = await getEmailTemplateById(emailTemplateId);
-  if (!template) return { error: "Modèle d'email introuvable." };
-  if (!template.subject?.trim()) {
-    return { error: `Le modèle « ${template.name} » n'a pas d'objet : il ne peut pas être envoyé.` };
+  // Les valeurs écrites en base dépendent du canal, et on met à NULL celles de
+  // l'autre : une règle basculée d'un canal à l'autre ne doit pas garder un
+  // modèle fantôme que personne ne voit plus.
+  let champs: Record<string, unknown>;
+
+  if (canal === "whatsapp") {
+    const nom = whatsapp?.template?.trim();
+    if (!nom) return { error: "Indique le nom du modèle WhatsApp approuvé par Meta." };
+    // Meta impose ce format aux noms de modèles : minuscules, chiffres,
+    // underscores. Le refuser ici évite un échec au premier envoi réel.
+    if (!/^[a-z0-9_]+$/.test(nom)) {
+      return {
+        error:
+          "Un nom de modèle Meta ne contient que des minuscules, des chiffres et des underscores.",
+      };
+    }
+    champs = {
+      channel: "whatsapp",
+      whatsappTemplate: nom,
+      whatsappLanguage: whatsapp?.langue?.trim() || "fr",
+      whatsappVariables: whatsapp?.variables ?? [],
+      emailTemplateId: null,
+      delayMinutes,
+      active,
+    };
+  } else {
+    if (!emailTemplateId) return { error: "Choisis un modèle d'email." };
+    // Un modèle sans objet est refusé À LA CRÉATION DE LA RÈGLE, pas découvert
+    // au premier envoi — sinon la panne n'apparaît que le jour où ça compte.
+    const template = await getEmailTemplateById(emailTemplateId);
+    if (!template) return { error: "Modèle d'email introuvable." };
+    if (!template.subject?.trim()) {
+      return { error: `Le modèle « ${template.name} » n'a pas d'objet : il ne peut pas être envoyé.` };
+    }
+    champs = {
+      channel: "email",
+      emailTemplateId,
+      whatsappTemplate: null,
+      delayMinutes,
+      active,
+    };
   }
 
   const existing = (await getAutomationsByBootcamp(bootcampId)).find(
@@ -307,17 +344,15 @@ export async function saveColumnAutomationAction(
   );
 
   if (existing) {
-    await updateAutomation(existing.id, { emailTemplateId, delayMinutes, active });
+    await updateAutomation(existing.id, champs);
   } else {
     const { currentActor } = await import("@/lib/auth");
     await createAutomation({
       bootcampId,
       statusId,
-      emailTemplateId,
-      delayMinutes,
-      active,
+      ...champs,
       createdBy: await currentActor(),
-    });
+    } as Parameters<typeof createAutomation>[0]);
   }
 
   revalidatePath(`/bootcamps/${bootcampId}`);

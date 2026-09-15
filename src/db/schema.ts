@@ -1077,9 +1077,19 @@ export const automations = pgTable("automations", {
   statusId: uuid("status_id")
     .notNull()
     .references(() => leadStatuses.id, { onDelete: "cascade" }),
-  emailTemplateId: uuid("email_template_id")
-    .notNull()
-    .references(() => emailTemplates.id),
+  // ── Canal (migration 0128) ──
+  // 'email' | 'whatsapp'. Une contrainte en base garantit qu'une règle porte
+  // bien le modèle de son canal : sans elle, une règle sans modèle du tout
+  // serait silencieusement inerte.
+  channel: text("channel").notNull().default("email"),
+  // Nul pour une règle WhatsApp.
+  emailTemplateId: uuid("email_template_id").references(() => emailTemplates.id),
+  // Le nom du modèle approuvé par Meta, et la langue déclarée avec lui.
+  whatsappTemplate: text("whatsapp_template"),
+  whatsappLanguage: text("whatsapp_language").notNull().default("fr"),
+  // Les NOMS des variables du CRM, dans l'ordre où Meta les attend : ses
+  // modèles portent {{1}}, {{2}}… donc c'est la POSITION qui fait le lien.
+  whatsappVariables: jsonb("whatsapp_variables").notNull().default([]),
   // 0 = envoi immédiat à l'entrée. Sinon file d'attente, vidée toutes les
   // ~15 min : la précision est au quart d'heure, pas à la minute.
   delayMinutes: integer("delay_minutes").notNull().default(0),
@@ -1111,6 +1121,8 @@ export const automationRuns = pgTable("automation_runs", {
   // de rattacher « ouvert » ou « cliqué » à la bonne ligne : sans lui, les
   // événements arrivaient et étaient jetés en silence.
   resendId: text("resend_id"),
+  // L'équivalent pour WhatsApp — le « wamid » rendu par Meta à l'envoi.
+  whatsappId: text("whatsapp_id"),
   deliveredAt: timestamp("delivered_at"),
   // Première réaction + nombre de fois, comme pour les campagnes.
   openedAt: timestamp("opened_at"),
