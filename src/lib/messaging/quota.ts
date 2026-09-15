@@ -3,8 +3,29 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaignRecipients, automationRuns } from "@/db/schema";
 
-/** Plafond quotidien du plan gratuit Resend — il vaut pour TOUT le compte. */
-export const DAILY_LIMIT = 100;
+/**
+ * Plafond quotidien d'envoi, pour TOUT le compte Resend.
+ *
+ * Réglable par `EMAIL_DAILY_LIMIT` : le plan gratuit plafonne à 100/jour, le
+ * plan Pro n'a **aucune limite quotidienne** (50 000/mois). Sans cette
+ * variable, passer à Pro n'aurait rien changé — le CRM aurait continué de
+ * brider à 100 sans le dire, et le symptôme (« ma campagne s'arrête toute
+ * seule ») n'aurait désigné aucune cause.
+ *
+ * On garde toujours un plafond, même sur Pro : c'est le seul garde-fou contre
+ * une campagne partie sur la mauvaise cible. Mettre un nombre haut, pas
+ * l'infini.
+ */
+function lireLimite(): number {
+  const brut = process.env.EMAIL_DAILY_LIMIT;
+  if (!brut) return 100;
+  const n = Number.parseInt(brut, 10);
+  // Une valeur illisible retombe sur le plan gratuit : mieux vaut trop prudent
+  // qu'un plafond accidentellement absent.
+  return Number.isFinite(n) && n > 0 ? n : 100;
+}
+
+export const DAILY_LIMIT = lireLimite();
 
 /**
  * Emails déjà partis aujourd'hui, campagnes ET automatisations confondues.
