@@ -126,6 +126,56 @@ export async function sendWhatsAppTemplate({
   });
 }
 
+export type WhatsAppTemplate = {
+  name: string;
+  language: string;
+  status: string; // APPROVED | PENDING | REJECTED…
+  category: string;
+  body: string | null; // le texte, avec ses {{1}}, {{2}}…
+  variables: number; // combien de {{n}} le corps attend
+};
+
+/**
+ * Les modèles du compte WhatsApp (le WABA, pas le numéro) — c'est ce qu'on peut
+ * envoyer hors fenêtre de 24 h. Demande `WHATSAPP_WABA_ID` ; sans lui, liste
+ * vide plutôt qu'une erreur : la page reste utilisable pour le texte libre.
+ */
+export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
+  const token = process.env.WHATSAPP_TOKEN;
+  const waba = process.env.WHATSAPP_WABA_ID;
+  if (!token || !waba) return [];
+  try {
+    const res = await fetch(
+      `${API}/${waba}/message_templates?fields=name,language,status,category,components&limit=100`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    const json = (await res.json().catch(() => null)) as {
+      data?: {
+        name: string;
+        language: string;
+        status: string;
+        category: string;
+        components?: { type: string; text?: string }[];
+      }[];
+    } | null;
+    if (!res.ok || !json?.data) return [];
+    return json.data.map((t) => {
+      const body = t.components?.find((c) => c.type === "BODY")?.text ?? null;
+      const nums = [...(body ?? "").matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+      return {
+        name: t.name,
+        language: t.language,
+        status: t.status,
+        category: t.category,
+        body,
+        variables: nums.length ? Math.max(...nums) : 0,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 /** Le numéro configuré répond-il ? Sert à prouver la connexion sans rien envoyer. */
 export async function checkWhatsApp(): Promise<
   { ok: true; numero: string; nom: string | null; qualite: string | null } | { ok: false; error: string }

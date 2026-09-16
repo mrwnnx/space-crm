@@ -21,9 +21,11 @@ import {
   Tag01Icon,
   Mail01Icon,
   AiMagicIcon,
+  WhatsappIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { WhatsAppUnreadBadge } from "@/components/whatsapp/unread-badge";
 
 type NavItem = {
   href: string;
@@ -41,6 +43,7 @@ const primaryNav: NavItem[] = [
   { href: "/contacts", label: "Contacts", icon: Contact01Icon },
   { href: "/tags", label: "Tags", icon: Tag01Icon },
   { href: "/campaigns", label: "Campagnes", icon: Mail01Icon },
+  { href: "/whatsapp", label: "WhatsApp", icon: WhatsappIcon },
 ];
 
 const secondaryNav: NavItem[] = [
@@ -159,6 +162,7 @@ function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
     >
       <HugeiconsIcon icon={item.icon} size={17} />
       {item.label}
+      {item.href === "/whatsapp" && <WhatsAppUnreadBadge />}
     </Link>
   );
 }

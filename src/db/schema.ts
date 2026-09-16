@@ -1162,3 +1162,16 @@ export const assistantMessages = pgTable("assistant_messages", {
 });
 
 export type AssistantMessage = typeof assistantMessages.$inferSelect;
+
+// La page « WhatsApp » : l'état d'une conversation, à côté du lead et non
+// dedans. Une ligne n'existe qu'une fois la conversation ouverte par un humain.
+// `readAt` = dernière ouverture ; un message reçu après est « non lu ». Partagé
+// par toute l'équipe : c'est la boîte de l'école, pas celle d'une personne.
+// (Table séparée plutôt qu'une colonne sur `leads` : un ALTER de `leads` attend
+// un verrou exclusif que des sessions oisives du pooler ne rendent jamais.)
+export const whatsappConversations = pgTable("whatsapp_conversations", {
+  leadId: uuid("lead_id")
+    .primaryKey()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at"),
+});

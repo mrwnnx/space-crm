@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { leads, activities } from "@/db/schema";
-import { eq, ilike } from "drizzle-orm";
+import { ingestInboundWhatsApp } from "@/lib/whatsapp-inbox";
 
 /**
  * Le webhook WhatsApp de Meta — remplace celui de Twilio.
@@ -62,8 +60,8 @@ export async function POST(request: NextRequest) {
       }[];
     };
 
-    let rattaches = 0;
-    let orphelins = 0;
+    let recus = 0;
+    let leadsCrees = 0;
 
     for (const entry of corps.entry ?? []) {
       for (const change of entry.changes ?? []) {
@@ -79,38 +77,17 @@ export async function POST(request: NextRequest) {
           const texte =
             m.text?.body ?? (m.type ? `[${m.type} reçu, non lisible dans le CRM]` : "[message vide]");
 
-          // Rapprochement par les 8 derniers chiffres : le CRM stocke des
-          // numéros tunisiens parfois sans indicatif, Meta les rend toujours
-          // avec. Comparer les fins évite de rater tout le monde.
-          const fin = m.from.replace(/\D/g, "").slice(-8);
-          const [lead] = await db.query.leads.findMany({
-            where: ilike(leads.mobileNo, `%${fin}%`),
-            limit: 1,
-          });
-
-          if (!lead) {
-            orphelins++;
-            continue;
-          }
-
-          await db.insert(activities).values({
-            referenceType: "lead",
-            referenceId: lead.id,
-            type: "whatsapp",
-            direction: "inbound",
-            subject: `WhatsApp reçu${nom ? ` de ${nom}` : ""}`,
-            content: texte,
-          });
-          await db
-            .update(leads)
-            .set({ lastContactedAt: new Date(), updatedAt: new Date() })
-            .where(eq(leads.id, lead.id));
-          rattaches++;
+          // Rattachement au lead — ou création du lead si le numéro est inconnu.
+          // Tout est dans src/lib/whatsapp-inbox.ts, seul point d'entrée d'un
+          // message reçu.
+          const r = await ingestInboundWhatsApp({ from: m.from, profileName: nom, text: texte });
+          recus++;
+          if (r.leadCreated) leadsCrees++;
         }
       }
     }
 
-    return NextResponse.json({ ok: true, rattaches, orphelins });
+    return NextResponse.json({ ok: true, recus, leadsCrees });
   } catch (err) {
     console.error("Webhook WhatsApp :", err);
     // 200 volontaire : voir l'en-tête. Une erreur de notre côté ne doit pas
