@@ -1175,3 +1175,11 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
     .references(() => leads.id, { onDelete: "cascade" }),
   readAt: timestamp("read_at"),
 });
+
+// Réglages du service WhatsApp — ligne unique. `aiReplyEnabled` est lu par la
+// réponse automatique (lot 3) ; tant qu'elle n'existe pas, il ne fait rien.
+export const whatsappSettings = pgTable("whatsapp_settings", {
+  id: boolean("id").primaryKey().default(true),
+  aiReplyEnabled: boolean("ai_reply_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

@@ -127,13 +127,22 @@ export async function sendWhatsAppTemplate({
 }
 
 export type WhatsAppTemplate = {
+  id: string;
   name: string;
   language: string;
   status: string; // APPROVED | PENDING | REJECTED…
   category: string;
   body: string | null; // le texte, avec ses {{1}}, {{2}}…
   variables: number; // combien de {{n}} le corps attend
+  rejectedReason: string | null; // Meta dit pourquoi, quand il refuse
 };
+
+function wabaConfig() {
+  const token = process.env.WHATSAPP_TOKEN;
+  const waba = process.env.WHATSAPP_WABA_ID;
+  if (!token || !waba) return null;
+  return { token, waba };
+}
 
 /**
  * Les modèles du compte WhatsApp (le WABA, pas le numéro) — c'est ce qu'on peut
@@ -141,38 +150,149 @@ export type WhatsAppTemplate = {
  * vide plutôt qu'une erreur : la page reste utilisable pour le texte libre.
  */
 export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
-  const token = process.env.WHATSAPP_TOKEN;
-  const waba = process.env.WHATSAPP_WABA_ID;
-  if (!token || !waba) return [];
+  const c = wabaConfig();
+  if (!c) return [];
   try {
     const res = await fetch(
-      `${API}/${waba}/message_templates?fields=name,language,status,category,components&limit=100`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      `${API}/${c.waba}/message_templates?fields=id,name,language,status,category,components,rejected_reason&limit=100`,
+      { headers: { Authorization: `Bearer ${c.token}` }, cache: "no-store" }
     );
     const json = (await res.json().catch(() => null)) as {
       data?: {
+        id: string;
         name: string;
         language: string;
         status: string;
         category: string;
+        rejected_reason?: string;
         components?: { type: string; text?: string }[];
       }[];
     } | null;
     if (!res.ok || !json?.data) return [];
     return json.data.map((t) => {
       const body = t.components?.find((c) => c.type === "BODY")?.text ?? null;
-      const nums = [...(body ?? "").matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
       return {
+        id: t.id,
         name: t.name,
         language: t.language,
         status: t.status,
         category: t.category,
         body,
-        variables: nums.length ? Math.max(...nums) : 0,
+        variables: countTemplateVariables(body),
+        // Meta rend "NONE" quand il n'y a rien à dire.
+        rejectedReason: t.rejected_reason && t.rejected_reason !== "NONE" ? t.rejected_reason : null,
       };
     });
   } catch {
     return [];
+  }
+}
+
+/** Combien de {{n}} un corps de modèle attend — c'est le plus grand numéro, pas le nombre d'occurrences. */
+export function countTemplateVariables(body: string | null): number {
+  const nums = [...(body ?? "").matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+  return nums.length ? Math.max(...nums) : 0;
+}
+
+/**
+ * Soumettre un modèle à Meta. Il part en PENDING ; l'approbation prend de
+ * quelques minutes à 48 h, et Meta peut requalifier la catégorie.
+ *
+ * `examples` : une valeur d'exemple par variable — Meta les EXIGE dès qu'il y
+ * a un {{n}}, c'est avec ça que ses relecteurs jugent le message.
+ */
+export async function createWhatsAppTemplate(input: {
+  name: string;
+  language: string;
+  category: "MARKETING" | "UTILITY";
+  body: string;
+  examples: string[];
+}): Promise<{ ok: true; id: string; status: string } | { ok: false; error: string }> {
+  const c = wabaConfig();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_WABA_ID absent de l'environnement." };
+
+  const n = countTemplateVariables(input.body);
+  const body: Record<string, unknown> = { type: "BODY", text: input.body };
+  if (n > 0) body.example = { body_text: [input.examples.slice(0, n)] };
+
+  try {
+    const res = await fetch(`${API}/${c.waba}/message_templates`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name,
+        language: input.language,
+        category: input.category,
+        components: [body],
+      }),
+    });
+    const json = (await res.json().catch(() => null)) as
+      | { id?: string; status?: string; error?: { message?: string; error_user_msg?: string } }
+      | null;
+    if (!res.ok || !json?.id) {
+      // `error_user_msg` est la phrase lisible ; `message` le code technique.
+      return { ok: false, error: json?.error?.error_user_msg ?? json?.error?.message ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, id: json.id, status: json.status ?? "PENDING" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
+  }
+}
+
+/** Retirer un modèle (toutes ses langues) — un nom refusé reste pris tant qu'on ne l'efface pas. */
+export async function deleteWhatsAppTemplate(name: string): Promise<{ ok: boolean; error?: string }> {
+  const c = wabaConfig();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_WABA_ID absent de l'environnement." };
+  try {
+    const res = await fetch(`${API}/${c.waba}/message_templates?name=${encodeURIComponent(name)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${c.token}` },
+    });
+    const json = (await res.json().catch(() => null)) as { success?: boolean; error?: { message?: string } } | null;
+    if (!res.ok || !json?.success) return { ok: false, error: json?.error?.message ?? `HTTP ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
+  }
+}
+
+export type WhatsAppNumber = {
+  numero: string;
+  nom: string | null;
+  qualite: string | null; // GREEN | YELLOW | RED | UNKNOWN
+  statut: string | null; // CONNECTED…
+  plateforme: string | null; // CLOUD_API attendu
+  nomVerifie: string | null; // APPROVED…
+  debit: string | null; // STANDARD…
+};
+
+/** Tout ce que Meta sait du numéro configuré — pour l'écran Paramètres. */
+export async function getWhatsAppNumber(): Promise<{ ok: true; numero: WhatsAppNumber } | { ok: false; error: string }> {
+  const c = config();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent de l'environnement." };
+  try {
+    const res = await fetch(
+      `${API}/${c.phoneId}?fields=display_phone_number,verified_name,quality_rating,status,platform_type,name_status,throughput`,
+      { headers: { Authorization: `Bearer ${c.token}` }, cache: "no-store" }
+    );
+    const json = (await res.json().catch(() => null)) as
+      | (Record<string, string | undefined> & { throughput?: { level?: string }; error?: { message?: string } })
+      | null;
+    if (!res.ok || !json) return { ok: false, error: json?.error?.message ?? `HTTP ${res.status}` };
+    return {
+      ok: true,
+      numero: {
+        numero: json.display_phone_number ?? "?",
+        nom: json.verified_name ?? null,
+        qualite: json.quality_rating ?? null,
+        statut: json.status ?? null,
+        plateforme: json.platform_type ?? null,
+        nomVerifie: json.name_status ?? null,
+        debit: json.throughput?.level ?? null,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
   }
 }
 

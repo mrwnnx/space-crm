@@ -6,6 +6,9 @@ import { WpConnectionForm } from "@/components/settings/wp-connection-form";
 import { TeamManager } from "@/components/settings/team-manager";
 import { EmailDesignForm } from "@/components/settings/email-design-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
+import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
+import { getWhatsAppNumber, listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
+import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +19,7 @@ export default async function SettingsPage({
 }) {
   const { tab } = await searchParams;
   const current: SettingsTab =
-    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding"
+    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding" || tab === "whatsapp"
       ? tab
       : "site";
 
@@ -33,6 +36,11 @@ export default async function SettingsPage({
   const allowed = current === "team" ? await getAllowedEmails() : [];
   const outsideAccounts = current === "team" ? await getAccountsOutsideAllowlist() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
+  // WhatsApp : le numéro et les modèles viennent de Meta, l'interrupteur de la base.
+  const [waNumero, waTemplates, waSettings] =
+    current === "whatsapp"
+      ? await Promise.all([getWhatsAppNumber(), listWhatsAppTemplates(), getWhatsAppSettings()])
+      : [null, [], null];
 
   return (
     <>
@@ -128,6 +136,14 @@ export default async function SettingsPage({
           </section>
           )}
 
+          {current === "whatsapp" && waNumero && waSettings && (
+            <WhatsAppSettings
+              numero={waNumero}
+              templates={waTemplates}
+              aiReplyEnabled={waSettings.aiReplyEnabled}
+            />
+          )}
+
           {current === "providers" && (
           /* Messaging providers status */
           <section className="rounded-xl border border-border bg-card p-5">
@@ -140,8 +156,8 @@ export default async function SettingsPage({
                 configured={!!process.env.RESEND_API_KEY}
               />
               <ProviderRow
-                name="Twilio (WhatsApp + SMS)"
-                configured={!!process.env.TWILIO_ACCOUNT_SID}
+                name="WhatsApp (API Cloud de Meta)"
+                configured={!!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID}
               />
             </div>
             <p className="mt-3 text-[10px] text-muted-foreground/60">
