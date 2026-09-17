@@ -218,6 +218,16 @@ export async function getDefaultLeadStatus(bootcampId?: string) {
   });
 }
 
+// Colonne d'entrée d'une formation : la colonne par défaut, sinon la première (une formation archivée n'en a pas toujours).
+export async function getEntryLeadStatus(bootcampId: string) {
+  const def = await getDefaultLeadStatus(bootcampId);
+  if (def) return def;
+  return db.query.leadStatuses.findFirst({
+    where: eq(leadStatuses.bootcampId, bootcampId),
+    orderBy: [asc(leadStatuses.position)],
+  });
+}
+
 // ── Lead Sources / Industries ──────────────────────────
 
 export async function getLeadSources() {
@@ -244,6 +254,7 @@ export async function getLeads(opts?: {
   statusId?: string;
   temperature?: "hot" | "cold";
   converted?: boolean;
+  tagId?: string;
 }): Promise<LeadWithRelations[]> {
   const filters: ReturnType<typeof and>[] = [];
 
@@ -261,6 +272,12 @@ export async function getLeads(opts?: {
   if (opts?.statusId) filters.push(eq(leads.statusId, opts.statusId));
   if (opts?.temperature) filters.push(eq(leads.temperature, opts.temperature));
   if (opts?.converted !== undefined) filters.push(eq(leads.converted, opts.converted));
+  if (opts?.tagId) {
+    filters.push(
+      // Identifiants en clair : dans un where de db.query, Drizzle réécrirait ${leadTags.leadId} avec l'alias de "leads".
+      sql`exists (select 1 from lead_tags lt where lt.lead_id = ${leads.id} and lt.tag_id = ${opts.tagId})`
+    );
+  }
 
   return db.query.leads.findMany({
     where: filters.length > 0 ? and(...filters) : undefined,
@@ -1462,6 +1479,54 @@ export async function createTag(data: typeof tags.$inferInsert) {
 
 export async function attachTagToLead(leadId: string, tagId: string) {
   await db.insert(leadTags).values({ leadId, tagId }).onConflictDoNothing();
+}
+
+// Import CSV : un tag choisi par son nom — réutilisé s'il existe déjà (tags.name est UNIQUE).
+export async function getOrCreateTagByName(name: string) {
+  const clean = name.trim();
+  const found = await db.query.tags.findFirst({
+    where: sql`lower(${tags.name}) = ${clean.toLowerCase()}`,
+  });
+  if (found) return found;
+  return createTag({ name: clean, color: "gray" });
+}
+
+// Import CSV : compléter un lead et son contact déjà connus — remplir ce qui est vide, ne jamais écraser.
+// Un nom égal à l'email (ou à sa partie avant le @) est un nom de remplacement : il compte comme vide.
+export async function completeFromImport(
+  leadId: string,
+  contactId: string,
+  f: { fullName: string | null; firstName: string | null; lastName: string | null; mobileNo: string | null; phone: string | null }
+) {
+  const placeholder = sql`(lower(${leads.fullName}) = lower(coalesce(${leads.email}, '')) or lower(${leads.fullName}) = split_part(lower(coalesce(${leads.email}, '')), '@', 1))`;
+  await db
+    .update(leads)
+    .set({
+      fullName: sql`case when ${placeholder} then coalesce(${f.fullName}, ${leads.fullName}) else ${leads.fullName} end`,
+      firstName: sql`coalesce(nullif(${leads.firstName}, ''), ${f.firstName})`,
+      mobileNo: sql`coalesce(nullif(${leads.mobileNo}, ''), ${f.mobileNo})`,
+      phone: sql`coalesce(nullif(${leads.phone}, ''), ${f.phone})`,
+    })
+    .where(eq(leads.id, leadId));
+  const cPlaceholder = sql`(lower(${contacts.fullName}) = lower(coalesce(${contacts.email}, '')) or lower(${contacts.fullName}) = split_part(lower(coalesce(${contacts.email}, '')), '@', 1))`;
+  await db
+    .update(contacts)
+    .set({
+      fullName: sql`case when ${cPlaceholder} then coalesce(${f.fullName}, ${contacts.fullName}) else ${contacts.fullName} end`,
+      firstName: sql`coalesce(nullif(${contacts.firstName}, ''), ${f.firstName})`,
+      lastName: sql`coalesce(nullif(${contacts.lastName}, ''), ${f.lastName})`,
+      mobileNo: sql`coalesce(nullif(${contacts.mobileNo}, ''), ${f.mobileNo})`,
+    })
+    .where(eq(contacts.id, contactId));
+}
+
+// Import CSV : la personne a-t-elle déjà un lead (dans n'importe quelle formation) ?
+export async function findLeadIdByContact(contactId: string): Promise<string | null> {
+  const lead = await db.query.leads.findFirst({
+    columns: { id: true },
+    where: eq(leads.contactId, contactId),
+  });
+  return lead?.id ?? null;
 }
 
 export async function detachTagFromLead(leadId: string, tagId: string) {

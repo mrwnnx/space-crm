@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
+import type { BulkImportResult, BulkImportLeadsOptions } from "@/lib/import-csv";
 import {
   getBootcampById,
   createBootcamp as createBootcampQuery,
@@ -2302,99 +2303,29 @@ export async function analyzeLeadsAction(
 
 // ── Data Import ────────────────────────────────────────
 
+export type { BulkImportResult, BulkImportLeadsOptions } from "@/lib/import-csv";
+
 export async function bulkImportLeadsAction(
   rows: Record<string, string>[],
-  fieldMapping: Record<string, string>
-) {
+  fieldMapping: Record<string, string>,
+  opts?: BulkImportLeadsOptions
+): Promise<BulkImportResult> {
   await requireUser();
-  const {
-    createLead: createLeadQuery,
-    getDefaultLeadStatus,
-    getOrCreateContactForLead,
-  } = await import("@/lib/queries");
-  const defaultStatus = await getDefaultLeadStatus();
-
-  let created = 0;
-  let errors = 0;
-
-  for (const row of rows) {
-    try {
-      const leadData: Record<string, string | null> = {};
-      for (const [csvCol, fieldName] of Object.entries(fieldMapping)) {
-        if (fieldName && row[csvCol] !== undefined) {
-          leadData[fieldName] = row[csvCol].trim() || null;
-        }
-      }
-
-      if (!leadData.fullName) continue;
-
-      // Dédup contact (Phase 2) — set contactId sur le lead importé
-      const contact = await getOrCreateContactForLead({
-        email: leadData.email || null,
-        mobileNo: leadData.mobileNo || null,
-        firstName: leadData.firstName || null,
-        lastName: leadData.lastName || null,
-        fullName: leadData.fullName,
-      });
-
-      await createLeadQuery({
-        fullName: leadData.fullName,
-        email: leadData.email || null,
-        mobileNo: leadData.mobileNo || null,
-        phone: leadData.phone || null,
-        organizationName: leadData.organizationName || null,
-        jobTitle: leadData.jobTitle || null,
-        website: leadData.website || null,
-        statusId: defaultStatus?.id ?? null,
-        contactId: contact.id,
-      });
-      created++;
-    } catch {
-      errors++;
-    }
-  }
-
+  const { importLeads } = await import("@/lib/import-csv");
+  const res = await importLeads(rows, fieldMapping, opts);
   revalidatePath("/leads");
-  return { created, errors, total: rows.length };
+  return res;
 }
 
 export async function bulkImportContactsAction(
   rows: Record<string, string>[],
   fieldMapping: Record<string, string>
-) {
+): Promise<BulkImportResult> {
   await requireUser();
-  const { getOrCreateContactForLead } = await import("@/lib/queries");
-
-  let created = 0;
-  let errors = 0;
-
-  for (const row of rows) {
-    try {
-      const leadData: Record<string, string | null> = {};
-      for (const [csvCol, fieldName] of Object.entries(fieldMapping)) {
-        if (fieldName && row[csvCol] !== undefined) {
-          leadData[fieldName] = row[csvCol].trim() || null;
-        }
-      }
-
-      if (!leadData.fullName) continue;
-
-      // Dédup contact (Phase 2) — remplace l'insertion brute
-      await getOrCreateContactForLead({
-        email: leadData.email || null,
-        mobileNo: leadData.mobileNo || null,
-        firstName: leadData.firstName || null,
-        lastName: leadData.lastName || null,
-        fullName: leadData.fullName,
-      });
-      created++;
-    } catch {
-      errors++;
-    }
-  }
-
+  const { importContacts } = await import("@/lib/import-csv");
+  const res = await importContacts(rows, fieldMapping);
   revalidatePath("/contacts");
-  return { created, errors, total: rows.length };
+  return res;
 }
 
 // ── Notification actions ───────────────────────────────

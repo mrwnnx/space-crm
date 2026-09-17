@@ -12,6 +12,7 @@ export function LeadsList({
   filterStatusId,
   filterTemperature,
   filterConverted,
+  filterTagId,
   bootcamps,
   statuses,
   tags,
@@ -21,6 +22,7 @@ export function LeadsList({
   filterStatusId: string | null;
   filterTemperature: string | null;
   filterConverted: string | null;
+  filterTagId: string | null;
   bootcamps: BulkBootcamp[];
   statuses: BulkStatus[];
   tags: BulkTag[];
@@ -62,6 +64,7 @@ export function LeadsList({
     if (params.statusId) sp.set("statusId", params.statusId);
     if (params.temperature) sp.set("temperature", params.temperature);
     if (params.converted) sp.set("converted", params.converted);
+    if (params.tag) sp.set("tag", params.tag);
     const qs = sp.toString();
     return `/leads${qs ? `?${qs}` : ""}`;
   }
@@ -80,6 +83,7 @@ export function LeadsList({
               statusId: filterStatusId || undefined,
               temperature: filterTemperature || undefined,
               converted: filterConverted || undefined,
+              tag: filterTagId || undefined,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -100,6 +104,7 @@ export function LeadsList({
               statusId: v || undefined,
               temperature: filterTemperature || undefined,
               converted: filterConverted || undefined,
+              tag: filterTagId || undefined,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -120,6 +125,7 @@ export function LeadsList({
               statusId: filterStatusId || undefined,
               temperature: v || undefined,
               converted: filterConverted || undefined,
+              tag: filterTagId || undefined,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -139,6 +145,7 @@ export function LeadsList({
               statusId: filterStatusId || undefined,
               temperature: filterTemperature || undefined,
               converted: v || undefined,
+              tag: filterTagId || undefined,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -148,7 +155,28 @@ export function LeadsList({
           <option value="false">Pas inscrit</option>
         </select>
 
-        {(filterBootcampId || filterStatusId || filterTemperature || filterConverted) && (
+        {/* Tag filter */}
+        <select
+          value={filterTagId || ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            window.location.href = filterHref({
+              bootcamp: filterBootcampId || undefined,
+              statusId: filterStatusId || undefined,
+              temperature: filterTemperature || undefined,
+              converted: filterConverted || undefined,
+              tag: v || undefined,
+            });
+          }}
+          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
+        >
+          <option value="">Tous les tags</option>
+          {tags.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+
+        {(filterBootcampId || filterStatusId || filterTemperature || filterConverted || filterTagId) && (
           <Link
             href="/leads"
             className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"

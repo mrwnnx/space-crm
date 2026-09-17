@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; bootcamp?: string; statusId?: string; temperature?: string; converted?: string }>;
+  searchParams: Promise<{ q?: string; bootcamp?: string; statusId?: string; temperature?: string; converted?: string; tag?: string }>;
 }) {
-  const { q, bootcamp, statusId, temperature, converted } = await searchParams;
+  const { q, bootcamp, statusId, temperature, converted, tag } = await searchParams;
 
   const [sources, statuses, bootcamps, savedViews, tags] = await Promise.all([
     getLeadSources(),
@@ -29,6 +29,7 @@ export default async function LeadsPage({
     statusId: statusId,
     temperature: temperature === "hot" ? "hot" : temperature === "cold" ? "cold" : undefined,
     converted: converted === "true" ? true : converted === "false" ? false : undefined,
+    tagId: tag,
   });
 
   return (
@@ -68,6 +69,7 @@ export default async function LeadsPage({
           filterStatusId={statusId || null}
           filterTemperature={temperature || null}
           filterConverted={converted || null}
+          filterTagId={tag || null}
           bootcamps={bootcamps.map((b) => ({ id: b.id, name: b.name }))}
           statuses={statuses.map((s) => ({
             id: s.id,

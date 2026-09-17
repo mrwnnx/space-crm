@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useCallback } from "react";
 import Papa from "papaparse";
-import { bulkImportLeadsAction, bulkImportContactsAction } from "@/app/actions";
+import { bulkImportLeadsAction, bulkImportContactsAction, type BulkImportResult } from "@/app/actions";
 import { cn } from "@/lib/utils";
 
 type EntityType = "leads" | "contacts";
+type Option = { id: string; name: string };
+
+// Lignes envoyées par appel serveur : petit pour que la progression avance par pas visibles et tienne dans la fenêtre Vercel.
+const CHUNK_SIZE = 50;
+// Il faut de quoi nommer la personne : un nom complet, un prénom/nom, ou à défaut un email.
+const NAME_FIELDS = ["fullName", "firstName", "lastName", "email"];
 
 const FIELD_OPTIONS: Record<EntityType, { value: string; label: string }[]> = {
   leads: [
     { value: "fullName", label: "Nom complet" },
+    { value: "firstName", label: "Prénom" },
+    { value: "lastName", label: "Nom" },
     { value: "email", label: "Email" },
     { value: "mobileNo", label: "Mobile" },
     { value: "phone", label: "Téléphone" },
@@ -19,20 +27,29 @@ const FIELD_OPTIONS: Record<EntityType, { value: string; label: string }[]> = {
   ],
   contacts: [
     { value: "fullName", label: "Nom complet" },
+    { value: "firstName", label: "Prénom" },
+    { value: "lastName", label: "Nom" },
     { value: "email", label: "Email" },
     { value: "mobileNo", label: "Mobile" },
     { value: "phone", label: "Téléphone" },
   ],
 };
 
-export function DataImporter() {
+export function DataImporter({ tags, bootcamps }: { tags: Option[]; bootcamps: Option[] }) {
   const [entityType, setEntityType] = useState<EntityType>("leads");
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<{ created: number; errors: number; total: number } | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [tagId, setTagId] = useState("");
+  const [newTagName, setNewTagName] = useState("");
+  const [bootcampId, setBootcampId] = useState("");
+  const [result, setResult] = useState<BulkImportResult | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  // Avancement en direct : lignes traitées et compteurs cumulés, mis à jour à chaque paquet.
+  const [progress, setProgress] = useState<BulkImportResult>({ created: 0, existing: 0, skipped: 0, errors: 0, total: 0 });
   const [dragOver, setDragOver] = useState(false);
+
+  const canImport = Object.values(mapping).some((v) => NAME_FIELDS.includes(v));
 
   const handleFile = useCallback((file: File) => {
     Papa.parse<Record<string, string>>(file, {
@@ -68,17 +85,36 @@ export function DataImporter() {
     if (file && file.name.endsWith(".csv")) handleFile(file);
   }
 
-  function handleImport() {
-    startTransition(async () => {
-      const action = entityType === "leads" ? bulkImportLeadsAction : bulkImportContactsAction;
-      const res = await action(csvData, mapping);
-      setResult(res);
-      if (res.created > 0) {
-        setCsvData([]);
-        setHeaders([]);
-        setMapping({});
+  async function handleImport() {
+    setIsPending(true);
+    const total: BulkImportResult = { created: 0, existing: 0, skipped: 0, errors: 0, total: 0 };
+    setProgress({ ...total });
+    try {
+      for (let i = 0; i < csvData.length; i += CHUNK_SIZE) {
+        const chunk = csvData.slice(i, i + CHUNK_SIZE);
+        const res =
+          entityType === "leads"
+            ? await bulkImportLeadsAction(chunk, mapping, {
+                tagId: tagId || null,
+                newTagName: newTagName || null,
+                bootcampId: bootcampId || null,
+              })
+            : await bulkImportContactsAction(chunk, mapping);
+        for (const k of ["created", "existing", "skipped", "errors", "total"] as const) total[k] += res[k];
+        if (res.firstError && !total.firstError) total.firstError = res.firstError;
+        setProgress({ ...total });
       }
-    });
+    } catch (e) {
+      // Un paquet a échoué (réseau, délai) : on compte ses lignes en erreur et on montre ce qui a été fait.
+      total.errors += csvData.length - total.total;
+      total.total = csvData.length;
+      if (!total.firstError) total.firstError = e instanceof Error ? e.message : String(e);
+    }
+    setResult(total);
+    setIsPending(false);
+    setCsvData([]);
+    setHeaders([]);
+    setMapping({});
   }
 
   function downloadTemplate() {
@@ -218,6 +254,58 @@ export function DataImporter() {
             </table>
           </div>
 
+          {/* Tag + destination (leads seulement) */}
+          {entityType === "leads" && (
+            <div className="grid gap-3 rounded-xl border border-border bg-card p-3 sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Tag à poser sur chaque lead</span>
+                <select
+                  value={tagId}
+                  onChange={(e) => {
+                    setTagId(e.target.value);
+                    if (e.target.value) setNewTagName("");
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
+                >
+                  <option value="">— Aucun —</option>
+                  {tags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={newTagName}
+                  onChange={(e) => {
+                    setNewTagName(e.target.value);
+                    if (e.target.value) setTagId("");
+                  }}
+                  placeholder="ou un nouveau tag…"
+                  maxLength={40}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Formation de destination</span>
+                <select
+                  value={bootcampId}
+                  onChange={(e) => setBootcampId(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
+                >
+                  <option value="">Aucune — base de contacts, hors kanban</option>
+                  {bootcamps.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Un email déjà connu ne crée pas de doublon : le tag est posé sur le lead existant.
+                </p>
+              </label>
+            </div>
+          )}
+
           {/* Preview */}
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
@@ -249,16 +337,38 @@ export function DataImporter() {
             </div>
           </div>
 
-          <button
-            onClick={handleImport}
-            disabled={isPending || !Object.values(mapping).some((v) => v === "fullName")}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isPending ? "Import en cours..." : `Importer ${csvData.length} ${entityType}`}
-          </button>
-          {!Object.values(mapping).some((v) => v === "fullName") && (
+          {isPending ? (
+            <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm font-medium text-foreground">Import en cours…</p>
+                <p className="text-2xl font-semibold tabular-nums text-foreground">
+                  {Math.round((progress.total / csvData.length) * 100)} %
+                </p>
+              </div>
+              <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300"
+                  style={{ width: `${(progress.total / csvData.length) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {progress.total} / {csvData.length} lignes · {progress.created} créés · {progress.existing} déjà présents
+                {progress.skipped > 0 && ` · ${progress.skipped} ignorés`}
+                {progress.errors > 0 && ` · ${progress.errors} erreurs`}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={handleImport}
+              disabled={!canImport}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {`Importer ${csvData.length} ${entityType}`}
+            </button>
+          )}
+          {!canImport && (
             <p className="text-xs text-red-500">
-              Vous devez mapper au moins la colonne "Nom complet"
+              Mappez au moins une colonne Nom complet, Prénom / Nom, ou Email
             </p>
           )}
         </div>
@@ -270,11 +380,23 @@ export function DataImporter() {
           <p className="text-sm font-semibold text-foreground">
             Import terminé
           </p>
-          <div className="mt-3 flex justify-center gap-6">
+          <div className="mt-3 flex flex-wrap justify-center gap-6">
             <div>
               <p className="text-2xl font-semibold text-green-600">{result.created}</p>
               <p className="text-xs text-muted-foreground">créés</p>
             </div>
+            {result.existing > 0 && (
+              <div>
+                <p className="text-2xl font-semibold text-foreground">{result.existing}</p>
+                <p className="text-xs text-muted-foreground">déjà présents</p>
+              </div>
+            )}
+            {result.skipped > 0 && (
+              <div>
+                <p className="text-2xl font-semibold text-muted-foreground">{result.skipped}</p>
+                <p className="text-xs text-muted-foreground">ignorés (sans nom ni email)</p>
+              </div>
+            )}
             {result.errors > 0 && (
               <div>
                 <p className="text-2xl font-semibold text-red-600">{result.errors}</p>
@@ -286,6 +408,11 @@ export function DataImporter() {
               <p className="text-xs text-muted-foreground">total</p>
             </div>
           </div>
+          {result.firstError && (
+            <p className="mt-3 break-words rounded-md bg-red-50 px-3 py-2 text-left text-xs text-red-700">
+              Première erreur : {result.firstError}
+            </p>
+          )}
           <button
             onClick={() => setResult(null)}
             className="mt-4 rounded-lg border border-border px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted"
