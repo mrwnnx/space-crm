@@ -10,7 +10,7 @@ import {
   sendWhatsApp,
   sendWhatsAppTemplate,
 } from "@/lib/messaging/whatsapp";
-import { markWhatsAppRead } from "@/lib/whatsapp-inbox";
+import { markWhatsAppRead, recordWhatsAppSent } from "@/lib/whatsapp-inbox";
 import { setAiReplyEnabled } from "@/lib/whatsapp-settings";
 
 /**
@@ -33,7 +33,7 @@ export async function replyWhatsAppAction(leadId: string, to: string, body: stri
   const r = await sendWhatsApp({ to, body: texte });
   if (!r.ok) return { ok: false as const, error: r.error ?? "Échec de l'envoi." };
 
-  await createActivity({
+  const activite = await createActivity({
     referenceType: "lead",
     referenceId: leadId,
     type: "whatsapp",
@@ -41,6 +41,7 @@ export async function replyWhatsAppAction(leadId: string, to: string, body: stri
     subject: "WhatsApp envoyé",
     content: texte,
   });
+  if (r.sid) await recordWhatsAppSent(r.sid, activite.id);
   await updateLead(leadId, { lastContactedAt: new Date() });
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);
@@ -68,7 +69,7 @@ export async function replyWhatsAppTemplateAction(
     /\{\{(\d+)\}\}/g,
     (_, n) => variables[Number(n) - 1] ?? ""
   );
-  await createActivity({
+  const activite = await createActivity({
     referenceType: "lead",
     referenceId: leadId,
     type: "whatsapp",
@@ -76,6 +77,7 @@ export async function replyWhatsAppTemplateAction(
     subject: `WhatsApp envoyé (modèle ${template.name})`,
     content: rendu,
   });
+  await recordWhatsAppSent(r.id, activite.id);
   await updateLead(leadId, { lastContactedAt: new Date() });
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);

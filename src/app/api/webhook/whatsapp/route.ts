@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ingestInboundWhatsApp } from "@/lib/whatsapp-inbox";
+import { applyWhatsAppStatus, ingestInboundWhatsApp } from "@/lib/whatsapp-inbox";
 
 /**
  * Le webhook WhatsApp de Meta — remplace celui de Twilio.
@@ -11,7 +11,8 @@ import { ingestInboundWhatsApp } from "@/lib/whatsapp-inbox";
  * Une réponse JSON échoue, même avec la bonne valeur.
  *
  * **POST** — les événements. Deux familles arrivent ici : les messages entrants
- * (une réponse d'un lead) et les changements de statut (envoyé, livré, lu).
+ * (une réponse d'un lead) et les changements de statut (envoyé, livré, lu,
+ * échec), rattachés à la bulle par le wamid via `whatsapp_messages`.
  *
  * ⚠️ Meta considère toute réponse non-200 comme un échec et **réessaie**. On
  * répond donc 200 même quand on ne sait pas quoi faire d'un événement : un 500
@@ -53,7 +54,11 @@ export async function POST(request: NextRequest) {
         changes?: {
           value?: {
             messages?: Entrant[];
-            statuses?: { status?: string }[];
+            statuses?: {
+              id?: string;
+              status?: string;
+              errors?: { code?: number; title?: string; message?: string }[];
+            }[];
             contacts?: { profile?: { name?: string } }[];
           };
         }[];
@@ -62,10 +67,19 @@ export async function POST(request: NextRequest) {
 
     let recus = 0;
     let leadsCrees = 0;
+    let statuts = 0;
 
     for (const entry of corps.entry ?? []) {
       for (const change of entry.changes ?? []) {
         const v = change.value;
+
+        // Les accusés : envoyé, livré, lu, échec — un par message, par wamid.
+        for (const st of v?.statuses ?? []) {
+          if (!st.id || !st.status) continue;
+          await applyWhatsAppStatus({ wamid: st.id, status: st.status, errors: st.errors });
+          statuts++;
+        }
+
         if (!v?.messages?.length) continue;
 
         const nom = v.contacts?.[0]?.profile?.name ?? null;
@@ -87,7 +101,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, recus, leadsCrees });
+    return NextResponse.json({ ok: true, recus, leadsCrees, statuts });
   } catch (err) {
     console.error("Webhook WhatsApp :", err);
     // 200 volontaire : voir l'en-tête. Une erreur de notre côté ne doit pas

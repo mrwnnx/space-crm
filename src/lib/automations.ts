@@ -246,7 +246,7 @@ async function executeRule(
       });
     }
 
-    await createActivity({
+    const activite = await createActivity({
       referenceType: "lead",
       referenceId: leadId,
       type: "whatsapp",
@@ -255,6 +255,9 @@ async function executeRule(
       content: valeurs.length ? `Variables : ${valeurs.join(" · ")}` : "Modèle sans variable",
       createdBy: "automation",
     });
+    // Le wamid rattache les accusés (livré, lu, échec) à cette bulle.
+    const { recordWhatsAppSent } = await import("@/lib/whatsapp-inbox");
+    await recordWhatsAppSent(envoi.id, activite.id);
     return "sent";
   }
 

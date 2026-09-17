@@ -44,6 +44,8 @@ type Message = {
   content: string | null;
   createdBy: string | null;
   createdAt: string;
+  status: "sent" | "delivered" | "read" | "failed" | null;
+  error: string | null;
 };
 
 type Thread = {
@@ -277,10 +279,28 @@ function Bulle({ m, precedent }: { m: Message; precedent?: Message }) {
           <p className={cn("mt-1 text-right text-[10px]", sortant ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {sortant && m.createdBy ? `${actorName(m.createdBy)} · ` : ""}
             {d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+            {sortant && <Accuse status={m.status} />}
           </p>
         </div>
       </div>
+      {sortant && m.status === "failed" && (
+        <p className="-mt-0.5 text-right text-[10.5px] text-red-600">{m.error ?? "Échec de l'envoi."}</p>
+      )}
     </>
+  );
+}
+
+/** Les coches de WhatsApp : ✓ envoyé, ✓✓ livré, ✓✓ bleues lu, ! échec. Rien = statut inconnu. */
+function Accuse({ status }: { status: Message["status"] }) {
+  if (!status) return null;
+  if (status === "failed") return <span className="ml-1 font-semibold text-red-300" title="Échec">!</span>;
+  return (
+    <span
+      className={cn("ml-1", status === "read" ? "text-sky-300" : "text-primary-foreground/70")}
+      title={status === "read" ? "Lu" : status === "delivered" ? "Livré" : "Envoyé"}
+    >
+      {status === "sent" ? "✓" : "✓✓"}
+    </span>
   );
 }
 

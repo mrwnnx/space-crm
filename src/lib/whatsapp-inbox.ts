@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/db";
-import { activities, leads, leadSources, whatsappConversations } from "@/db/schema";
+import { activities, leads, leadSources, whatsappConversations, whatsappMessages } from "@/db/schema";
 import { asc, and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getOrCreateContactForLead } from "@/lib/queries";
 
@@ -111,12 +111,16 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
   }));
 }
 
+export type MessageStatus = "sent" | "delivered" | "read" | "failed";
+
 export type Message = {
   id: string;
   direction: "inbound" | "outbound";
   content: string | null;
   createdBy: string | null;
   createdAt: Date;
+  status: MessageStatus | null; // null = envoyé avant qu'on garde les statuts, ou message reçu
+  error: string | null;
 };
 
 /**
@@ -155,13 +159,24 @@ export async function getWhatsAppThread(leadId: string) {
     ),
     orderBy: [asc(activities.createdAt)],
   });
-  const messages: Message[] = rows.map((a) => ({
-    id: a.id,
-    direction: a.direction,
-    content: a.content,
-    createdBy: a.createdBy,
-    createdAt: a.createdAt,
-  }));
+  const statuts = rows.length
+    ? await db.query.whatsappMessages.findMany({
+        where: inArray(whatsappMessages.activityId, rows.map((a) => a.id)),
+      })
+    : [];
+  const parActivite = new Map(statuts.map((s) => [s.activityId, s]));
+  const messages: Message[] = rows.map((a) => {
+    const st = parActivite.get(a.id);
+    return {
+      id: a.id,
+      direction: a.direction,
+      content: a.content,
+      createdBy: a.createdBy,
+      createdAt: a.createdAt,
+      status: (st?.status as MessageStatus | undefined) ?? null,
+      error: st?.error ?? null,
+    };
+  });
   const lastInbound = [...messages].reverse().find((m) => m.direction === "inbound");
 
   return {
@@ -285,4 +300,55 @@ export async function ingestInboundWhatsApp(input: {
   // message rangé — jamais avant, pour qu'un échec de l'IA ne perde pas le message.
 
   return { leadId: lead.id, leadCreated };
+}
+
+// ── Statuts d'envoi ───────────────────────────────────
+
+/** À appeler juste après un envoi réussi : lie le wamid de Meta à la bulle. */
+export async function recordWhatsAppSent(wamid: string, activityId: string) {
+  await db.insert(whatsappMessages).values({ wamid, activityId }).onConflictDoNothing();
+}
+
+const RANG: Record<MessageStatus, number> = { sent: 1, delivered: 2, read: 3, failed: 9 };
+
+/**
+ * Les erreurs de Meta, traduites. Le code brut n'apprend rien à Fatma ; la
+ * phrase lui dit quoi faire. Les autres codes passent tels quels.
+ */
+const ERREURS: Record<number, string> = {
+  131026: "Ce numéro n'est pas sur WhatsApp, ou a bloqué le numéro de l'école.",
+  131047: "Plus de 24 h sans réponse de cette personne : seul un modèle approuvé peut partir.",
+  131049: "Meta a limité les messages marketing vers cette personne pour l'instant.",
+  131053: "Le fichier joint n'a pas pu être envoyé.",
+  130472: "Cette personne fait partie d'un test de Meta : le message n'a pas été livré.",
+  131042: "Problème de paiement sur le compte WhatsApp de l'école.",
+};
+
+/**
+ * Un statut reçu par le webhook. On ne garde que le plus avancé : Meta peut
+ * livrer « read » avant « delivered ». Un wamid inconnu (envoi d'avant cette
+ * table, ou depuis un autre outil) est ignoré sans bruit.
+ */
+export async function applyWhatsAppStatus(input: {
+  wamid: string;
+  status: string;
+  errors?: { code?: number; title?: string; message?: string }[];
+}) {
+  const statut = input.status as MessageStatus;
+  if (!(statut in RANG)) return;
+  const existant = await db.query.whatsappMessages.findFirst({
+    where: eq(whatsappMessages.wamid, input.wamid),
+  });
+  if (!existant) return;
+  if (RANG[(existant.status as MessageStatus)] >= RANG[statut]) return;
+
+  const e = input.errors?.[0];
+  const error =
+    statut === "failed"
+      ? (e?.code && ERREURS[e.code]) || e?.message || e?.title || "Échec de l'envoi, sans détail de Meta."
+      : null;
+  await db
+    .update(whatsappMessages)
+    .set({ status: statut, error, updatedAt: new Date() })
+    .where(eq(whatsappMessages.wamid, input.wamid));
 }

@@ -1183,3 +1183,15 @@ export const whatsappSettings = pgTable("whatsapp_settings", {
   aiReplyEnabled: boolean("ai_reply_enabled").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Le statut d'un WhatsApp envoyé (✓ / ✓✓ / lu / échec), rattaché à sa bulle
+// par `activityId` et à Meta par `wamid`. Alimenté par le webhook.
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  wamid: text("wamid").primaryKey(),
+  activityId: uuid("activity_id")
+    .notNull()
+    .references(() => activities.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("sent"), // sent | delivered | read | failed
+  error: text("error"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

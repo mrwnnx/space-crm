@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { sendWhatsAppAction } from "@/app/actions";
+import { replyWhatsAppAction } from "@/app/whatsapp-actions";
 
 export function WhatsAppComposer({
   referenceType,
@@ -23,7 +24,12 @@ export function WhatsAppComposer({
     if (!to || !content.trim()) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await sendWhatsAppAction(referenceType, referenceId, to, content);
+      // Un lead passe par l'action de la page Messages : c'est elle qui garde
+      // le wamid, donc les accusés (livré, lu, échec) sous la bulle.
+      const result =
+        referenceType === "lead"
+          ? await replyWhatsAppAction(referenceId, to, content)
+          : await sendWhatsAppAction(referenceType, referenceId, to, content);
       setFeedback(
         result.ok
           ? { ok: true, msg: "WhatsApp envoyé" }
