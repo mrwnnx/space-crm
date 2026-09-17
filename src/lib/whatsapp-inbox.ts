@@ -7,6 +7,7 @@ import {
   whatsappConversations,
   whatsappMedia,
   whatsappMessages,
+  whatsappQuickReplies,
 } from "@/db/schema";
 import { libelleMedia, rapatrierMediaMeta, type MediaKind, type Stocke } from "@/lib/messaging/whatsapp-media";
 import { asc, and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
@@ -119,7 +120,7 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
   }));
 }
 
-export type MessageStatus = "sent" | "delivered" | "read" | "failed";
+export type MessageStatus = "sent" | "delivered" | "read" | "failed" | "received";
 
 export type Media = { kind: MediaKind; url: string; mimeType: string | null; filename: string | null };
 
@@ -129,9 +130,13 @@ export type Message = {
   content: string | null;
   createdBy: string | null;
   createdAt: Date;
-  status: MessageStatus | null; // null = envoyé avant qu'on garde les statuts, ou message reçu
+  status: MessageStatus | null; // null = envoyé avant qu'on garde les statuts
   error: string | null;
   media: Media | null;
+  wamid: string | null; // null = message d'avant le lot A (envoyé) ou le lot D (reçu) : ni citable, ni réagissable
+  replyTo: { content: string | null; direction: "inbound" | "outbound" } | null; // le message cité, s'il est dans le fil
+  reactionLead: string | null;
+  reactionUs: string | null;
 };
 
 /**
@@ -182,18 +187,29 @@ export async function getWhatsAppThread(leadId: string) {
       })
     : [];
   const mediaParActivite = new Map(medias.map((m) => [m.activityId, m]));
+  // Pour retrouver un message cité : wamid → activité du fil.
+  const activiteParWamid = new Map(statuts.map((s) => [s.wamid, rows.find((a) => a.id === s.activityId)]));
   const messages: Message[] = rows.map((a) => {
     const st = parActivite.get(a.id);
     const md = mediaParActivite.get(a.id);
+    const cite = st?.replyToWamid ? activiteParWamid.get(st.replyToWamid) : undefined;
     return {
       id: a.id,
       direction: a.direction,
       content: a.content,
       createdBy: a.createdBy,
       createdAt: a.createdAt,
-      status: (st?.status as MessageStatus | undefined) ?? null,
+      status: st && st.status !== "received" ? (st.status as MessageStatus) : null,
       error: st?.error ?? null,
       media: md ? { kind: md.kind as MediaKind, url: md.url, mimeType: md.mimeType, filename: md.filename } : null,
+      wamid: st?.wamid ?? null,
+      replyTo: st?.replyToWamid
+        ? cite
+          ? { content: cite.content, direction: cite.direction }
+          : { content: "Message plus ancien", direction: a.direction === "inbound" ? "outbound" : "inbound" }
+        : null,
+      reactionLead: st?.reactionLead ?? null,
+      reactionUs: st?.reactionUs ?? null,
     };
   });
   const lastInbound = [...messages].reverse().find((m) => m.direction === "inbound");
@@ -271,6 +287,8 @@ export async function ingestInboundWhatsApp(input: {
   profileName: string | null;
   text: string;
   media?: MediaEntrant | null;
+  wamid?: string | null; // l'identifiant Meta du message reçu — pour le citer et y réagir
+  replyToWamid?: string | null; // le lead a répondu à ce message-là
 }): Promise<{ leadId: string; leadCreated: boolean }> {
   // Rapprochement par les 8 derniers chiffres : le CRM stocke des numéros
   // tunisiens parfois sans indicatif, Meta les rend toujours avec. Le lead le
@@ -336,6 +354,12 @@ export async function ingestInboundWhatsApp(input: {
       content: contenu,
     })
     .returning({ id: activities.id });
+  if (input.wamid) {
+    await db
+      .insert(whatsappMessages)
+      .values({ wamid: input.wamid, activityId: activite.id, status: "received", replyToWamid: input.replyToWamid ?? null })
+      .onConflictDoNothing();
+  }
   if (input.media && stocke) {
     await db.insert(whatsappMedia).values({
       activityId: activite.id,
@@ -361,11 +385,45 @@ export async function ingestInboundWhatsApp(input: {
 // ── Statuts d'envoi ───────────────────────────────────
 
 /** À appeler juste après un envoi réussi : lie le wamid de Meta à la bulle. */
-export async function recordWhatsAppSent(wamid: string, activityId: string) {
-  await db.insert(whatsappMessages).values({ wamid, activityId }).onConflictDoNothing();
+export async function recordWhatsAppSent(wamid: string, activityId: string, replyToWamid?: string | null) {
+  await db
+    .insert(whatsappMessages)
+    .values({ wamid, activityId, replyToWamid: replyToWamid ?? null })
+    .onConflictDoNothing();
 }
 
-const RANG: Record<MessageStatus, number> = { sent: 1, delivered: 2, read: 3, failed: 9 };
+/** Une réaction (du lead via le webhook, ou la nôtre) posée sur un message par son wamid. "" = retirée. */
+export async function applyWhatsAppReaction(wamid: string, emoji: string, de: "lead" | "us") {
+  await db
+    .update(whatsappMessages)
+    .set(de === "lead" ? { reactionLead: emoji || null } : { reactionUs: emoji || null })
+    .where(eq(whatsappMessages.wamid, wamid));
+}
+
+/** Le lead lié à un wamid — pour savoir qui a réagi, sans re-chercher par numéro. */
+export async function getLeadIdByWamid(wamid: string): Promise<string | null> {
+  const row = await db.query.whatsappMessages.findFirst({ where: eq(whatsappMessages.wamid, wamid) });
+  if (!row) return null;
+  const a = await db.query.activities.findFirst({ where: eq(activities.id, row.activityId), columns: { referenceId: true } });
+  return a?.referenceId ?? null;
+}
+
+// ── Réponses rapides ──────────────────────────────────
+
+export async function getQuickReplies() {
+  return db.query.whatsappQuickReplies.findMany({ orderBy: [asc(whatsappQuickReplies.shortcut)] });
+}
+
+export async function createQuickReply(shortcut: string, text: string) {
+  const [row] = await db.insert(whatsappQuickReplies).values({ shortcut, text }).returning();
+  return row;
+}
+
+export async function deleteQuickReply(id: string) {
+  await db.delete(whatsappQuickReplies).where(eq(whatsappQuickReplies.id, id));
+}
+
+const RANG: Record<MessageStatus, number> = { received: 0, sent: 1, delivered: 2, read: 3, failed: 9 };
 
 /**
  * Les erreurs de Meta, traduites. Le code brut n'apprend rien à Fatma ; la
@@ -395,7 +453,7 @@ export async function applyWhatsAppStatus(input: {
   const existant = await db.query.whatsappMessages.findFirst({
     where: eq(whatsappMessages.wamid, input.wamid),
   });
-  if (!existant) return;
+  if (!existant || existant.status === "received") return;
   if (RANG[(existant.status as MessageStatus)] >= RANG[statut]) return;
 
   const e = input.errors?.[0];

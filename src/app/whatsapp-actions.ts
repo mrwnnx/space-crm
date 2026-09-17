@@ -9,10 +9,18 @@ import {
   deleteWhatsAppTemplate,
   sendWhatsApp,
   sendWhatsAppMedia,
+  sendWhatsAppReaction,
   sendWhatsAppTemplate,
 } from "@/lib/messaging/whatsapp";
 import { ENVOI_MAX_BYTES, ENVOI_MIME, libelleMedia, stockerMedia } from "@/lib/messaging/whatsapp-media";
-import { markWhatsAppRead, recordWhatsAppMedia, recordWhatsAppSent } from "@/lib/whatsapp-inbox";
+import {
+  applyWhatsAppReaction,
+  createQuickReply,
+  deleteQuickReply,
+  markWhatsAppRead,
+  recordWhatsAppMedia,
+  recordWhatsAppSent,
+} from "@/lib/whatsapp-inbox";
 import { setAiReplyEnabled } from "@/lib/whatsapp-settings";
 
 /**
@@ -26,13 +34,13 @@ export async function markWhatsAppReadAction(leadId: string) {
   await markWhatsAppRead(leadId);
 }
 
-/** Texte libre — Meta le refuse hors fenêtre de 24 h, avec un message clair. */
-export async function replyWhatsAppAction(leadId: string, to: string, body: string) {
+/** Texte libre — Meta le refuse hors fenêtre de 24 h, avec un message clair. `replyTo` cite un message. */
+export async function replyWhatsAppAction(leadId: string, to: string, body: string, replyTo?: string | null) {
   await requireUser();
   const texte = body.trim();
   if (!texte) return { ok: false as const, error: "Message vide." };
 
-  const r = await sendWhatsApp({ to, body: texte });
+  const r = await sendWhatsApp({ to, body: texte, replyTo: replyTo ?? undefined });
   if (!r.ok) return { ok: false as const, error: r.error ?? "Échec de l'envoi." };
 
   const activite = await createActivity({
@@ -43,7 +51,7 @@ export async function replyWhatsAppAction(leadId: string, to: string, body: stri
     subject: "WhatsApp envoyé",
     content: texte,
   });
-  if (r.sid) await recordWhatsAppSent(r.sid, activite.id);
+  if (r.sid) await recordWhatsAppSent(r.sid, activite.id, replyTo);
   await updateLead(leadId, { lastContactedAt: new Date() });
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);
@@ -60,6 +68,7 @@ export async function sendWhatsAppMediaAction(formData: FormData) {
   const leadId = String(formData.get("leadId") ?? "");
   const to = String(formData.get("to") ?? "");
   const caption = String(formData.get("caption") ?? "").trim();
+  const replyTo = String(formData.get("replyTo") ?? "") || null;
   const file = formData.get("file");
   if (!leadId || !to) return { ok: false as const, error: "Lead ou numéro manquant." };
   if (!(file instanceof File) || file.size === 0) return { ok: false as const, error: "Aucun fichier." };
@@ -78,6 +87,7 @@ export async function sendWhatsAppMediaAction(formData: FormData) {
     link: stock.media.url,
     caption: caption || undefined,
     filename: kind === "document" ? file.name : undefined,
+    replyTo: replyTo ?? undefined,
   });
   if (!r.ok) return { ok: false as const, error: r.error };
 
@@ -89,7 +99,7 @@ export async function sendWhatsAppMediaAction(formData: FormData) {
     subject: kind === "audio" ? "WhatsApp envoyé (vocal)" : "WhatsApp envoyé (pièce jointe)",
     content: kind !== "audio" && caption ? caption : libelleMedia(kind, file.name),
   });
-  await recordWhatsAppSent(r.id, activite.id);
+  await recordWhatsAppSent(r.id, activite.id, replyTo);
   await recordWhatsAppMedia(activite.id, kind, stock.media, kind === "document" ? file.name : null);
   await updateLead(leadId, { lastContactedAt: new Date() });
   revalidatePath("/whatsapp");
@@ -150,6 +160,44 @@ export async function assignBootcampAction(leadId: string, bootcampId: string) {
 
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);
+  return { ok: true as const };
+}
+
+/** Réagir à un message du fil par un emoji ("" pour retirer). Fenêtre de 24 h, comme le texte. */
+export async function reactWhatsAppAction(leadId: string, to: string, wamid: string, emoji: string) {
+  await requireUser();
+  const r = await sendWhatsAppReaction({ to, messageId: wamid, emoji });
+  if (!r.ok) return { ok: false as const, error: r.error };
+  await applyWhatsAppReaction(wamid, emoji, "us");
+  revalidatePath("/whatsapp");
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true as const };
+}
+
+// ── Réponses rapides ──────────────────────────────────
+
+export async function createQuickReplyAction(shortcut: string, text: string) {
+  await requireUser();
+  const s = shortcut.trim().toLowerCase().replace(/^\//, "");
+  if (!/^[a-z0-9_-]{1,30}$/.test(s)) {
+    return { ok: false as const, error: "Le raccourci : lettres, chiffres, - ou _ (ex. prix, horaires)." };
+  }
+  if (!text.trim()) return { ok: false as const, error: "Le texte est vide." };
+  try {
+    await createQuickReply(s, text.trim());
+  } catch {
+    return { ok: false as const, error: `« /${s} » existe déjà.` };
+  }
+  revalidatePath("/settings");
+  revalidatePath("/whatsapp");
+  return { ok: true as const };
+}
+
+export async function deleteQuickReplyAction(id: string) {
+  await requireUser();
+  await deleteQuickReply(id);
+  revalidatePath("/settings");
+  revalidatePath("/whatsapp");
   return { ok: true as const };
 }
 

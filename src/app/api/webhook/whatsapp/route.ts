@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyWhatsAppStatus, ingestInboundWhatsApp, type MediaEntrant } from "@/lib/whatsapp-inbox";
+import {
+  applyWhatsAppReaction,
+  applyWhatsAppStatus,
+  ingestInboundWhatsApp,
+  type MediaEntrant,
+} from "@/lib/whatsapp-inbox";
 import { MEDIA_KINDS } from "@/lib/messaging/whatsapp-media";
 
 /**
@@ -44,8 +49,11 @@ export async function GET(request: NextRequest) {
 
 type MediaMeta = { id?: string; mime_type?: string; caption?: string; filename?: string };
 type Entrant = {
+  id?: string; // le wamid
   from?: string;
   type?: string;
+  context?: { id?: string }; // le message auquel le lead répond
+  reaction?: { message_id?: string; emoji?: string };
   text?: { body?: string };
   image?: MediaMeta;
   video?: MediaMeta;
@@ -117,6 +125,11 @@ export async function POST(request: NextRequest) {
 
         for (const m of v.messages) {
           if (!m.from) continue;
+          // Une réaction n'est pas une bulle : elle se pose sur le message visé.
+          if (m.type === "reaction" && m.reaction?.message_id) {
+            await applyWhatsAppReaction(m.reaction.message_id, m.reaction.emoji ?? "", "lead");
+            continue;
+          }
           // Rattachement au lead — ou création du lead si le numéro est inconnu.
           // Tout est dans src/lib/whatsapp-inbox.ts, seul point d'entrée d'un
           // message reçu. Une photo, un vocal, un PDF y sont rapatriés.
@@ -125,6 +138,8 @@ export async function POST(request: NextRequest) {
             profileName: nom,
             text: texteDe(m),
             media: mediaDe(m),
+            wamid: m.id ?? null,
+            replyToWamid: m.context?.id ?? null,
           });
           recus++;
           if (r.leadCreated) leadsCrees++;

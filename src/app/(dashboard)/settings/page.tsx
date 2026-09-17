@@ -9,6 +9,7 @@ import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-t
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
 import { getWhatsAppNumber, listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
+import { getQuickReplies } from "@/lib/whatsapp-inbox";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +38,10 @@ export default async function SettingsPage({
   const outsideAccounts = current === "team" ? await getAccountsOutsideAllowlist() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
   // WhatsApp : le numéro et les modèles viennent de Meta, l'interrupteur de la base.
-  const [waNumero, waTemplates, waSettings] =
+  const [waNumero, waTemplates, waSettings, waQuick] =
     current === "whatsapp"
-      ? await Promise.all([getWhatsAppNumber(), listWhatsAppTemplates(), getWhatsAppSettings()])
-      : [null, [], null];
+      ? await Promise.all([getWhatsAppNumber(), listWhatsAppTemplates(), getWhatsAppSettings(), getQuickReplies()])
+      : [null, [], null, []];
 
   return (
     <>
@@ -141,6 +142,7 @@ export default async function SettingsPage({
               numero={waNumero}
               templates={waTemplates}
               aiReplyEnabled={waSettings.aiReplyEnabled}
+              quickReplies={waQuick.map((q) => ({ id: q.id, shortcut: q.shortcut, text: q.text }))}
             />
           )}
 

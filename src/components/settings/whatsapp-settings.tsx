@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { WhatsAppNumber, WhatsAppTemplate } from "@/lib/messaging/whatsapp";
-import { createTemplateAction, deleteTemplateAction, setAiReplyAction } from "@/app/whatsapp-actions";
+import {
+  createQuickReplyAction,
+  createTemplateAction,
+  deleteQuickReplyAction,
+  deleteTemplateAction,
+  setAiReplyAction,
+} from "@/app/whatsapp-actions";
 
 /*
  * Paramètres → WhatsApp : le numéro tel que Meta le voit, l'interrupteur de la
@@ -22,21 +28,121 @@ const LANGUES = [
   { code: "en_US", label: "Anglais" },
 ];
 
+type QuickReply = { id: string; shortcut: string; text: string };
+
 export function WhatsAppSettings({
   numero,
   templates,
   aiReplyEnabled,
+  quickReplies,
 }: {
   numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string };
   templates: WhatsAppTemplate[];
   aiReplyEnabled: boolean;
+  quickReplies: QuickReply[];
 }) {
   return (
     <div className="space-y-6">
       <SectionNumero numero={numero} />
       <SectionIA enabled={aiReplyEnabled} />
+      <SectionReponsesRapides items={quickReplies} />
       <SectionModeles templates={templates} />
     </div>
+  );
+}
+
+// ── Les réponses rapides ──────────────────────────────
+
+function SectionReponsesRapides({ items }: { items: QuickReply[] }) {
+  const router = useRouter();
+  const [shortcut, setShortcut] = useState("");
+  const [text, setText] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function ajouter(e: React.FormEvent) {
+    e.preventDefault();
+    setErreur(null);
+    startTransition(async () => {
+      const r = await createQuickReplyAction(shortcut, text);
+      if (r.ok) {
+        setShortcut("");
+        setText("");
+        router.refresh();
+      } else setErreur(r.error);
+    });
+  }
+
+  function supprimer(id: string) {
+    startTransition(async () => {
+      await deleteQuickReplyAction(id);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Section title="Réponses rapides">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Dans la page Messages, tapez <span className="font-mono">/</span> puis le raccourci : le texte se met en
+        place, avec <span className="font-mono">{"{{firstName}}"}</span> et{" "}
+        <span className="font-mono">{"{{formation}}"}</span> remplacés pour ce lead. Texte libre : ça ne part que
+        dans la fenêtre de 24 h.
+      </p>
+      {items.length > 0 && (
+        <ul className="mb-3 divide-y divide-border rounded-lg border border-border">
+          {items.map((q) => (
+            <li key={q.id} className="flex items-start gap-3 px-3 py-2">
+              <span className="shrink-0 font-mono text-xs text-primary">/{q.shortcut}</span>
+              <span className="min-w-0 flex-1 whitespace-pre-wrap text-xs text-foreground">{q.text}</span>
+              <button
+                type="button"
+                onClick={() => supprimer(q.id)}
+                disabled={isPending}
+                className="shrink-0 text-[10.5px] text-muted-foreground hover:text-red-600"
+              >
+                Supprimer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={ajouter} className="flex flex-wrap items-start gap-2">
+        <label className="w-36">
+          <span className={LABEL}>Raccourci</span>
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-sm text-muted-foreground">/</span>
+            <input
+              value={shortcut}
+              onChange={(e) => setShortcut(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+              placeholder="prix"
+              className={cn(INPUT, "font-mono")}
+              required
+            />
+          </div>
+        </label>
+        <label className="min-w-64 flex-1">
+          <span className={LABEL}>Texte</span>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            placeholder={"Bonjour {{firstName}}, le {{formation}} coûte 1300 TND, ou 3 × 500 TND."}
+            className={cn(INPUT, "resize-y")}
+            required
+          />
+        </label>
+        <div className="flex flex-col items-end gap-1 self-end">
+          <button
+            type="submit"
+            disabled={isPending || !shortcut || !text.trim()}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+          >
+            Ajouter
+          </button>
+        </div>
+        {erreur && <p className="w-full text-xs text-red-600">{erreur}</p>}
+      </form>
+    </Section>
   );
 }
 

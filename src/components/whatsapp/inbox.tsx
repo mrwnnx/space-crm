@@ -11,6 +11,7 @@ import type { WhatsAppTemplate } from "@/lib/messaging/whatsapp";
 import {
   assignBootcampAction,
   markWhatsAppReadAction,
+  reactWhatsAppAction,
   replyWhatsAppAction,
   replyWhatsAppTemplateAction,
   sendWhatsAppMediaAction,
@@ -45,10 +46,21 @@ type Message = {
   content: string | null;
   createdBy: string | null;
   createdAt: string;
-  status: "sent" | "delivered" | "read" | "failed" | null;
+  status: "sent" | "delivered" | "read" | "failed" | "received" | null;
   error: string | null;
   media: { kind: "image" | "video" | "audio" | "document" | "sticker"; url: string; mimeType: string | null; filename: string | null } | null;
+  wamid: string | null;
+  replyTo: { content: string | null; direction: "inbound" | "outbound" } | null;
+  reactionLead: string | null;
+  reactionUs: string | null;
 };
+
+type QuickReply = { shortcut: string; text: string };
+
+/** Ce que la zone de réponse cite : posé par « Répondre » sur une bulle. */
+type Citation = { wamid: string; content: string | null; direction: "inbound" | "outbound" };
+
+const EMOJIS = ["👍", "❤️", "😂", "🙏", "👏", "✅"];
 
 type Thread = {
   lead: { id: string; fullName: string; mobileNo: string | null; email: string | null; bootcamp: string | null };
@@ -64,11 +76,13 @@ export function WhatsAppInbox({
   thread,
   templates,
   bootcamps,
+  quickReplies,
 }: {
   conversations: Conversation[];
   thread: Thread | null;
   templates: WhatsAppTemplate[];
   bootcamps: Bootcamp[];
+  quickReplies: QuickReply[];
 }) {
   const router = useRouter();
 
@@ -99,7 +113,13 @@ export function WhatsAppInbox({
 
       <section className={cn("flex-1 flex-col overflow-hidden", thread ? "flex" : "hidden md:flex")}>
         {thread ? (
-          <ThreadView thread={thread} templates={templates} bootcamps={bootcamps} />
+          <ThreadView
+            key={thread.lead.id} // un autre lead = un autre fil : citation et brouillon repartent de zéro
+            thread={thread}
+            templates={templates}
+            bootcamps={bootcamps}
+            quickReplies={quickReplies}
+          />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
             <HugeiconsIcon icon={WhatsappIcon} size={28} />
@@ -152,14 +172,17 @@ function ThreadView({
   thread,
   templates,
   bootcamps,
+  quickReplies,
 }: {
   thread: Thread;
   templates: WhatsAppTemplate[];
   bootcamps: Bootcamp[];
+  quickReplies: QuickReply[];
 }) {
   const router = useRouter();
   const { lead, messages, lastInboundAt, ouverte } = thread;
   const bas = useRef<HTMLDivElement>(null);
+  const [citation, setCitation] = useState<Citation | null>(null);
 
   // Ouvrir la conversation, c'est la lire — pour toute l'équipe. Redéclenché
   // quand un nouveau message arrive pendant qu'elle est ouverte.
@@ -193,7 +216,16 @@ function ThreadView({
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="mx-auto flex max-w-2xl flex-col gap-1.5">
           {messages.map((m, i) => (
-            <Bulle key={m.id} m={m} precedent={messages[i - 1]} />
+            <Bulle
+              key={m.id}
+              m={m}
+              precedent={messages[i - 1]}
+              actif={ouverte && !!lead.mobileNo}
+              onRepondre={() => m.wamid && setCitation({ wamid: m.wamid, content: m.content, direction: m.direction })}
+              onReagir={(emoji) =>
+                m.wamid && lead.mobileNo ? reactWhatsAppAction(lead.id, lead.mobileNo, m.wamid, emoji).then(() => router.refresh()) : undefined
+              }
+            />
           ))}
           <div ref={bas} />
         </div>
@@ -204,7 +236,15 @@ function ThreadView({
           {!lead.mobileNo ? (
             <p className="text-xs text-muted-foreground">Ce lead n&apos;a pas de numéro : impossible de répondre.</p>
           ) : ouverte ? (
-            <ReponseLibre leadId={lead.id} to={lead.mobileNo} />
+            <ReponseLibre
+              leadId={lead.id}
+              to={lead.mobileNo}
+              prenom={lead.fullName.split(" ")[0]}
+              formation={lead.bootcamp?.split(" · ")[0] ?? ""}
+              quickReplies={quickReplies}
+              citation={citation}
+              onCitationClear={() => setCitation(null)}
+            />
           ) : (
             <ReponseModele leadId={lead.id} to={lead.mobileNo} templates={templates} />
           )}
@@ -259,24 +299,55 @@ function AttribuerFormation({ leadId, bootcamps }: { leadId: string; bootcamps: 
   );
 }
 
-function Bulle({ m, precedent }: { m: Message; precedent?: Message }) {
+function Bulle({
+  m,
+  precedent,
+  actif,
+  onRepondre,
+  onReagir,
+}: {
+  m: Message;
+  precedent?: Message;
+  actif: boolean; // fenêtre ouverte : on peut citer et réagir
+  onRepondre: () => void;
+  onReagir: (emoji: string) => void;
+}) {
   const d = new Date(m.createdAt);
   const jour = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const nouveauJour = !precedent || new Date(precedent.createdAt).toDateString() !== d.toDateString();
   const sortant = m.direction === "outbound";
+  const [picker, setPicker] = useState(false);
+  // Sans wamid (message d'avant les lots A/D), ni citation ni réaction possibles.
+  const outils = actif && !!m.wamid;
+  const reactions = [m.reactionLead, m.reactionUs].filter(Boolean) as string[];
 
   return (
     <>
       {nouveauJour && (
         <p className="my-2 text-center text-[10.5px] uppercase tracking-wider text-muted-foreground">{jour}</p>
       )}
-      <div className={cn("flex", sortant ? "justify-end" : "justify-start")}>
+      <div className={cn("group flex items-end gap-1", sortant ? "justify-end" : "justify-start")}>
+        {sortant && outils && (
+          <OutilsBulle m={m} picker={picker} setPicker={setPicker} onRepondre={onRepondre} onReagir={onReagir} />
+        )}
+        <div className="relative max-w-[80%]">
         <div
           className={cn(
-            "max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
+            "rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
             sortant ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground"
           )}
         >
+          {m.replyTo && (
+            <div
+              className={cn(
+                "mb-1.5 border-l-2 pl-2 text-xs opacity-80",
+                sortant ? "border-primary-foreground/60" : "border-primary"
+              )}
+            >
+              <span className="block text-[10px] font-medium">{m.replyTo.direction === "outbound" ? "Vous" : "Le lead"}</span>
+              <span className="line-clamp-2">{m.replyTo.content}</span>
+            </div>
+          )}
           {m.media && <PieceJointe media={m.media} sortant={sortant} />}
           {/* Sans légende, le texte n'est que le libellé « 📷 Photo » : le média suffit. */}
           {!(m.media && m.media.kind !== "document" && /^(📷|🎥|🎤|Sticker)/.test(m.content ?? "")) && m.content}
@@ -286,11 +357,80 @@ function Bulle({ m, precedent }: { m: Message; precedent?: Message }) {
             {sortant && <Accuse status={m.status} />}
           </p>
         </div>
+        {reactions.length > 0 && (
+          <span
+            className={cn(
+              "absolute -bottom-2 rounded-full border border-border bg-background px-1.5 text-xs leading-5 shadow-sm",
+              sortant ? "left-1" : "right-1"
+            )}
+            title={[m.reactionLead && `Le lead : ${m.reactionLead}`, m.reactionUs && `Vous : ${m.reactionUs}`].filter(Boolean).join(" · ")}
+          >
+            {reactions.join("")}
+          </span>
+        )}
+        </div>
+        {!sortant && outils && (
+          <OutilsBulle m={m} picker={picker} setPicker={setPicker} onRepondre={onRepondre} onReagir={onReagir} />
+        )}
       </div>
       {sortant && m.status === "failed" && (
         <p className="-mt-0.5 text-right text-[10.5px] text-red-600">{m.error ?? "Échec de l'envoi."}</p>
       )}
     </>
+  );
+}
+
+/** « Répondre » et le choix d'un emoji, visibles au survol de la bulle. */
+function OutilsBulle({
+  m,
+  picker,
+  setPicker,
+  onRepondre,
+  onReagir,
+}: {
+  m: Message;
+  picker: boolean;
+  setPicker: (v: boolean) => void;
+  onRepondre: () => void;
+  onReagir: (emoji: string) => void;
+}) {
+  return (
+    <div className="relative mb-4 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <button
+        type="button"
+        onClick={onRepondre}
+        className="rounded px-1 text-[10.5px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        title="Répondre à ce message"
+      >
+        ↩
+      </button>
+      <button
+        type="button"
+        onClick={() => setPicker(!picker)}
+        className="rounded px-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        title="Réagir"
+      >
+        {m.reactionUs ?? "☺"}
+      </button>
+      {picker && (
+        <div className="absolute bottom-6 z-10 flex gap-0.5 rounded-full border border-border bg-background px-1.5 py-1 shadow-md">
+          {EMOJIS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => {
+                setPicker(false);
+                // Recliquer l'emoji déjà posé le retire.
+                onReagir(m.reactionUs === e ? "" : e);
+              }}
+              className={cn("rounded-full px-1 text-base hover:bg-muted", m.reactionUs === e && "bg-muted")}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -395,9 +535,34 @@ function Accuse({ status }: { status: Message["status"] }) {
   );
 }
 
-function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
+function ReponseLibre({
+  leadId,
+  to,
+  prenom,
+  formation,
+  quickReplies,
+  citation,
+  onCitationClear,
+}: {
+  leadId: string;
+  to: string;
+  prenom: string;
+  formation: string;
+  quickReplies: QuickReply[];
+  citation: Citation | null;
+  onCitationClear: () => void;
+}) {
   const router = useRouter();
   const [texte, setTexte] = useState("");
+  const zone = useRef<HTMLTextAreaElement>(null);
+  // « / » en début de message ouvre la liste des réponses rapides, filtrée par ce qui suit.
+  const filtre = texte.startsWith("/") && !texte.includes("\n") ? texte.slice(1).toLowerCase() : null;
+  const suggestions = filtre === null ? [] : quickReplies.filter((q) => q.shortcut.startsWith(filtre)).slice(0, 6);
+  function inserer(q: QuickReply) {
+    // Les variables du texte prêt prennent les valeurs de CE lead.
+    setTexte(q.text.replace(/\{\{firstName\}\}/g, prenom).replace(/\{\{formation\}\}/g, formation));
+    zone.current?.focus();
+  }
   const [fichier, setFichier] = useState<File | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -422,13 +587,15 @@ function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
         fd.set("to", to);
         fd.set("caption", texte);
         fd.set("file", fichier);
+        if (citation) fd.set("replyTo", citation.wamid);
         r = await sendWhatsAppMediaAction(fd);
       } else {
-        r = await replyWhatsAppAction(leadId, to, texte);
+        r = await replyWhatsAppAction(leadId, to, texte, citation?.wamid ?? null);
       }
       if (r.ok) {
         setTexte("");
         setFichier(null);
+        onCitationClear();
         if (fileRef.current) fileRef.current.value = "";
         router.refresh();
       } else {
@@ -444,13 +611,52 @@ function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
         envoyer();
       }}
     >
+      {citation && (
+        <div className="mb-1.5 flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted px-2.5 py-1.5 text-xs">
+          <div className="min-w-0 flex-1">
+            <span className="block text-[10px] font-medium text-muted-foreground">
+              En réponse à {citation.direction === "outbound" ? "vous" : "le lead"}
+            </span>
+            <span className="line-clamp-2 text-foreground">{citation.content}</span>
+          </div>
+          <button type="button" onClick={onCitationClear} className="text-muted-foreground hover:text-foreground" aria-label="Retirer la citation">
+            ✕
+          </button>
+        </div>
+      )}
+      {suggestions.length > 0 && (
+        <div className="mb-1.5 overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+          {suggestions.map((q) => (
+            <button
+              key={q.shortcut}
+              type="button"
+              onClick={() => inserer(q)}
+              className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-muted"
+            >
+              <span className="shrink-0 font-mono text-xs text-primary">/{q.shortcut}</span>
+              <span className="truncate text-xs text-muted-foreground">{q.text}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {filtre !== null && suggestions.length === 0 && quickReplies.length === 0 && (
+        <p className="mb-1.5 text-[10.5px] text-muted-foreground">
+          Aucune réponse rapide — créez-en dans Paramètres → WhatsApp.
+        </p>
+      )}
       <textarea
+        ref={zone}
         value={texte}
         onChange={(e) => setTexte(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) envoyer();
+          // Entrée ou Tab sur une suggestion unique l'insère.
+          if ((e.key === "Enter" || e.key === "Tab") && suggestions.length === 1 && filtre !== null) {
+            e.preventDefault();
+            inserer(suggestions[0]);
+          }
         }}
-        placeholder={estVocal ? "Le vocal part sans texte." : fichier ? "Légende (facultative)…" : "Votre réponse…"}
+        placeholder={estVocal ? "Le vocal part sans texte." : fichier ? "Légende (facultative)…" : "Votre réponse… (« / » pour une réponse rapide)"}
         disabled={estVocal}
         rows={2}
         className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"

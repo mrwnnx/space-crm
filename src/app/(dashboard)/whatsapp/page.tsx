@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { WhatsAppInbox } from "@/components/whatsapp/inbox";
-import { fenetreOuverte, getWhatsAppConversations, getWhatsAppThread } from "@/lib/whatsapp-inbox";
+import { fenetreOuverte, getQuickReplies, getWhatsAppConversations, getWhatsAppThread } from "@/lib/whatsapp-inbox";
 import { listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
 import { getBootcamps } from "@/lib/queries";
 
@@ -16,13 +16,14 @@ export default async function WhatsAppPage({
   searchParams: Promise<{ lead?: string }>;
 }) {
   const { lead: leadId } = await searchParams;
-  const [conversations, thread, templates, bootcamps] = await Promise.all([
+  const [conversations, thread, templates, bootcamps, quickReplies] = await Promise.all([
     getWhatsAppConversations(),
     leadId ? getWhatsAppThread(leadId) : Promise.resolve(null),
     // Seuls les modèles approuvés s'envoient ; les autres attendent chez Meta.
     listWhatsAppTemplates().then((t) => t.filter((x) => x.status === "APPROVED")),
     // Pour donner une formation à un lead né d'un message WhatsApp.
     getBootcamps(),
+    getQuickReplies(),
   ]);
 
   return (
@@ -49,6 +50,7 @@ export default async function WhatsAppPage({
         }
         templates={templates}
         bootcamps={bootcamps.map((b) => ({ id: b.id, name: b.name }))}
+        quickReplies={quickReplies.map((q) => ({ shortcut: q.shortcut, text: q.text }))}
       />
     </div>
   );

@@ -1191,9 +1191,20 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
   activityId: uuid("activity_id")
     .notNull()
     .references(() => activities.id, { onDelete: "cascade" }),
-  status: text("status").notNull().default("sent"), // sent | delivered | read | failed
+  status: text("status").notNull().default("sent"), // sent | delivered | read | failed | received
   error: text("error"),
+  replyToWamid: text("reply_to_wamid"), // le message cité, dans un sens ou dans l'autre
+  reactionLead: text("reaction_lead"), // l'emoji du lead sur ce message
+  reactionUs: text("reaction_us"), // le nôtre sur le sien
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Les réponses rapides de la page Messages : « /prix » → un texte prêt.
+export const whatsappQuickReplies = pgTable("whatsapp_quick_replies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  shortcut: text("shortcut").notNull().unique(),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Une pièce jointe WhatsApp (photo, vidéo, PDF, vocal, sticker), rapatriée

@@ -76,16 +76,36 @@ async function envoyer(corps: Record<string, unknown>): Promise<WhatsAppResult> 
 export async function sendWhatsApp({
   to,
   body,
+  replyTo,
 }: {
   to: string;
   body: string;
+  replyTo?: string; // wamid du message cité — le lead le voit en citation
 }): Promise<{ ok: boolean; error?: string; sid?: string }> {
   const r = await envoyer({
     to: normaliser(to),
     type: "text",
     text: { preview_url: true, body },
+    ...(replyTo ? { context: { message_id: replyTo } } : {}),
   });
   return r.ok ? { ok: true, sid: r.id } : { ok: false, error: r.error };
+}
+
+/** Réagir à un message (le sien ou le nôtre) par un emoji ; "" retire la réaction. */
+export async function sendWhatsAppReaction({
+  to,
+  messageId,
+  emoji,
+}: {
+  to: string;
+  messageId: string;
+  emoji: string;
+}): Promise<WhatsAppResult> {
+  return envoyer({
+    to: normaliser(to),
+    type: "reaction",
+    reaction: { message_id: messageId, emoji },
+  });
 }
 
 /**
@@ -100,12 +120,14 @@ export async function sendWhatsAppMedia({
   link,
   caption,
   filename,
+  replyTo,
 }: {
   to: string;
   kind: "image" | "video" | "document" | "audio";
   link: string;
   caption?: string;
   filename?: string;
+  replyTo?: string;
 }): Promise<WhatsAppResult> {
   return envoyer({
     to: normaliser(to),
@@ -115,6 +137,7 @@ export async function sendWhatsAppMedia({
       ...(caption && kind !== "audio" ? { caption } : {}),
       ...(kind === "document" && filename ? { filename } : {}),
     },
+    ...(replyTo ? { context: { message_id: replyTo } } : {}),
   });
 }
 
