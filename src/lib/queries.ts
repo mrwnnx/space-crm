@@ -254,7 +254,8 @@ export async function getLeads(opts?: {
   statusId?: string;
   temperature?: "hot" | "cold";
   converted?: boolean;
-  tagId?: string;
+  tagIds?: string[];
+  tagMode?: "any" | "all"; // any = au moins un des tags ; all = tous
 }): Promise<LeadWithRelations[]> {
   const filters: ReturnType<typeof and>[] = [];
 
@@ -272,10 +273,13 @@ export async function getLeads(opts?: {
   if (opts?.statusId) filters.push(eq(leads.statusId, opts.statusId));
   if (opts?.temperature) filters.push(eq(leads.temperature, opts.temperature));
   if (opts?.converted !== undefined) filters.push(eq(leads.converted, opts.converted));
-  if (opts?.tagId) {
+  if (opts?.tagIds && opts.tagIds.length > 0) {
+    // Identifiants en clair : dans un where de db.query, Drizzle réécrirait ${leadTags.leadId} avec l'alias de "leads".
+    // Un tableau dans ${} devient un tuple ($1, $2) — d'où le `in`, pas `= any(...::uuid[])`.
     filters.push(
-      // Identifiants en clair : dans un where de db.query, Drizzle réécrirait ${leadTags.leadId} avec l'alias de "leads".
-      sql`exists (select 1 from lead_tags lt where lt.lead_id = ${leads.id} and lt.tag_id = ${opts.tagId})`
+      opts.tagMode === "all"
+        ? sql`(select count(distinct lt.tag_id) from lead_tags lt where lt.lead_id = ${leads.id} and lt.tag_id in ${opts.tagIds}) = ${opts.tagIds.length}`
+        : sql`exists (select 1 from lead_tags lt where lt.lead_id = ${leads.id} and lt.tag_id in ${opts.tagIds})`
     );
   }
 

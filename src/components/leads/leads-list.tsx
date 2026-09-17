@@ -12,7 +12,8 @@ export function LeadsList({
   filterStatusId,
   filterTemperature,
   filterConverted,
-  filterTagId,
+  filterTagIds,
+  filterTagMode,
   bootcamps,
   statuses,
   tags,
@@ -22,7 +23,8 @@ export function LeadsList({
   filterStatusId: string | null;
   filterTemperature: string | null;
   filterConverted: string | null;
-  filterTagId: string | null;
+  filterTagIds: string[];
+  filterTagMode: "any" | "all";
   bootcamps: BulkBootcamp[];
   statuses: BulkStatus[];
   tags: BulkTag[];
@@ -65,6 +67,7 @@ export function LeadsList({
     if (params.temperature) sp.set("temperature", params.temperature);
     if (params.converted) sp.set("converted", params.converted);
     if (params.tag) sp.set("tag", params.tag);
+    if (params.tag && params.tagMode === "all") sp.set("tagMode", "all");
     const qs = sp.toString();
     return `/leads${qs ? `?${qs}` : ""}`;
   }
@@ -83,7 +86,8 @@ export function LeadsList({
               statusId: filterStatusId || undefined,
               temperature: filterTemperature || undefined,
               converted: filterConverted || undefined,
-              tag: filterTagId || undefined,
+              tag: filterTagIds.join(",") || undefined,
+              tagMode: filterTagMode,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -104,7 +108,8 @@ export function LeadsList({
               statusId: v || undefined,
               temperature: filterTemperature || undefined,
               converted: filterConverted || undefined,
-              tag: filterTagId || undefined,
+              tag: filterTagIds.join(",") || undefined,
+              tagMode: filterTagMode,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -125,7 +130,8 @@ export function LeadsList({
               statusId: filterStatusId || undefined,
               temperature: v || undefined,
               converted: filterConverted || undefined,
-              tag: filterTagId || undefined,
+              tag: filterTagIds.join(",") || undefined,
+              tagMode: filterTagMode,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -145,7 +151,8 @@ export function LeadsList({
               statusId: filterStatusId || undefined,
               temperature: filterTemperature || undefined,
               converted: v || undefined,
-              tag: filterTagId || undefined,
+              tag: filterTagIds.join(",") || undefined,
+              tagMode: filterTagMode,
             });
           }}
           className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
@@ -155,28 +162,24 @@ export function LeadsList({
           <option value="false">Pas inscrit</option>
         </select>
 
-        {/* Tag filter */}
-        <select
-          value={filterTagId || ""}
-          onChange={(e) => {
-            const v = e.target.value;
+        {/* Tag filter — plusieurs tags, OU / ET */}
+        <TagFilter
+          tags={tags}
+          selected={filterTagIds}
+          mode={filterTagMode}
+          onApply={(ids, mode) => {
             window.location.href = filterHref({
               bootcamp: filterBootcampId || undefined,
               statusId: filterStatusId || undefined,
               temperature: filterTemperature || undefined,
               converted: filterConverted || undefined,
-              tag: v || undefined,
+              tag: ids.join(",") || undefined,
+              tagMode: mode,
             });
           }}
-          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring"
-        >
-          <option value="">Tous les tags</option>
-          {tags.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+        />
 
-        {(filterBootcampId || filterStatusId || filterTemperature || filterConverted || filterTagId) && (
+        {(filterBootcampId || filterStatusId || filterTemperature || filterConverted || filterTagIds.length > 0) && (
           <Link
             href="/leads"
             className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"
@@ -368,5 +371,92 @@ function Th({
     >
       {children}
     </th>
+  );
+}
+
+// Cases à cocher + interrupteur OU / ET ; le filtre part au clic sur « Appliquer », dans l'URL comme les autres.
+function TagFilter({
+  tags,
+  selected,
+  mode,
+  onApply,
+}: {
+  tags: BulkTag[];
+  selected: string[];
+  mode: "any" | "all";
+  onApply: (ids: string[], mode: "any" | "all") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [ids, setIds] = useState<string[]>(selected);
+  const [m, setM] = useState<"any" | "all">(mode);
+  const label =
+    selected.length === 0
+      ? "Tous les tags"
+      : selected.length === 1
+        ? tags.find((t) => t.id === selected[0])?.name ?? "1 tag"
+        : `${selected.length} tags (${mode === "all" ? "tous" : "l'un d'eux"})`;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring",
+          selected.length > 0 && "border-primary/50 text-foreground"
+        )}
+      >
+        {label} ▾
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-1 w-64 rounded-lg border border-border bg-popover p-2 shadow-md">
+          <div className="mb-2 flex gap-1 rounded-md bg-muted p-0.5 text-[11px]">
+            {(["any", "all"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setM(v)}
+                className={cn(
+                  "flex-1 rounded px-2 py-1 transition-colors",
+                  m === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {v === "any" ? "OU — au moins un" : "ET — tous"}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-56 space-y-0.5 overflow-y-auto">
+            {tags.map((t) => (
+              <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted">
+                <input
+                  type="checkbox"
+                  checked={ids.includes(t.id)}
+                  onChange={(e) => setIds(e.target.checked ? [...ids, t.id] : ids.filter((x) => x !== t.id))}
+                  className="h-3.5 w-3.5"
+                />
+                {t.name}
+              </label>
+            ))}
+            {tags.length === 0 && <p className="px-1.5 py-1 text-xs text-muted-foreground">Aucun tag</p>}
+          </div>
+          <div className="mt-2 flex justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => onApply([], "any")}
+              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+            >
+              Effacer
+            </button>
+            <button
+              type="button"
+              onClick={() => onApply(ids, m)}
+              className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Appliquer
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
