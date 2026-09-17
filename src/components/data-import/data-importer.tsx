@@ -13,6 +13,16 @@ const CHUNK_SIZE = 50;
 // Il faut de quoi nommer la personne : un nom complet, un prénom/nom, ou à défaut un email.
 const NAME_FIELDS = ["fullName", "firstName", "lastName", "email"];
 
+// En-têtes rencontrés dans les exports (minuscules, lettres seules) → champ. « name » seul = nom complet.
+const HEADER_ALIASES: Record<string, string[]> = {
+  fullName: ["name", "fullname", "nomcomplet", "nometprenom", "nomprenom", "prenomnom", "prenometnom"],
+  firstName: ["firstname", "prenom", "prnom", "givenname"],
+  lastName: ["lastname", "nom", "surname", "familyname", "nomdefamille"],
+  email: ["email", "mail", "adresseemail", "courriel", "emailaddress"],
+  mobileNo: ["mobile", "mobileno", "gsm", "portable", "whatsapp", "numero", "numro"],
+  phone: ["phone", "telephone", "tlphone", "tel", "phonenumber"],
+};
+
 // Un appel qui tombe (réseau, délai Vercel) est retenté deux fois avant de compter ses lignes en erreur.
 async function sendWithRetry<T>(send: () => Promise<T>, attempts = 3): Promise<T> {
   let lastError: unknown;
@@ -82,7 +92,10 @@ export function DataImporter({ tags, bootcamps }: { tags: Option[]; bootcamps: O
         for (const col of cols) {
           const normalized = col.toLowerCase().replace(/[^a-z]/g, "");
           const match = fieldOpts.find(
-            (f) => f.value.toLowerCase() === normalized || f.label.toLowerCase() === col.toLowerCase()
+            (f) =>
+              f.value.toLowerCase() === normalized ||
+              f.label.toLowerCase() === col.toLowerCase() ||
+              HEADER_ALIASES[f.value]?.includes(normalized)
           );
           autoMapping[col] = match?.value || "";
         }
