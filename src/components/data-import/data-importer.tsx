@@ -13,6 +13,20 @@ const CHUNK_SIZE = 50;
 // Il faut de quoi nommer la personne : un nom complet, un prénom/nom, ou à défaut un email.
 const NAME_FIELDS = ["fullName", "firstName", "lastName", "email"];
 
+// Un appel qui tombe (réseau, délai Vercel) est retenté deux fois avant de compter ses lignes en erreur.
+async function sendWithRetry<T>(send: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let n = 1; n <= attempts; n++) {
+    try {
+      return await send();
+    } catch (e) {
+      lastError = e;
+      if (n < attempts) await new Promise((r) => setTimeout(r, 2000 * n));
+    }
+  }
+  throw lastError;
+}
+
 const FIELD_OPTIONS: Record<EntityType, { value: string; label: string }[]> = {
   leads: [
     { value: "fullName", label: "Nom complet" },
@@ -89,26 +103,27 @@ export function DataImporter({ tags, bootcamps }: { tags: Option[]; bootcamps: O
     setIsPending(true);
     const total: BulkImportResult = { created: 0, existing: 0, skipped: 0, errors: 0, total: 0 };
     setProgress({ ...total });
-    try {
-      for (let i = 0; i < csvData.length; i += CHUNK_SIZE) {
-        const chunk = csvData.slice(i, i + CHUNK_SIZE);
-        const res =
-          entityType === "leads"
-            ? await bulkImportLeadsAction(chunk, mapping, {
-                tagId: tagId || null,
-                newTagName: newTagName || null,
-                bootcampId: bootcampId || null,
-              })
-            : await bulkImportContactsAction(chunk, mapping);
-        for (const k of ["created", "existing", "skipped", "errors", "total"] as const) total[k] += res[k];
-        if (res.firstError && !total.firstError) total.firstError = res.firstError;
-        setProgress({ ...total });
+    for (let i = 0; i < csvData.length; i += CHUNK_SIZE) {
+      const chunk = csvData.slice(i, i + CHUNK_SIZE);
+      const send = () =>
+        entityType === "leads"
+          ? bulkImportLeadsAction(chunk, mapping, {
+              tagId: tagId || null,
+              newTagName: newTagName || null,
+              bootcampId: bootcampId || null,
+            })
+          : bulkImportContactsAction(chunk, mapping);
+      let res: BulkImportResult;
+      try {
+        res = await sendWithRetry(send);
+      } catch (e) {
+        // Ce paquet a vraiment échoué (réseau, délai) : ses lignes comptent en erreur, on passe au suivant.
+        // Relancer le même fichier les reprendra : les lignes déjà entrées passent en « déjà présents ».
+        res = { created: 0, existing: 0, skipped: 0, errors: chunk.length, total: chunk.length, firstError: e instanceof Error ? e.message : String(e) };
       }
-    } catch (e) {
-      // Un paquet a échoué (réseau, délai) : on compte ses lignes en erreur et on montre ce qui a été fait.
-      total.errors += csvData.length - total.total;
-      total.total = csvData.length;
-      if (!total.firstError) total.firstError = e instanceof Error ? e.message : String(e);
+      for (const k of ["created", "existing", "skipped", "errors", "total"] as const) total[k] += res[k];
+      if (res.firstError && !total.firstError) total.firstError = res.firstError;
+      setProgress({ ...total });
     }
     setResult(total);
     setIsPending(false);
