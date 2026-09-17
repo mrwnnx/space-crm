@@ -1195,3 +1195,19 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
   error: text("error"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Une pièce jointe WhatsApp (photo, vidéo, PDF, vocal, sticker), rapatriée
+// dans le bucket public `whatsapp-media` et rattachée à sa bulle.
+export const whatsappMedia = pgTable("whatsapp_media", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  activityId: uuid("activity_id")
+    .notNull()
+    .references(() => activities.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), // image | video | audio | document | sticker
+  mimeType: text("mime_type"),
+  url: text("url").notNull(),
+  storagePath: text("storage_path").notNull(),
+  filename: text("filename"),
+  size: integer("size"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

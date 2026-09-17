@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Attachment01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { cn, formatRelative, initials } from "@/lib/utils";
 import { actorName } from "@/lib/actors";
 import type { WhatsAppTemplate } from "@/lib/messaging/whatsapp";
@@ -13,6 +13,7 @@ import {
   markWhatsAppReadAction,
   replyWhatsAppAction,
   replyWhatsAppTemplateAction,
+  sendWhatsAppMediaAction,
 } from "@/app/whatsapp-actions";
 
 /*
@@ -46,6 +47,7 @@ type Message = {
   createdAt: string;
   status: "sent" | "delivered" | "read" | "failed" | null;
   error: string | null;
+  media: { kind: "image" | "video" | "audio" | "document" | "sticker"; url: string; mimeType: string | null; filename: string | null } | null;
 };
 
 type Thread = {
@@ -275,7 +277,9 @@ function Bulle({ m, precedent }: { m: Message; precedent?: Message }) {
             sortant ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground"
           )}
         >
-          {m.content}
+          {m.media && <PieceJointe media={m.media} sortant={sortant} />}
+          {/* Sans légende, le texte n'est que le libellé « 📷 Photo » : le média suffit. */}
+          {!(m.media && m.media.kind !== "document" && /^(📷|🎥|🎤|Sticker)/.test(m.content ?? "")) && m.content}
           <p className={cn("mt-1 text-right text-[10px]", sortant ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {sortant && m.createdBy ? `${actorName(m.createdBy)} · ` : ""}
             {d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
@@ -288,6 +292,38 @@ function Bulle({ m, precedent }: { m: Message; precedent?: Message }) {
       )}
     </>
   );
+}
+
+function PieceJointe({ media, sortant }: { media: NonNullable<Message["media"]>; sortant: boolean }) {
+  switch (media.kind) {
+    case "image":
+    case "sticker":
+      return (
+        <a href={media.url} target="_blank" rel="noreferrer" className="mb-1 block">
+          {/* eslint-disable-next-line @next/next/no-img-element -- URL externe du bucket, taille inconnue */}
+          <img
+            src={media.url}
+            alt=""
+            className={cn("rounded-lg object-cover", media.kind === "sticker" ? "h-28 w-28" : "max-h-72 w-full max-w-xs")}
+          />
+        </a>
+      );
+    case "video":
+      return <video src={media.url} controls preload="metadata" className="mb-1 max-h-72 w-full max-w-xs rounded-lg" />;
+    case "audio":
+      return <audio src={media.url} controls preload="metadata" className="mb-1 w-64 max-w-full" />;
+    case "document":
+      return (
+        <a
+          href={media.url}
+          target="_blank"
+          rel="noreferrer"
+          className={cn("mb-1 block underline underline-offset-2", sortant ? "text-primary-foreground" : "text-primary")}
+        >
+          📄 {media.filename ?? "Document"}
+        </a>
+      );
+  }
 }
 
 /** Les coches de WhatsApp : ✓ envoyé, ✓✓ livré, ✓✓ bleues lu, ! échec. Rien = statut inconnu. */
@@ -307,16 +343,31 @@ function Accuse({ status }: { status: Message["status"] }) {
 function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
   const router = useRouter();
   const [texte, setTexte] = useState("");
+  const [fichier, setFichier] = useState<File | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function envoyer() {
-    if (!texte.trim() || isPending) return;
+    if ((!texte.trim() && !fichier) || isPending) return;
     setErreur(null);
     startTransition(async () => {
-      const r = await replyWhatsAppAction(leadId, to, texte);
+      let r: { ok: true } | { ok: false; error: string };
+      if (fichier) {
+        // Avec une pièce jointe, le texte devient sa légende.
+        const fd = new FormData();
+        fd.set("leadId", leadId);
+        fd.set("to", to);
+        fd.set("caption", texte);
+        fd.set("file", fichier);
+        r = await sendWhatsAppMediaAction(fd);
+      } else {
+        r = await replyWhatsAppAction(leadId, to, texte);
+      }
       if (r.ok) {
         setTexte("");
+        setFichier(null);
+        if (fileRef.current) fileRef.current.value = "";
         router.refresh();
       } else {
         setErreur(r.error);
@@ -337,16 +388,50 @@ function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) envoyer();
         }}
-        placeholder="Votre réponse…"
+        placeholder={fichier ? "Légende (facultative)…" : "Votre réponse…"}
         rows={2}
         className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
       />
       <div className="mt-1.5 flex items-center justify-between gap-2">
-        <p className="text-[10.5px] text-muted-foreground">{erreur ?? "⌘↵ pour envoyer"}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,video/mp4,application/pdf"
+            className="hidden"
+            onChange={(e) => setFichier(e.target.files?.[0] ?? null)}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground"
+            title="Photo, vidéo ou PDF — 4 Mo max"
+          >
+            <HugeiconsIcon icon={Attachment01Icon} size={14} />
+            {fichier ? (
+              <span className="max-w-48 truncate text-foreground">{fichier.name}</span>
+            ) : (
+              "Joindre"
+            )}
+          </button>
+          {fichier && (
+            <button
+              type="button"
+              onClick={() => {
+                setFichier(null);
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+              className="text-[10.5px] text-muted-foreground hover:text-red-600"
+            >
+              ✕
+            </button>
+          )}
+          <p className="truncate text-[10.5px] text-muted-foreground">{erreur ?? (fichier ? "" : "⌘↵ pour envoyer")}</p>
+        </div>
         <button
           type="submit"
-          disabled={isPending || !texte.trim()}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+          disabled={isPending || (!texte.trim() && !fichier)}
+          className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
         >
           {isPending ? "Envoi…" : "Envoyer"}
         </button>

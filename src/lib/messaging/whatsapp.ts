@@ -89,6 +89,35 @@ export async function sendWhatsApp({
 }
 
 /**
+ * Une pièce jointe — photo, vidéo, PDF — par son URL publique, que Meta va
+ * chercher lui-même. Même règle que le texte : fenêtre de 24 h seulement.
+ * `filename` n'est lu que pour un document (c'est le nom que le lead verra).
+ */
+export async function sendWhatsAppMedia({
+  to,
+  kind,
+  link,
+  caption,
+  filename,
+}: {
+  to: string;
+  kind: "image" | "video" | "document";
+  link: string;
+  caption?: string;
+  filename?: string;
+}): Promise<WhatsAppResult> {
+  return envoyer({
+    to: normaliser(to),
+    type: kind,
+    [kind]: {
+      link,
+      ...(caption ? { caption } : {}),
+      ...(kind === "document" && filename ? { filename } : {}),
+    },
+  });
+}
+
+/**
  * Modèle approuvé — le seul envoi possible hors fenêtre, donc **le seul
  * utilisable par une automatisation**.
  *

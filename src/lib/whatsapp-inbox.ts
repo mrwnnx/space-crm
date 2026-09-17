@@ -1,6 +1,14 @@
 import "server-only";
 import { db } from "@/db";
-import { activities, leads, leadSources, whatsappConversations, whatsappMessages } from "@/db/schema";
+import {
+  activities,
+  leads,
+  leadSources,
+  whatsappConversations,
+  whatsappMedia,
+  whatsappMessages,
+} from "@/db/schema";
+import { libelleMedia, rapatrierMediaMeta, type MediaKind, type Stocke } from "@/lib/messaging/whatsapp-media";
 import { asc, and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getOrCreateContactForLead } from "@/lib/queries";
 
@@ -113,6 +121,8 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
 
 export type MessageStatus = "sent" | "delivered" | "read" | "failed";
 
+export type Media = { kind: MediaKind; url: string; mimeType: string | null; filename: string | null };
+
 export type Message = {
   id: string;
   direction: "inbound" | "outbound";
@@ -121,6 +131,7 @@ export type Message = {
   createdAt: Date;
   status: MessageStatus | null; // null = envoyé avant qu'on garde les statuts, ou message reçu
   error: string | null;
+  media: Media | null;
 };
 
 /**
@@ -165,8 +176,15 @@ export async function getWhatsAppThread(leadId: string) {
       })
     : [];
   const parActivite = new Map(statuts.map((s) => [s.activityId, s]));
+  const medias = rows.length
+    ? await db.query.whatsappMedia.findMany({
+        where: inArray(whatsappMedia.activityId, rows.map((a) => a.id)),
+      })
+    : [];
+  const mediaParActivite = new Map(medias.map((m) => [m.activityId, m]));
   const messages: Message[] = rows.map((a) => {
     const st = parActivite.get(a.id);
+    const md = mediaParActivite.get(a.id);
     return {
       id: a.id,
       direction: a.direction,
@@ -175,6 +193,7 @@ export async function getWhatsAppThread(leadId: string) {
       createdAt: a.createdAt,
       status: (st?.status as MessageStatus | undefined) ?? null,
       error: st?.error ?? null,
+      media: md ? { kind: md.kind as MediaKind, url: md.url, mimeType: md.mimeType, filename: md.filename } : null,
     };
   });
   const lastInbound = [...messages].reverse().find((m) => m.direction === "inbound");
@@ -240,10 +259,18 @@ async function getOrCreateSourceWhatsApp() {
  *
  * `from` arrive de Meta en chiffres seuls, indicatif compris (« 21627688700 »).
  */
+export type MediaEntrant = {
+  kind: MediaKind;
+  mediaId: string; // l'identifiant Meta, à rapatrier tout de suite
+  caption: string | null;
+  filename: string | null;
+};
+
 export async function ingestInboundWhatsApp(input: {
   from: string;
   profileName: string | null;
   text: string;
+  media?: MediaEntrant | null;
 }): Promise<{ leadId: string; leadCreated: boolean }> {
   // Rapprochement par les 8 derniers chiffres : le CRM stocke des numéros
   // tunisiens parfois sans indicatif, Meta les rend toujours avec. Le lead le
@@ -283,14 +310,43 @@ export async function ingestInboundWhatsApp(input: {
     leadCreated = true;
   }
 
-  await db.insert(activities).values({
-    referenceType: "lead",
-    referenceId: lead.id,
-    type: "whatsapp",
-    direction: "inbound",
-    subject: `WhatsApp reçu${input.profileName ? ` de ${input.profileName}` : ""}`,
-    content: input.text,
-  });
+  // Un média se rapatrie AVANT d'écrire la bulle : s'il échoue, la bulle le
+  // dit (« non récupéré ») plutôt que de promettre une photo absente.
+  let stocke: Stocke | null = null;
+  let contenu = input.text;
+  if (input.media) {
+    const r = await rapatrierMediaMeta(lead.id, input.media.mediaId, input.media.filename);
+    const libelle = libelleMedia(input.media.kind, input.media.filename);
+    if (r.ok) {
+      stocke = r.media;
+      contenu = input.media.caption ?? libelle;
+    } else {
+      contenu = `${libelle} — non récupéré (${r.error})`;
+    }
+  }
+
+  const [activite] = await db
+    .insert(activities)
+    .values({
+      referenceType: "lead",
+      referenceId: lead.id,
+      type: "whatsapp",
+      direction: "inbound",
+      subject: `WhatsApp reçu${input.profileName ? ` de ${input.profileName}` : ""}`,
+      content: contenu,
+    })
+    .returning({ id: activities.id });
+  if (input.media && stocke) {
+    await db.insert(whatsappMedia).values({
+      activityId: activite.id,
+      kind: input.media.kind,
+      mimeType: stocke.mimeType,
+      url: stocke.url,
+      storagePath: stocke.storagePath,
+      filename: input.media.filename,
+      size: stocke.size,
+    });
+  }
   await db
     .update(leads)
     .set({ lastContactedAt: new Date(), updatedAt: new Date() })
@@ -351,4 +407,17 @@ export async function applyWhatsAppStatus(input: {
     .update(whatsappMessages)
     .set({ status: statut, error, updatedAt: new Date() })
     .where(eq(whatsappMessages.wamid, input.wamid));
+}
+
+/** Rattache un média déjà stocké (envoi depuis le CRM) à sa bulle. */
+export async function recordWhatsAppMedia(activityId: string, kind: MediaKind, stocke: Stocke, filename?: string | null) {
+  await db.insert(whatsappMedia).values({
+    activityId,
+    kind,
+    mimeType: stocke.mimeType,
+    url: stocke.url,
+    storagePath: stocke.storagePath,
+    filename: filename ?? null,
+    size: stocke.size,
+  });
 }

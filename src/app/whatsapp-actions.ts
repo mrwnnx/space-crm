@@ -8,9 +8,11 @@ import {
   createWhatsAppTemplate,
   deleteWhatsAppTemplate,
   sendWhatsApp,
+  sendWhatsAppMedia,
   sendWhatsAppTemplate,
 } from "@/lib/messaging/whatsapp";
-import { markWhatsAppRead, recordWhatsAppSent } from "@/lib/whatsapp-inbox";
+import { ENVOI_MAX_BYTES, ENVOI_MIME, libelleMedia, stockerMedia } from "@/lib/messaging/whatsapp-media";
+import { markWhatsAppRead, recordWhatsAppMedia, recordWhatsAppSent } from "@/lib/whatsapp-inbox";
 import { setAiReplyEnabled } from "@/lib/whatsapp-settings";
 
 /**
@@ -42,6 +44,53 @@ export async function replyWhatsAppAction(leadId: string, to: string, body: stri
     content: texte,
   });
   if (r.sid) await recordWhatsAppSent(r.sid, activite.id);
+  await updateLead(leadId, { lastContactedAt: new Date() });
+  revalidatePath("/whatsapp");
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true as const };
+}
+
+/**
+ * Une photo, une vidéo ou un PDF, avec une légende facultative. Le fichier est
+ * d'abord posé dans notre bucket (c'est notre copie, celle du fil), puis Meta
+ * le récupère par son URL. Fenêtre de 24 h seulement, comme le texte.
+ */
+export async function sendWhatsAppMediaAction(formData: FormData) {
+  await requireUser();
+  const leadId = String(formData.get("leadId") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const caption = String(formData.get("caption") ?? "").trim();
+  const file = formData.get("file");
+  if (!leadId || !to) return { ok: false as const, error: "Lead ou numéro manquant." };
+  if (!(file instanceof File) || file.size === 0) return { ok: false as const, error: "Aucun fichier." };
+  const kind = ENVOI_MIME[file.type];
+  if (!kind) return { ok: false as const, error: "Formats acceptés : JPG, PNG, MP4, PDF." };
+  if (file.size > ENVOI_MAX_BYTES) {
+    return { ok: false as const, error: `Fichier trop lourd (${(file.size / 1024 / 1024).toFixed(1)} Mo, maximum 4 Mo).` };
+  }
+
+  const stock = await stockerMedia(leadId, file, file.type, file.name);
+  if (!stock.ok) return { ok: false as const, error: stock.error };
+
+  const r = await sendWhatsAppMedia({
+    to,
+    kind,
+    link: stock.media.url,
+    caption: caption || undefined,
+    filename: kind === "document" ? file.name : undefined,
+  });
+  if (!r.ok) return { ok: false as const, error: r.error };
+
+  const activite = await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "whatsapp",
+    direction: "outbound",
+    subject: "WhatsApp envoyé (pièce jointe)",
+    content: caption || libelleMedia(kind, file.name),
+  });
+  await recordWhatsAppSent(r.id, activite.id);
+  await recordWhatsAppMedia(activite.id, kind, stock.media, kind === "document" ? file.name : null);
   await updateLead(leadId, { lastContactedAt: new Date() });
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyWhatsAppStatus, ingestInboundWhatsApp } from "@/lib/whatsapp-inbox";
+import { applyWhatsAppStatus, ingestInboundWhatsApp, type MediaEntrant } from "@/lib/whatsapp-inbox";
+import { MEDIA_KINDS } from "@/lib/messaging/whatsapp-media";
 
 /**
  * Le webhook WhatsApp de Meta — remplace celui de Twilio.
@@ -41,11 +42,41 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Vérification refusée" }, { status: 403 });
 }
 
+type MediaMeta = { id?: string; mime_type?: string; caption?: string; filename?: string };
 type Entrant = {
   from?: string;
-  text?: { body?: string };
   type?: string;
+  text?: { body?: string };
+  image?: MediaMeta;
+  video?: MediaMeta;
+  audio?: MediaMeta;
+  document?: MediaMeta;
+  sticker?: MediaMeta;
+  // Une réponse par bouton de modèle arrive ici, pas dans `text`.
+  button?: { text?: string; payload?: string };
+  interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
 };
+
+/** Le texte lisible d'un message entrant, quel que soit son type. */
+function texteDe(m: Entrant): string {
+  if (m.text?.body) return m.text.body;
+  if (m.button?.text) return m.button.text;
+  const i = m.interactive;
+  if (i?.button_reply?.title) return i.button_reply.title;
+  if (i?.list_reply?.title) return i.list_reply.title;
+  return m.type ? `[${m.type} reçu, non lisible dans le CRM]` : "[message vide]";
+}
+
+/** La pièce jointe d'un message entrant, s'il en porte une. */
+function mediaDe(m: Entrant): MediaEntrant | null {
+  const kind = MEDIA_KINDS.find((k) => k === m.type);
+  const meta = kind ? m[kind] : undefined;
+  if (!kind || !meta?.id) return null;
+  return { kind, mediaId: meta.id, caption: meta.caption ?? null, filename: meta.filename ?? null };
+}
+
+// Rapatrier une vidéo de 16 Mo peut dépasser les 10 s par défaut.
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -86,15 +117,15 @@ export async function POST(request: NextRequest) {
 
         for (const m of v.messages) {
           if (!m.from) continue;
-          // Le texte n'existe que sur les messages de type « text » ; une image
-          // ou un vocal arrive sans corps, et doit quand même laisser une trace.
-          const texte =
-            m.text?.body ?? (m.type ? `[${m.type} reçu, non lisible dans le CRM]` : "[message vide]");
-
           // Rattachement au lead — ou création du lead si le numéro est inconnu.
           // Tout est dans src/lib/whatsapp-inbox.ts, seul point d'entrée d'un
-          // message reçu.
-          const r = await ingestInboundWhatsApp({ from: m.from, profileName: nom, text: texte });
+          // message reçu. Une photo, un vocal, un PDF y sont rapatriés.
+          const r = await ingestInboundWhatsApp({
+            from: m.from,
+            profileName: nom,
+            text: texteDe(m),
+            media: mediaDe(m),
+          });
           recus++;
           if (r.leadCreated) leadsCrees++;
         }
