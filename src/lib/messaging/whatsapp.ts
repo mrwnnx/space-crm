@@ -89,9 +89,10 @@ export async function sendWhatsApp({
 }
 
 /**
- * Une pièce jointe — photo, vidéo, PDF — par son URL publique, que Meta va
- * chercher lui-même. Même règle que le texte : fenêtre de 24 h seulement.
- * `filename` n'est lu que pour un document (c'est le nom que le lead verra).
+ * Une pièce jointe — photo, vidéo, PDF, vocal — par son URL publique, que Meta
+ * va chercher lui-même. Même règle que le texte : fenêtre de 24 h seulement.
+ * `filename` n'est lu que pour un document (c'est le nom que le lead verra) ;
+ * un audio n'a pas de légende.
  */
 export async function sendWhatsAppMedia({
   to,
@@ -101,7 +102,7 @@ export async function sendWhatsAppMedia({
   filename,
 }: {
   to: string;
-  kind: "image" | "video" | "document";
+  kind: "image" | "video" | "document" | "audio";
   link: string;
   caption?: string;
   filename?: string;
@@ -111,7 +112,7 @@ export async function sendWhatsAppMedia({
     type: kind,
     [kind]: {
       link,
-      ...(caption ? { caption } : {}),
+      ...(caption && kind !== "audio" ? { caption } : {}),
       ...(kind === "document" && filename ? { filename } : {}),
     },
   });

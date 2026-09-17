@@ -64,7 +64,7 @@ export async function sendWhatsAppMediaAction(formData: FormData) {
   if (!leadId || !to) return { ok: false as const, error: "Lead ou numéro manquant." };
   if (!(file instanceof File) || file.size === 0) return { ok: false as const, error: "Aucun fichier." };
   const kind = ENVOI_MIME[file.type];
-  if (!kind) return { ok: false as const, error: "Formats acceptés : JPG, PNG, MP4, PDF." };
+  if (!kind) return { ok: false as const, error: "Formats acceptés : JPG, PNG, MP4, PDF, ou un vocal enregistré ici." };
   if (file.size > ENVOI_MAX_BYTES) {
     return { ok: false as const, error: `Fichier trop lourd (${(file.size / 1024 / 1024).toFixed(1)} Mo, maximum 4 Mo).` };
   }
@@ -86,8 +86,8 @@ export async function sendWhatsAppMediaAction(formData: FormData) {
     referenceId: leadId,
     type: "whatsapp",
     direction: "outbound",
-    subject: "WhatsApp envoyé (pièce jointe)",
-    content: caption || libelleMedia(kind, file.name),
+    subject: kind === "audio" ? "WhatsApp envoyé (vocal)" : "WhatsApp envoyé (pièce jointe)",
+    content: kind !== "audio" && caption ? caption : libelleMedia(kind, file.name),
   });
   await recordWhatsAppSent(r.id, activite.id);
   await recordWhatsAppMedia(activite.id, kind, stock.media, kind === "document" ? file.name : null);

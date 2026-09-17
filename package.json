@@ -27,6 +27,7 @@
     "drizzle-orm": "^0.45.2",
     "marked": "^18.0.11",
     "next": "16.2.9",
+    "opus-recorder": "^8.0.5",
     "papaparse": "^5.5.4",
     "postgres": "^3.4.9",
     "react": "19.2.4",

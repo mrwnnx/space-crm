@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon, Attachment01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Attachment01Icon, Mic01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { cn, formatRelative, initials } from "@/lib/utils";
 import { actorName } from "@/lib/actors";
 import type { WhatsAppTemplate } from "@/lib/messaging/whatsapp";
@@ -326,6 +326,61 @@ function PieceJointe({ media, sortant }: { media: NonNullable<Message["media"]>;
   }
 }
 
+/**
+ * Enregistrer un vocal dans le navigateur, directement en ogg/opus — le seul
+ * format que WhatsApp affiche comme un message vocal. Chrome n'enregistre
+ * qu'en webm : l'encodeur (opus-recorder, wasm) tourne dans un worker servi
+ * depuis /opus/. Le résultat devient un File, envoyé comme une pièce jointe.
+ */
+function useVocal(onFichier: (f: File) => void, onErreur: (e: string) => void) {
+  const [enregistre, setEnregistre] = useState(false);
+  const [secondes, setSecondes] = useState(0);
+  const rec = useRef<{ stop: () => void; close: () => void } | null>(null);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function demarrer() {
+    try {
+      const { default: Recorder } = await import("opus-recorder");
+      const r = new Recorder({
+        encoderPath: "/opus/encoderWorker.min.js",
+        encoderApplication: 2048, // voix
+        encoderSampleRate: 48000,
+        encoderBitRate: 32000,
+        numberOfChannels: 1,
+      });
+      const morceaux: Uint8Array[] = [];
+      r.ondataavailable = (data) => morceaux.push(data);
+      r.onstop = () => {
+        const blob = new Blob(morceaux as BlobPart[], { type: "audio/ogg" });
+        onFichier(new File([blob], `vocal-${Date.now()}.ogg`, { type: "audio/ogg" }));
+        r.close();
+        rec.current = null;
+      };
+      await r.start();
+      rec.current = r;
+      setSecondes(0);
+      setEnregistre(true);
+      timer.current = setInterval(() => setSecondes((n) => n + 1), 1000);
+    } catch (e) {
+      onErreur(
+        e instanceof Error && e.name === "NotAllowedError"
+          ? "Micro refusé par le navigateur — autorisez-le pour ce site."
+          : "Impossible de démarrer l'enregistrement."
+      );
+    }
+  }
+
+  function arreter() {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = null;
+    setEnregistre(false);
+    rec.current?.stop();
+  }
+
+  const duree = `${Math.floor(secondes / 60)}:${String(secondes % 60).padStart(2, "0")}`;
+  return { enregistre, duree, demarrer, arreter };
+}
+
 /** Les coches de WhatsApp : ✓ envoyé, ✓✓ livré, ✓✓ bleues lu, ! échec. Rien = statut inconnu. */
 function Accuse({ status }: { status: Message["status"] }) {
   if (!status) return null;
@@ -347,6 +402,13 @@ function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const vocal = useVocal((f) => setFichier(f), (e) => setErreur(e));
+  const estVocal = fichier?.type === "audio/ogg";
+  // Une URL d'aperçu par vocal, libérée quand il change — pas une par rendu.
+  const apercu = useMemo(() => (estVocal && fichier ? URL.createObjectURL(fichier) : null), [fichier, estVocal]);
+  useEffect(() => () => {
+    if (apercu) URL.revokeObjectURL(apercu);
+  }, [apercu]);
 
   function envoyer() {
     if ((!texte.trim() && !fichier) || isPending) return;
@@ -388,7 +450,8 @@ function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) envoyer();
         }}
-        placeholder={fichier ? "Légende (facultative)…" : "Votre réponse…"}
+        placeholder={estVocal ? "Le vocal part sans texte." : fichier ? "Légende (facultative)…" : "Votre réponse…"}
+        disabled={estVocal}
         rows={2}
         className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
       />
@@ -401,19 +464,42 @@ function ReponseLibre({ leadId, to }: { leadId: string; to: string }) {
             className="hidden"
             onChange={(e) => setFichier(e.target.files?.[0] ?? null)}
           />
+          {vocal.enregistre ? (
+            <button
+              type="button"
+              onClick={vocal.arreter}
+              className="flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[10.5px] font-medium text-white"
+            >
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+              {vocal.duree} · Arrêter
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={vocal.demarrer}
+              disabled={isPending || !!fichier}
+              className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+              title="Enregistrer un vocal"
+            >
+              <HugeiconsIcon icon={Mic01Icon} size={14} />
+              Vocal
+            </button>
+          )}
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground"
+            disabled={vocal.enregistre}
+            className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
             title="Photo, vidéo ou PDF — 4 Mo max"
           >
             <HugeiconsIcon icon={Attachment01Icon} size={14} />
-            {fichier ? (
+            {fichier && !estVocal ? (
               <span className="max-w-48 truncate text-foreground">{fichier.name}</span>
             ) : (
               "Joindre"
             )}
           </button>
+          {apercu && <audio src={apercu} controls className="h-7 w-44" />}
           {fichier && (
             <button
               type="button"

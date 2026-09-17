@@ -22,12 +22,15 @@ export const MEDIA_KINDS: MediaKind[] = ["image", "video", "audio", "document", 
 
 /** Ce qu'on accepte d'envoyer depuis le CRM, et jusqu'à quel poids. */
 export const ENVOI_MAX_BYTES = 4 * 1024 * 1024; // le corps d'une action Vercel plafonne à 4,5 Mo
-export type EnvoiKind = "image" | "video" | "document";
+export type EnvoiKind = "image" | "video" | "document" | "audio";
 export const ENVOI_MIME: Record<string, EnvoiKind> = {
   "image/jpeg": "image",
   "image/png": "image",
   "video/mp4": "video",
   "application/pdf": "document",
+  // Un vocal enregistré dans le CRM : ogg/opus est LE format que WhatsApp
+  // affiche comme un message vocal (et non comme un fichier audio).
+  "audio/ogg": "audio",
 };
 
 function storage() {
