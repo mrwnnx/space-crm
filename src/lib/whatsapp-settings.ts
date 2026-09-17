@@ -20,3 +20,27 @@ export async function setAiReplyEnabled(enabled: boolean) {
   await getWhatsAppSettings(); // garantit la ligne
   await db.update(whatsappSettings).set({ aiReplyEnabled: enabled, updatedAt: new Date() });
 }
+
+export type AutoRepliesInput = {
+  welcomeEnabled: boolean;
+  welcomeText: string;
+  awayEnabled: boolean;
+  awayText: string;
+  awayStart: number;
+  awayEnd: number;
+  awayDays: number[]; // ISO 1-7
+};
+
+export async function saveAutoReplies(input: AutoRepliesInput) {
+  await getWhatsAppSettings(); // garantit la ligne
+  await db.update(whatsappSettings).set({
+    welcomeEnabled: input.welcomeEnabled,
+    welcomeText: input.welcomeText,
+    awayEnabled: input.awayEnabled,
+    awayText: input.awayText,
+    awayStart: input.awayStart,
+    awayEnd: input.awayEnd,
+    awayDays: input.awayDays.join(","),
+    updatedAt: new Date(),
+  });
+}

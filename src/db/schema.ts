@@ -1182,6 +1182,15 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
 export const whatsappSettings = pgTable("whatsapp_settings", {
   id: boolean("id").primaryKey().default(true),
   aiReplyEnabled: boolean("ai_reply_enabled").notNull().default(false),
+  // Bienvenue : au premier message d'un numéro. Absence : hors horaires (heure
+  // de Tunis, jours ISO 1-7), au plus une fois par 24 h par conversation.
+  welcomeEnabled: boolean("welcome_enabled").notNull().default(false),
+  welcomeText: text("welcome_text").notNull().default(""),
+  awayEnabled: boolean("away_enabled").notNull().default(false),
+  awayText: text("away_text").notNull().default(""),
+  awayStart: integer("away_start").notNull().default(9),
+  awayEnd: integer("away_end").notNull().default(18),
+  awayDays: text("away_days").notNull().default("1,2,3,4,5"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

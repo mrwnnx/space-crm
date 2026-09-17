@@ -3,13 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { WhatsAppNumber, WhatsAppTemplate } from "@/lib/messaging/whatsapp";
+import type { WhatsAppNumber, WhatsAppProfile, WhatsAppTemplate } from "@/lib/messaging/whatsapp";
+import { WHATSAPP_VERTICALS } from "@/lib/messaging/whatsapp-verticals";
 import {
   createQuickReplyAction,
   createTemplateAction,
   deleteQuickReplyAction,
   deleteTemplateAction,
+  saveAutoRepliesAction,
   setAiReplyAction,
+  updateProfileAction,
 } from "@/app/whatsapp-actions";
 
 /*
@@ -30,24 +33,189 @@ const LANGUES = [
 
 type QuickReply = { id: string; shortcut: string; text: string };
 
+export type AutoReplies = {
+  welcomeEnabled: boolean;
+  welcomeText: string;
+  awayEnabled: boolean;
+  awayText: string;
+  awayStart: number;
+  awayEnd: number;
+  awayDays: number[];
+};
+
 export function WhatsAppSettings({
   numero,
+  profil,
   templates,
   aiReplyEnabled,
   quickReplies,
+  autoReplies,
 }: {
   numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string };
+  profil: { ok: true; profil: WhatsAppProfile } | { ok: false; error: string };
   templates: WhatsAppTemplate[];
   aiReplyEnabled: boolean;
   quickReplies: QuickReply[];
+  autoReplies: AutoReplies;
 }) {
   return (
     <div className="space-y-6">
       <SectionNumero numero={numero} />
+      <SectionProfil profil={profil} nomAffiche={numero.ok ? numero.numero.nom : null} />
+      <SectionAuto initial={autoReplies} />
       <SectionIA enabled={aiReplyEnabled} />
       <SectionReponsesRapides items={quickReplies} />
       <SectionModeles templates={templates} />
     </div>
+  );
+}
+
+// ── Bienvenue et absence ──────────────────────────────
+
+const JOURS = [
+  { n: 1, l: "Lun" },
+  { n: 2, l: "Mar" },
+  { n: 3, l: "Mer" },
+  { n: 4, l: "Jeu" },
+  { n: 5, l: "Ven" },
+  { n: 6, l: "Sam" },
+  { n: 7, l: "Dim" },
+];
+
+function SectionAuto({ initial }: { initial: AutoReplies }) {
+  const router = useRouter();
+  const [v, setV] = useState<AutoReplies>(initial);
+  const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function enregistrer(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    startTransition(async () => {
+      const r = await saveAutoRepliesAction(v);
+      setMessage(r.ok ? { ok: true, texte: "Enregistré." } : { ok: false, texte: r.error });
+      if (r.ok) router.refresh();
+    });
+  }
+
+  const heures = Array.from({ length: 24 }, (_, i) => i);
+
+  return (
+    <Section title="Messages automatiques">
+      <form onSubmit={enregistrer} className="space-y-4">
+        <div className="rounded-lg border border-border p-3">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={v.welcomeEnabled}
+              onChange={(e) => setV({ ...v, welcomeEnabled: e.target.checked })}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm font-medium text-foreground">Message de bienvenue</span>
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Envoyé au <strong className="font-medium text-foreground">premier message</strong> d&apos;un numéro,
+            jamais après. <span className="font-mono">{"{{firstName}}"}</span> et{" "}
+            <span className="font-mono">{"{{formation}}"}</span> sont remplacés.
+          </p>
+          {v.welcomeEnabled && (
+            <textarea
+              value={v.welcomeText}
+              onChange={(e) => setV({ ...v, welcomeText: e.target.value })}
+              rows={3}
+              placeholder={"Bonjour {{firstName}} 👋 Merci pour ton message ! On te répond dans la journée."}
+              className={cn(INPUT, "mt-2 resize-y")}
+            />
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border p-3">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={v.awayEnabled}
+              onChange={(e) => setV({ ...v, awayEnabled: e.target.checked })}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm font-medium text-foreground">Message d&apos;absence</span>
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Envoyé quand un message arrive <strong className="font-medium text-foreground">hors des horaires</strong>{" "}
+            ci-dessous (heure de Tunis), au plus une fois par 24 h et par personne.
+          </p>
+          {v.awayEnabled && (
+            <div className="mt-2 space-y-2">
+              <textarea
+                value={v.awayText}
+                onChange={(e) => setV({ ...v, awayText: e.target.value })}
+                rows={3}
+                placeholder={"Merci pour ton message ! L'équipe est absente pour le moment — on te répond dès l'ouverture."}
+                className={cn(INPUT, "resize-y")}
+              />
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span className="text-muted-foreground">Ouvert de</span>
+                <select
+                  value={v.awayStart}
+                  onChange={(e) => setV({ ...v, awayStart: Number(e.target.value) })}
+                  className="rounded-md border border-border bg-background px-2 py-1"
+                >
+                  {heures.map((h) => (
+                    <option key={h} value={h}>
+                      {h}h
+                    </option>
+                  ))}
+                </select>
+                <span className="text-muted-foreground">à</span>
+                <select
+                  value={v.awayEnd}
+                  onChange={(e) => setV({ ...v, awayEnd: Number(e.target.value) })}
+                  className="rounded-md border border-border bg-background px-2 py-1"
+                >
+                  {heures.map((h) => (
+                    <option key={h} value={h}>
+                      {h}h
+                    </option>
+                  ))}
+                </select>
+                <span className="flex flex-wrap gap-1">
+                  {JOURS.map((j) => {
+                    const on = v.awayDays.includes(j.n);
+                    return (
+                      <button
+                        key={j.n}
+                        type="button"
+                        onClick={() =>
+                          setV({ ...v, awayDays: on ? v.awayDays.filter((d) => d !== j.n) : [...v.awayDays, j.n].sort() })
+                        }
+                        className={cn(
+                          "rounded-md border px-2 py-0.5",
+                          on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+                        )}
+                      >
+                        {j.l}
+                      </button>
+                    );
+                  })}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
+          {message && (
+            <span className={cn("text-xs", message.ok ? "text-green-700" : "text-red-600")}>{message.texte}</span>
+          )}
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+          >
+            {isPending ? "…" : "Enregistrer"}
+          </button>
+        </div>
+      </form>
+    </Section>
   );
 }
 
@@ -213,6 +381,136 @@ function SectionNumero({ numero }: { numero: { ok: true; numero: WhatsAppNumber 
   );
 }
 
+// ── Le profil de l'entreprise ─────────────────────────
+// Ce que voit un contact qui ouvre la fiche du numéro : photo, description, adresse, sites.
+// Chaque enregistrement écrit chez Meta ; l'écran relit ensuite le profil réel.
+
+function SectionProfil({
+  profil,
+  nomAffiche,
+}: {
+  profil: { ok: true; profil: WhatsAppProfile } | { ok: false; error: string };
+  nomAffiche: string | null;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  const [apercu, setApercu] = useState<string | null>(null);
+
+  if (!profil.ok) {
+    return (
+      <Section title="Le profil">
+        <p className="text-xs text-red-600">{profil.error}</p>
+      </Section>
+    );
+  }
+  const p = profil.profil;
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    setErreur(null);
+    setOk(false);
+    startTransition(async () => {
+      const r = await updateProfileAction(fd);
+      if (!r.ok) {
+        setErreur(r.error);
+        return;
+      }
+      setOk(true);
+      setApercu(null);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Section title="Le profil">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="flex items-start gap-4">
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
+            {(apercu ?? p.profilePictureUrl) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={apercu ?? p.profilePictureUrl ?? ""} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                Pas de photo
+              </div>
+            )}
+          </div>
+          <div className="flex-1 space-y-1">
+            <label className={LABEL}>Photo de profil</label>
+            <input
+              type="file"
+              name="photo"
+              accept="image/jpeg,image/png"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                setApercu(f ? URL.createObjectURL(f) : null);
+              }}
+              className="block text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium"
+            />
+            <p className="text-[10.5px] text-muted-foreground/70">JPG ou PNG, carré de préférence, 5 Mo maximum.</p>
+            <p className="pt-1 text-xs text-foreground">
+              Nom affiché : <span className="font-medium">{nomAffiche ?? "?"}</span>
+              <span className="ml-2 text-[10.5px] text-muted-foreground">
+                (le changer passe par WhatsApp Manager et une revue Meta — pas d&apos;ici)
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={LABEL}>À propos — la ligne sous le nom (139 car.)</label>
+            <input name="about" defaultValue={p.about} maxLength={139} className={INPUT} placeholder="Formations UX/UI Design à Tunis" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={LABEL}>Description (512 car.)</label>
+            <textarea name="description" defaultValue={p.description} maxLength={512} rows={3} className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Adresse</label>
+            <input name="address" defaultValue={p.address} maxLength={256} className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Email</label>
+            <input name="email" type="email" defaultValue={p.email} className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Site web</label>
+            <input name="website1" type="url" defaultValue={p.websites[0] ?? ""} className={INPUT} placeholder="https://thespace.academy" />
+          </div>
+          <div>
+            <label className={LABEL}>Second lien (Instagram…)</label>
+            <input name="website2" type="url" defaultValue={p.websites[1] ?? ""} className={INPUT} placeholder="https://instagram.com/…" />
+          </div>
+          <div>
+            <label className={LABEL}>Secteur</label>
+            <select name="vertical" defaultValue={p.vertical} className={INPUT}>
+              {WHATSAPP_VERTICALS.map((v) => (
+                <option key={v.code} value={v.code}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {isPending ? "Enregistrement chez Meta…" : "Enregistrer le profil"}
+          </button>
+          {ok && <span className="text-xs text-green-700">Profil mis à jour — c&apos;est ce que WhatsApp affiche maintenant.</span>}
+          {erreur && <span className="text-xs text-red-600">{erreur}</span>}
+        </div>
+      </form>
+    </Section>
+  );
+}
+
 // ── L'IA ──────────────────────────────────────────────
 
 function SectionIA({ enabled }: { enabled: boolean }) {
@@ -332,6 +630,13 @@ function LigneModele({ t }: { t: WhatsAppTemplate }) {
         )}
       </div>
       {t.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{t.body}</p>}
+      {t.buttons.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {t.buttons.map((b) => (
+            <span key={b} className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-foreground">{b}</span>
+          ))}
+        </div>
+      )}
       {t.rejectedReason && <p className="mt-1 text-[10.5px] text-red-600">Motif de Meta : {t.rejectedReason}</p>}
       {erreur && <p className="mt-1 text-[10.5px] text-red-600">{erreur}</p>}
     </li>
@@ -351,6 +656,7 @@ function NouveauModele({ existants }: { existants: string[] }) {
   const [category, setCategory] = useState<"MARKETING" | "UTILITY">("MARKETING");
   const [body, setBody] = useState("");
   const [examples, setExamples] = useState<string[]>([]);
+  const [buttons, setButtons] = useState<string[]>(["", "", ""]);
   const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -361,12 +667,13 @@ function NouveauModele({ existants }: { existants: string[] }) {
     e.preventDefault();
     setMessage(null);
     startTransition(async () => {
-      const r = await createTemplateAction({ name, language, category, body, examples });
+      const r = await createTemplateAction({ name, language, category, body, examples, buttons });
       if (r.ok) {
         setMessage({ ok: true, texte: "Soumis à Meta. Il apparaît « en attente » jusqu'à sa relecture." });
         setName("");
         setBody("");
         setExamples([]);
+        setButtons(["", "", ""]);
         router.refresh();
       } else {
         setMessage({ ok: false, texte: r.error });
@@ -462,6 +769,28 @@ function NouveauModele({ existants }: { existants: string[] }) {
           </p>
         </div>
       )}
+      <div>
+        <span className={LABEL}>Boutons de réponse rapide (3 max, 25 car.)</span>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {buttons.map((b, i) => (
+            <input
+              key={i}
+              value={b}
+              maxLength={25}
+              onChange={(e) => {
+                const v = [...buttons];
+                v[i] = e.target.value;
+                setButtons(v);
+              }}
+              placeholder={["Oui, appelez-moi", "Plus tard", "Une question"][i]}
+              className={INPUT}
+            />
+          ))}
+        </div>
+        <span className="text-[10.5px] text-muted-foreground">
+          Un tap sur un bouton compte comme une réponse du lead : la fenêtre de 24 h s&apos;ouvre et on peut lui écrire librement.
+        </span>
+      </div>
 
       {message && (
         <p className={cn("text-xs", message.ok ? "text-green-700" : "text-red-600")}>{message.texte}</p>

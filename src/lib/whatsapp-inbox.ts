@@ -383,6 +383,23 @@ export async function ingestInboundWhatsApp(input: {
     leadCreated = true;
   }
 
+  // Premier message de ce numéro ? (toutes ses fiches confondues) — pour la
+  // bienvenue automatique. Décidé AVANT d'insérer le nôtre.
+  const fichesDuNumero = leadCreated
+    ? [lead]
+    : await db.query.leads.findMany({ where: eq(CLE_TEL, fin), columns: { id: true } });
+  const dejaRecu = leadCreated
+    ? undefined
+    : await db.query.activities.findFirst({
+        where: and(
+          inArray(activities.referenceId, fichesDuNumero.map((f) => f.id)),
+          eq(activities.type, "whatsapp"),
+          eq(activities.direction, "inbound")
+        ),
+        columns: { id: true },
+      });
+  const premierMessage = !dejaRecu;
+
   // Un média se rapatrie AVANT d'écrire la bulle : s'il échoue, la bulle le
   // dit (« non récupéré ») plutôt que de promettre une photo absente.
   let stocke: Stocke | null = null;
@@ -436,8 +453,12 @@ export async function ingestInboundWhatsApp(input: {
     .set({ archivedAt: null })
     .where(eq(whatsappConversations.leadId, lead.id));
 
-  // ← Lot 3 : c'est ICI qu'une réponse automatique (IA) se décidera, une fois le
-  // message rangé — jamais avant, pour qu'un échec de l'IA ne perde pas le message.
+  // Les réponses automatiques à texte fixe (bienvenue, absence) — après que le
+  // message est rangé, jamais avant : un raté ne perd pas le message. Import
+  // dynamique : ce module-là nous importe aussi.
+  // ← Lot 3 : l'IA se branchera au même endroit, derrière `aiReplyEnabled`.
+  const { repondreAutomatiquement } = await import("@/lib/whatsapp-auto-reply");
+  await repondreAutomatiquement(lead.id, premierMessage);
 
   return { leadId: lead.id, leadCreated };
 }

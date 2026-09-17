@@ -26,7 +26,7 @@ import {
   recordWhatsAppSent,
   setWhatsAppArchived,
 } from "@/lib/whatsapp-inbox";
-import { setAiReplyEnabled } from "@/lib/whatsapp-settings";
+import { saveAutoReplies, setAiReplyEnabled, type AutoRepliesInput } from "@/lib/whatsapp-settings";
 
 /**
  * Les actions de la page « WhatsApp ». Module à part de `actions.ts` — un
@@ -223,6 +223,31 @@ export async function deleteQuickReplyAction(id: string) {
 export async function setAiReplyAction(enabled: boolean) {
   await requireUser();
   await setAiReplyEnabled(enabled);
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+export async function saveAutoRepliesAction(input: AutoRepliesInput) {
+  await requireUser();
+  const h = (n: number) => Math.min(23, Math.max(0, Math.floor(n)));
+  const jours = [...new Set(input.awayDays.map(Number).filter((d) => d >= 1 && d <= 7))];
+  if (input.welcomeEnabled && !input.welcomeText.trim()) {
+    return { ok: false as const, error: "Le message de bienvenue est vide." };
+  }
+  if (input.awayEnabled && !input.awayText.trim()) {
+    return { ok: false as const, error: "Le message d'absence est vide." };
+  }
+  if (input.awayEnabled && h(input.awayStart) >= h(input.awayEnd)) {
+    return { ok: false as const, error: "L'heure de fin doit être après l'heure de début." };
+  }
+  await saveAutoReplies({
+    ...input,
+    welcomeText: input.welcomeText.trim(),
+    awayText: input.awayText.trim(),
+    awayStart: h(input.awayStart),
+    awayEnd: h(input.awayEnd),
+    awayDays: jours,
+  });
   revalidatePath("/settings");
   return { ok: true as const };
 }

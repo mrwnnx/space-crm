@@ -187,6 +187,7 @@ export type WhatsAppTemplate = {
   category: string;
   body: string | null; // le texte, avec ses {{1}}, {{2}}…
   variables: number; // combien de {{n}} le corps attend
+  buttons: string[]; // les réponses rapides, s'il y en a
   rejectedReason: string | null; // Meta dit pourquoi, quand il refuse
 };
 
@@ -218,12 +219,15 @@ export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
         status: string;
         category: string;
         rejected_reason?: string;
-        components?: { type: string; text?: string }[];
+        components?: { type: string; text?: string; buttons?: { type: string; text: string }[] }[];
       }[];
     } | null;
     if (!res.ok || !json?.data) return [];
     return json.data.map((t) => {
       const body = t.components?.find((c) => c.type === "BODY")?.text ?? null;
+      const buttons = (t.components?.find((c) => c.type === "BUTTONS")?.buttons ?? [])
+        .filter((b) => b.type === "QUICK_REPLY")
+        .map((b) => b.text);
       return {
         id: t.id,
         name: t.name,
@@ -232,6 +236,7 @@ export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
         category: t.category,
         body,
         variables: countTemplateVariables(body),
+        buttons,
         // Meta rend "NONE" quand il n'y a rien à dire.
         rejectedReason: t.rejected_reason && t.rejected_reason !== "NONE" ? t.rejected_reason : null,
       };
@@ -260,6 +265,7 @@ export async function createWhatsAppTemplate(input: {
   category: "MARKETING" | "UTILITY";
   body: string;
   examples: string[];
+  buttons?: string[]; // réponses rapides : un tap = un message du lead, la fenêtre de 24 h s'ouvre
 }): Promise<{ ok: true; id: string; status: string } | { ok: false; error: string }> {
   const c = wabaConfig();
   if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_WABA_ID absent de l'environnement." };
@@ -267,6 +273,11 @@ export async function createWhatsAppTemplate(input: {
   const n = countTemplateVariables(input.body);
   const body: Record<string, unknown> = { type: "BODY", text: input.body };
   if (n > 0) body.example = { body_text: [input.examples.slice(0, n)] };
+  const components: Record<string, unknown>[] = [body];
+  const buttons = (input.buttons ?? []).map((b) => b.trim()).filter(Boolean).slice(0, 3);
+  if (buttons.length > 0) {
+    components.push({ type: "BUTTONS", buttons: buttons.map((text) => ({ type: "QUICK_REPLY", text })) });
+  }
 
   try {
     const res = await fetch(`${API}/${c.waba}/message_templates`, {
@@ -276,7 +287,7 @@ export async function createWhatsAppTemplate(input: {
         name: input.name,
         language: input.language,
         category: input.category,
-        components: [body],
+        components,
       }),
     });
     const json = (await res.json().catch(() => null)) as
@@ -320,6 +331,123 @@ export type WhatsAppNumber = {
 };
 
 /** Tout ce que Meta sait du numéro configuré — pour l'écran Paramètres. */
+// ── Le profil de l'entreprise (photo, description, adresse, sites) ──────────
+
+export type WhatsAppProfile = {
+  about: string;
+  address: string;
+  description: string;
+  email: string;
+  websites: string[];
+  vertical: string;
+  profilePictureUrl: string | null;
+};
+
+/** Le profil tel que WhatsApp le sert aux contacts — pas ce qu'on a tapé, ce que Meta a gardé. */
+export async function getWhatsAppProfile(): Promise<{ ok: true; profil: WhatsAppProfile } | { ok: false; error: string }> {
+  const c = config();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent de l'environnement." };
+  try {
+    const res = await fetch(
+      `${API}/${c.phoneId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`,
+      { headers: { Authorization: `Bearer ${c.token}` }, cache: "no-store" }
+    );
+    const json = (await res.json().catch(() => null)) as
+      | { data?: Array<Record<string, string | string[] | undefined>>; error?: { message?: string } }
+      | null;
+    const d = json?.data?.[0];
+    if (!res.ok || !d) return { ok: false, error: json?.error?.message ?? `HTTP ${res.status}` };
+    const str = (v: unknown) => (typeof v === "string" ? v : "");
+    return {
+      ok: true,
+      profil: {
+        about: str(d.about),
+        address: str(d.address),
+        description: str(d.description),
+        email: str(d.email),
+        websites: Array.isArray(d.websites) ? d.websites.filter((w): w is string => typeof w === "string") : [],
+        vertical: str(d.vertical) || "OTHER",
+        profilePictureUrl: str(d.profile_picture_url) || null,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
+  }
+}
+
+/**
+ * Écrire le profil. Meta refuse un champ vide dans certains cas (`about`) : on n'envoie que ce qui est rempli,
+ * sauf `websites` qui accepte une liste vide pour effacer.
+ */
+export async function updateWhatsAppProfile(input: {
+  about?: string;
+  address?: string;
+  description?: string;
+  email?: string;
+  websites?: string[];
+  vertical?: string;
+  profilePictureHandle?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const c = config();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent de l'environnement." };
+  const body: Record<string, unknown> = { messaging_product: "whatsapp" };
+  if (input.about?.trim()) body.about = input.about.trim();
+  if (input.address !== undefined) body.address = input.address.trim();
+  if (input.description !== undefined) body.description = input.description.trim();
+  if (input.email !== undefined) body.email = input.email.trim();
+  if (input.websites) body.websites = input.websites.map((w) => w.trim()).filter(Boolean).slice(0, 2);
+  if (input.vertical) body.vertical = input.vertical;
+  if (input.profilePictureHandle) body.profile_picture_handle = input.profilePictureHandle;
+  try {
+    const res = await fetch(`${API}/${c.phoneId}/whatsapp_business_profile`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => null)) as
+      | { success?: boolean; error?: { message?: string; error_user_msg?: string } }
+      | null;
+    if (!res.ok || !json?.success) {
+      return { ok: false, error: json?.error?.error_user_msg ?? json?.error?.message ?? `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
+  }
+}
+
+/**
+ * La photo de profil passe par l'API d'upload « resumable » de Meta, en deux temps : ouvrir une session
+ * sur l'app du jeton, y pousser les octets. Le `h` rendu est le « handle » que le profil attend.
+ */
+export async function uploadWhatsAppProfilePicture(
+  bytes: ArrayBuffer,
+  mime: string
+): Promise<{ ok: true; handle: string } | { ok: false; error: string }> {
+  const c = config();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent de l'environnement." };
+  const auth = { Authorization: `Bearer ${c.token}` };
+  try {
+    // L'app à laquelle le jeton appartient — c'est elle qui héberge la session d'upload.
+    const app = (await fetch(`${API}/app?fields=id`, { headers: auth }).then((r) => r.json())) as { id?: string };
+    if (!app.id) return { ok: false, error: "Impossible d'identifier l'app Meta du jeton." };
+    const session = (await fetch(
+      `${API}/${app.id}/uploads?file_length=${bytes.byteLength}&file_type=${encodeURIComponent(mime)}`,
+      { method: "POST", headers: auth }
+    ).then((r) => r.json())) as { id?: string; error?: { message?: string } };
+    if (!session.id) return { ok: false, error: session.error?.message ?? "Session d'upload refusée." };
+    const up = (await fetch(`${API}/${session.id}`, {
+      method: "POST",
+      headers: { ...auth, file_offset: "0", "Content-Type": "application/octet-stream" },
+      body: new Blob([bytes]),
+    }).then((r) => r.json())) as { h?: string; error?: { message?: string } };
+    if (!up.h) return { ok: false, error: up.error?.message ?? "Upload refusé." };
+    return { ok: true, handle: up.h };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
+  }
+}
+
 export async function getWhatsAppNumber(): Promise<{ ok: true; numero: WhatsAppNumber } | { ok: false; error: string }> {
   const c = config();
   if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent de l'environnement." };

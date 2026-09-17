@@ -7,7 +7,7 @@ import { TeamManager } from "@/components/settings/team-manager";
 import { EmailDesignForm } from "@/components/settings/email-design-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
-import { getWhatsAppNumber, listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
+import { getWhatsAppNumber, getWhatsAppProfile, listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
 import { getQuickReplies } from "@/lib/whatsapp-inbox";
 
@@ -38,10 +38,16 @@ export default async function SettingsPage({
   const outsideAccounts = current === "team" ? await getAccountsOutsideAllowlist() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
   // WhatsApp : le numéro et les modèles viennent de Meta, l'interrupteur de la base.
-  const [waNumero, waTemplates, waSettings, waQuick] =
+  const [waNumero, waTemplates, waSettings, waQuick, waProfil] =
     current === "whatsapp"
-      ? await Promise.all([getWhatsAppNumber(), listWhatsAppTemplates(), getWhatsAppSettings(), getQuickReplies()])
-      : [null, [], null, []];
+      ? await Promise.all([
+          getWhatsAppNumber(),
+          listWhatsAppTemplates(),
+          getWhatsAppSettings(),
+          getQuickReplies(),
+          getWhatsAppProfile(),
+        ])
+      : [null, [], null, [], null];
 
   return (
     <>
@@ -137,12 +143,22 @@ export default async function SettingsPage({
           </section>
           )}
 
-          {current === "whatsapp" && waNumero && waSettings && (
+          {current === "whatsapp" && waNumero && waSettings && waProfil && (
             <WhatsAppSettings
               numero={waNumero}
+              profil={waProfil}
               templates={waTemplates}
               aiReplyEnabled={waSettings.aiReplyEnabled}
               quickReplies={waQuick.map((q) => ({ id: q.id, shortcut: q.shortcut, text: q.text }))}
+              autoReplies={{
+                welcomeEnabled: waSettings.welcomeEnabled,
+                welcomeText: waSettings.welcomeText,
+                awayEnabled: waSettings.awayEnabled,
+                awayText: waSettings.awayText,
+                awayStart: waSettings.awayStart,
+                awayEnd: waSettings.awayEnd,
+                awayDays: waSettings.awayDays.split(",").map(Number).filter(Boolean),
+              }}
             />
           )}
 
