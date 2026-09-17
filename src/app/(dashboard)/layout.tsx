@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
+import { WhatsAppNotifier } from "@/components/whatsapp/notifier";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,6 +12,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </main>
       {/* Disponible sur tous les écrans du CRM, jamais dans le chemin. */}
       <AssistantPanel />
+      {/* Le « bip » d'un WhatsApp reçu, où qu'on soit dans le CRM. */}
+      <WhatsAppNotifier />
     </div>
   );
 }

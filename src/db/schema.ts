@@ -1174,6 +1174,7 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
     .primaryKey()
     .references(() => leads.id, { onDelete: "cascade" }),
   readAt: timestamp("read_at"),
+  archivedAt: timestamp("archived_at"), // NULL = visible ; un message reçu la remet à NULL
 });
 
 // Réglages du service WhatsApp — ligne unique. `aiReplyEnabled` est lu par la

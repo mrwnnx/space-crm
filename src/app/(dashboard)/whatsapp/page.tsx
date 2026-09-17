@@ -13,11 +13,11 @@ export const dynamic = "force-dynamic";
 export default async function WhatsAppPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lead?: string }>;
+  searchParams: Promise<{ lead?: string; q?: string; archives?: string }>;
 }) {
-  const { lead: leadId } = await searchParams;
+  const { lead: leadId, q, archives } = await searchParams;
   const [conversations, thread, templates, bootcamps, quickReplies] = await Promise.all([
-    getWhatsAppConversations(),
+    getWhatsAppConversations(q),
     leadId ? getWhatsAppThread(leadId) : Promise.resolve(null),
     // Seuls les modèles approuvés s'envoient ; les autres attendent chez Meta.
     listWhatsAppTemplates().then((t) => t.filter((x) => x.status === "APPROVED")),
@@ -38,9 +38,12 @@ export default async function WhatsAppPage({
           lastAt: c.lastAt.toISOString(),
           lastInboundAt: c.lastInboundAt?.toISOString() ?? null,
         }))}
+        q={q ?? ""}
+        archives={archives === "1"}
         thread={
           thread
             ? {
+                archived: thread.archived,
                 lead: thread.lead,
                 messages: thread.messages.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() })),
                 lastInboundAt: thread.lastInboundAt?.toISOString() ?? null,

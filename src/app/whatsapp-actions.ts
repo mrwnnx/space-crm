@@ -11,15 +11,20 @@ import {
   sendWhatsAppMedia,
   sendWhatsAppReaction,
   sendWhatsAppTemplate,
+  updateWhatsAppProfile,
+  uploadWhatsAppProfilePicture,
 } from "@/lib/messaging/whatsapp";
+import { WHATSAPP_VERTICALS } from "@/lib/messaging/whatsapp-verticals";
 import { ENVOI_MAX_BYTES, ENVOI_MIME, libelleMedia, stockerMedia } from "@/lib/messaging/whatsapp-media";
 import {
   applyWhatsAppReaction,
   createQuickReply,
   deleteQuickReply,
   markWhatsAppRead,
+  markWhatsAppUnread,
   recordWhatsAppMedia,
   recordWhatsAppSent,
+  setWhatsAppArchived,
 } from "@/lib/whatsapp-inbox";
 import { setAiReplyEnabled } from "@/lib/whatsapp-settings";
 
@@ -32,6 +37,18 @@ import { setAiReplyEnabled } from "@/lib/whatsapp-settings";
 export async function markWhatsAppReadAction(leadId: string) {
   await requireUser();
   await markWhatsAppRead(leadId);
+}
+
+export async function markWhatsAppUnreadAction(leadId: string) {
+  await requireUser();
+  await markWhatsAppUnread(leadId);
+  revalidatePath("/whatsapp");
+}
+
+export async function setWhatsAppArchivedAction(leadId: string, archived: boolean) {
+  await requireUser();
+  await setWhatsAppArchived(leadId, archived);
+  revalidatePath("/whatsapp");
 }
 
 /** Texte libre — Meta le refuse hors fenêtre de 24 h, avec un message clair. `replyTo` cite un message. */
@@ -224,6 +241,7 @@ export async function createTemplateAction(input: {
   category: "MARKETING" | "UTILITY";
   body: string;
   examples: string[];
+  buttons?: string[];
 }) {
   await requireUser();
   const name = input.name.trim().toLowerCase();
@@ -239,7 +257,10 @@ export async function createTemplateAction(input: {
     return { ok: false as const, error: `Donnez un exemple pour chacune des ${n} variables : Meta le demande.` };
   }
 
-  const r = await createWhatsAppTemplate({ name, language: input.language, category: input.category, body, examples });
+  const buttons = (input.buttons ?? []).map((b) => b.trim()).filter(Boolean);
+  if (buttons.length > 3) return { ok: false as const, error: "Trois boutons maximum." };
+  if (buttons.some((b) => b.length > 25)) return { ok: false as const, error: "Un bouton : 25 caractères maximum." };
+  const r = await createWhatsAppTemplate({ name, language: input.language, category: input.category, body, examples, buttons });
   if (!r.ok) return r;
   revalidatePath("/settings");
   return { ok: true as const, status: r.status };
@@ -249,6 +270,47 @@ export async function deleteTemplateAction(name: string) {
   await requireUser();
   const r = await deleteWhatsAppTemplate(name);
   if (!r.ok) return { ok: false as const, error: r.error ?? "Échec de la suppression." };
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+// ── Le profil de l'entreprise ─────────────────────────
+
+const PHOTO_MIME = new Set(["image/jpeg", "image/png"]);
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Enregistrer le profil WhatsApp — écrit chez Meta, l'écran relit ensuite ce que Meta a gardé. */
+export async function updateProfileAction(formData: FormData) {
+  await requireUser();
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const about = str("about");
+  const description = str("description");
+  const address = str("address");
+  const email = str("email");
+  const websites = [str("website1"), str("website2")].filter(Boolean);
+  const vertical = str("vertical");
+
+  if (about.length > 139) return { ok: false as const, error: "« À propos » : 139 caractères maximum." };
+  if (description.length > 512) return { ok: false as const, error: "La description : 512 caractères maximum." };
+  if (address.length > 256) return { ok: false as const, error: "L'adresse : 256 caractères maximum." };
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false as const, error: "L'email n'est pas valide." };
+  for (const w of websites) {
+    if (!/^https?:\/\/\S+$/.test(w)) return { ok: false as const, error: `Le site « ${w} » doit commencer par http:// ou https://.` };
+  }
+  if (!WHATSAPP_VERTICALS.some((v) => v.code === vertical)) return { ok: false as const, error: "Secteur inconnu." };
+
+  let profilePictureHandle: string | undefined;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    if (!PHOTO_MIME.has(photo.type)) return { ok: false as const, error: "La photo : JPG ou PNG." };
+    if (photo.size > PHOTO_MAX_BYTES) return { ok: false as const, error: "La photo dépasse 5 Mo." };
+    const up = await uploadWhatsAppProfilePicture(await photo.arrayBuffer(), photo.type);
+    if (!up.ok) return up;
+    profilePictureHandle = up.handle;
+  }
+
+  const r = await updateWhatsAppProfile({ about, description, address, email, websites, vertical, profilePictureHandle });
+  if (!r.ok) return r;
   revalidatePath("/settings");
   return { ok: true as const };
 }

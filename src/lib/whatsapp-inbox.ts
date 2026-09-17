@@ -54,12 +54,19 @@ export type Conversation = {
   lastContent: string | null;
   lastInboundAt: Date | null;
   unread: number;
+  archived: boolean;
 };
 
 /** La clé d'un numéro : ses 8 derniers chiffres — cf. le rapprochement du webhook. */
 const CLE_TEL = sql`right(regexp_replace(coalesce(${leads.mobileNo}, ''), '\\D', '', 'g'), 8)`;
 
-export async function getWhatsAppConversations(): Promise<Conversation[]> {
+/**
+ * `q` filtre sur le nom, le numéro ou le contenu d'un message du fil.
+ * Les conversations archivées sont rendues avec `archived: true` — c'est la
+ * page qui choisit lesquelles montrer.
+ */
+export async function getWhatsAppConversations(q?: string | null): Promise<Conversation[]> {
+  const motif = q?.trim() ? `%${q.trim()}%` : null;
   const rows = await db.execute<{
     lead_id: string;
     full_name: string;
@@ -70,6 +77,7 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
     last_direction: "inbound" | "outbound";
     last_content: string | null;
     unread: number;
+    archived_at: Date | null;
   }>(sql`
     with msgs as (
       select a.direction, a.content, a.created_at,
@@ -91,7 +99,8 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
            last.direction as last_direction, last.content as last_content,
            (select count(*)::int from msgs x
              where x.tel = g.tel and x.direction = 'inbound'
-               and x.created_at > coalesce(c.read_at, '-infinity'::timestamp)) as unread
+               and x.created_at > coalesce(c.read_at, '-infinity'::timestamp)) as unread,
+           c.archived_at
     from grp g
     join lateral (
       select direction, content from msgs m
@@ -104,6 +113,8 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
     ) porteur on true
     left join bootcamps b on b.id = porteur.bootcamp_id
     left join whatsapp_conversations c on c.lead_id = porteur.id
+    where ${motif ? sql`(porteur.full_name ilike ${motif} or porteur.mobile_no ilike ${motif}
+           or exists (select 1 from msgs x where x.tel = g.tel and x.content ilike ${motif}))` : sql`true`}
     order by g.last_at desc
   `);
 
@@ -117,6 +128,7 @@ export async function getWhatsAppConversations(): Promise<Conversation[]> {
     lastContent: r.last_content,
     lastInboundAt: r.last_inbound_at ? new Date(r.last_inbound_at) : null,
     unread: r.unread,
+    archived: !!r.archived_at,
   }));
 }
 
@@ -214,7 +226,12 @@ export async function getWhatsAppThread(leadId: string) {
   });
   const lastInbound = [...messages].reverse().find((m) => m.direction === "inbound");
 
+  const conv = await db.query.whatsappConversations.findFirst({
+    where: eq(whatsappConversations.leadId, porteur.id),
+  });
+
   return {
+    archived: !!conv?.archivedAt,
     lead: {
       id: porteur.id,
       fullName: porteur.fullName,
@@ -230,8 +247,15 @@ export async function getWhatsAppThread(leadId: string) {
   };
 }
 
-/** Nombre de conversations (numéros) avec au moins un message non lu — la pastille du menu. */
-export async function getWhatsAppUnreadCount(): Promise<number> {
+/**
+ * Nombre de conversations (numéros) avec au moins un message non lu — la
+ * pastille du menu — et le dernier message reçu, pour sonner quand il change.
+ * Les archivées ne comptent pas : un message reçu les désarchive de toute façon.
+ */
+export async function getWhatsAppUnreadCount(): Promise<{
+  unread: number;
+  latest: { leadId: string; fullName: string; content: string | null; at: string } | null;
+}> {
   const rows = await db.execute<{ n: number }>(sql`
     with msgs as (
       select a.created_at, right(regexp_replace(l.mobile_no, '\\D', '', 'g'), 8) as tel
@@ -248,9 +272,40 @@ export async function getWhatsAppUnreadCount(): Promise<number> {
       order by l.created_at desc limit 1
     ) porteur on true
     left join whatsapp_conversations c on c.lead_id = porteur.id
-    where m.created_at > coalesce(c.read_at, '-infinity'::timestamp)
+    where m.created_at > coalesce(c.read_at, '-infinity'::timestamp) and c.archived_at is null
   `);
-  return rows[0]?.n ?? 0;
+  const dernier = await db.execute<{ lead_id: string; full_name: string; content: string | null; at: Date }>(sql`
+    select a.reference_id as lead_id, l.full_name, a.content, a.created_at as at
+    from activities a join leads l on l.id = a.reference_id
+    where a.type = 'whatsapp' and a.reference_type = 'lead' and a.direction = 'inbound'
+    order by a.created_at desc limit 1
+  `);
+  const d = dernier[0];
+  return {
+    unread: rows[0]?.n ?? 0,
+    latest: d ? { leadId: d.lead_id, fullName: d.full_name, content: d.content, at: new Date(d.at).toISOString() } : null,
+  };
+}
+
+/** « Marquer non lu » : le dernier message reçu redevient non lu — exactement un. */
+export async function markWhatsAppUnread(leadId: string) {
+  const fil = await getWhatsAppThread(leadId);
+  if (!fil?.lastInboundAt) return;
+  await db
+    .insert(whatsappConversations)
+    .values({ leadId: fil.lead.id, readAt: new Date(fil.lastInboundAt.getTime() - 1000) })
+    .onConflictDoUpdate({
+      target: whatsappConversations.leadId,
+      set: { readAt: new Date(fil.lastInboundAt.getTime() - 1000) },
+    });
+}
+
+export async function setWhatsAppArchived(leadId: string, archived: boolean) {
+  const at = archived ? new Date() : null;
+  await db
+    .insert(whatsappConversations)
+    .values({ leadId, archivedAt: at })
+    .onConflictDoUpdate({ target: whatsappConversations.leadId, set: { archivedAt: at } });
 }
 
 export async function markWhatsAppRead(leadId: string) {
@@ -375,6 +430,11 @@ export async function ingestInboundWhatsApp(input: {
     .update(leads)
     .set({ lastContactedAt: new Date(), updatedAt: new Date() })
     .where(eq(leads.id, lead.id));
+  // Un message reçu ressort la conversation des archives, comme dans WhatsApp.
+  await db
+    .update(whatsappConversations)
+    .set({ archivedAt: null })
+    .where(eq(whatsappConversations.leadId, lead.id));
 
   // ← Lot 3 : c'est ICI qu'une réponse automatique (IA) se décidera, une fois le
   // message rangé — jamais avant, pour qu'un échec de l'IA ne perde pas le message.

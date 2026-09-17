@@ -4,17 +4,19 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon, Attachment01Icon, Mic01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Attachment01Icon, Mic01Icon, Search01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { cn, formatRelative, initials } from "@/lib/utils";
 import { actorName } from "@/lib/actors";
 import type { WhatsAppTemplate } from "@/lib/messaging/whatsapp";
 import {
   assignBootcampAction,
   markWhatsAppReadAction,
+  markWhatsAppUnreadAction,
   reactWhatsAppAction,
   replyWhatsAppAction,
   replyWhatsAppTemplateAction,
   sendWhatsAppMediaAction,
+  setWhatsAppArchivedAction,
 } from "@/app/whatsapp-actions";
 
 /*
@@ -38,6 +40,7 @@ type Conversation = {
   lastContent: string | null;
   lastInboundAt: string | null;
   unread: number;
+  archived: boolean;
 };
 
 type Message = {
@@ -63,6 +66,7 @@ type Citation = { wamid: string; content: string | null; direction: "inbound" | 
 const EMOJIS = ["👍", "❤️", "😂", "🙏", "👏", "✅"];
 
 type Thread = {
+  archived: boolean;
   lead: { id: string; fullName: string; mobileNo: string | null; email: string | null; bootcamp: string | null };
   messages: Message[];
   lastInboundAt: string | null;
@@ -77,12 +81,16 @@ export function WhatsAppInbox({
   templates,
   bootcamps,
   quickReplies,
+  q,
+  archives,
 }: {
   conversations: Conversation[];
   thread: Thread | null;
   templates: WhatsAppTemplate[];
   bootcamps: Bootcamp[];
   quickReplies: QuickReply[];
+  q: string;
+  archives: boolean;
 }) {
   const router = useRouter();
 
@@ -91,24 +99,61 @@ export function WhatsAppInbox({
     return () => clearInterval(t);
   }, [router]);
 
+  const visibles = conversations.filter((c) => c.archived === archives);
+  const nbArchivees = conversations.filter((c) => c.archived).length;
+
+  function url(p: { q?: string; archives?: boolean; lead?: string | null }) {
+    const sp = new URLSearchParams();
+    const qq = p.q ?? q;
+    const aa = p.archives ?? archives;
+    if (qq) sp.set("q", qq);
+    if (aa) sp.set("archives", "1");
+    const lead = p.lead === undefined ? thread?.lead.id : p.lead;
+    if (lead) sp.set("lead", lead);
+    const qs = sp.toString();
+    return `/whatsapp${qs ? `?${qs}` : ""}`;
+  }
+
   return (
     <div className="flex flex-1 overflow-hidden">
       <aside
         className={cn(
-          "w-full shrink-0 flex-col overflow-y-auto border-r border-border bg-card md:flex md:w-80",
+          "w-full shrink-0 flex-col border-r border-border bg-card md:flex md:w-80",
           thread ? "hidden" : "flex"
         )}
       >
-        {conversations.length === 0 ? (
-          <p className="p-5 text-sm text-muted-foreground">
-            Aucune conversation pour l&apos;instant. Elles apparaîtront ici dès qu&apos;un message
-            arrive sur le numéro de l&apos;école.
-          </p>
-        ) : (
-          conversations.map((c) => (
-            <ConversationRow key={c.leadId} c={c} active={thread?.lead.id === c.leadId} />
-          ))
-        )}
+        <div className="shrink-0 space-y-2 border-b border-border p-3">
+          <Recherche q={q} onChange={(v) => router.replace(url({ q: v, lead: null }))} />
+          <div className="flex items-center gap-2 text-[10.5px]">
+            <Link
+              href={url({ archives: false, lead: null })}
+              className={cn("rounded-md px-2 py-0.5", !archives ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              Conversations
+            </Link>
+            <Link
+              href={url({ archives: true, lead: null })}
+              className={cn("rounded-md px-2 py-0.5", archives ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              Archivées{nbArchivees > 0 ? ` (${nbArchivees})` : ""}
+            </Link>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {visibles.length === 0 ? (
+            <p className="p-5 text-sm text-muted-foreground">
+              {q
+                ? "Rien ne correspond à cette recherche."
+                : archives
+                  ? "Aucune conversation archivée."
+                  : "Aucune conversation pour l'instant. Elles apparaîtront ici dès qu'un message arrive sur le numéro de l'école."}
+            </p>
+          ) : (
+            visibles.map((c) => (
+              <ConversationRow key={c.leadId} c={c} href={url({ lead: c.leadId })} active={thread?.lead.id === c.leadId} />
+            ))
+          )}
+        </div>
       </aside>
 
       <section className={cn("flex-1 flex-col overflow-hidden", thread ? "flex" : "hidden md:flex")}>
@@ -119,6 +164,7 @@ export function WhatsAppInbox({
             templates={templates}
             bootcamps={bootcamps}
             quickReplies={quickReplies}
+            retour={url({ lead: null })}
           />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -131,11 +177,45 @@ export function WhatsAppInbox({
   );
 }
 
-function ConversationRow({ c, active }: { c: Conversation; active: boolean }) {
+/** Le champ de recherche : l'URL suit la frappe, avec un léger délai. */
+function Recherche({ q, onChange }: { q: string; onChange: (v: string) => void }) {
+  const [valeur, setValeur] = useState(q);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-muted-foreground">
+      <HugeiconsIcon icon={Search01Icon} size={14} />
+      <input
+        value={valeur}
+        onChange={(e) => {
+          setValeur(e.target.value);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => onChange(e.target.value), 350);
+        }}
+        placeholder="Nom, numéro ou message…"
+        className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground/70"
+      />
+      {valeur && (
+        <button
+          type="button"
+          onClick={() => {
+            setValeur("");
+            onChange("");
+          }}
+          className="text-xs hover:text-foreground"
+          aria-label="Effacer"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ConversationRow({ c, href, active }: { c: Conversation; href: string; active: boolean }) {
   const apercu = c.lastContent ?? "";
   return (
     <Link
-      href={`/whatsapp?lead=${c.leadId}`}
+      href={href}
       className={cn(
         "flex gap-3 border-b border-border px-4 py-3 transition-colors hover:bg-muted",
         active && "bg-primary/10"
@@ -173,16 +253,32 @@ function ThreadView({
   templates,
   bootcamps,
   quickReplies,
+  retour,
 }: {
   thread: Thread;
   templates: WhatsAppTemplate[];
   bootcamps: Bootcamp[];
   quickReplies: QuickReply[];
+  retour: string;
 }) {
   const router = useRouter();
   const { lead, messages, lastInboundAt, ouverte } = thread;
   const bas = useRef<HTMLDivElement>(null);
   const [citation, setCitation] = useState<Citation | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function nonLu() {
+    startTransition(async () => {
+      await markWhatsAppUnreadAction(lead.id);
+      router.push(retour); // rester dessus la remarquerait lue aussitôt
+    });
+  }
+  function archiver(v: boolean) {
+    startTransition(async () => {
+      await setWhatsAppArchivedAction(lead.id, v);
+      router.push(retour);
+    });
+  }
 
   // Ouvrir la conversation, c'est la lire — pour toute l'équipe. Redéclenché
   // quand un nouveau message arrive pendant qu'elle est ouverte.
@@ -197,7 +293,7 @@ function ThreadView({
   return (
     <>
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
-        <Link href="/whatsapp" className="text-muted-foreground hover:text-foreground md:hidden" aria-label="Retour">
+        <Link href={retour} className="text-muted-foreground hover:text-foreground md:hidden" aria-label="Retour">
           <HugeiconsIcon icon={ArrowLeft01Icon} size={18} />
         </Link>
         <div className="min-w-0 flex-1">
@@ -208,6 +304,23 @@ function ThreadView({
           </p>
         </div>
         {!lead.bootcamp && <AttribuerFormation leadId={lead.id} bootcamps={bootcamps} />}
+        <button
+          type="button"
+          onClick={nonLu}
+          disabled={isPending || !lastInboundAt}
+          className="shrink-0 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+          title="Revenir plus tard : la conversation reprend sa pastille"
+        >
+          Non lu
+        </button>
+        <button
+          type="button"
+          onClick={() => archiver(!thread.archived)}
+          disabled={isPending}
+          className="shrink-0 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+        >
+          {thread.archived ? "Désarchiver" : "Archiver"}
+        </button>
         <Link href={`/leads/${lead.id}`} className="shrink-0 text-xs text-primary hover:underline">
           Voir la fiche
         </Link>
