@@ -10,6 +10,7 @@ type Tag = { id: string; name: string; leadCount: number };
 
 type Stats = {
   matched: number;
+  excluded: number;
   unsubscribed: number;
   bounced: number;
   noEmail: number;
@@ -28,16 +29,19 @@ export function CampaignAudience({
   campaignId,
   tags,
   initialTagIds,
+  initialExcludeTagIds,
   initialEmails,
   readOnly,
 }: {
   campaignId: string;
   tags: Tag[];
   initialTagIds: string[];
+  initialExcludeTagIds: string[];
   initialEmails: string[];
   readOnly: boolean;
 }) {
   const [tagIds, setTagIds] = useState<string[]>(initialTagIds);
+  const [excludeIds, setExcludeIds] = useState<string[]>(initialExcludeTagIds);
   const [emailsRaw, setEmailsRaw] = useState(initialEmails.join("\n"));
   const [stats, setStats] = useState<Stats | null>(null);
   const [ignored, setIgnored] = useState<string[]>([]);
@@ -54,7 +58,7 @@ export function CampaignAudience({
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await previewAudienceAction(tagIds, parseEmails(emailsRaw));
+        const r = await previewAudienceAction(tagIds, parseEmails(emailsRaw), excludeIds);
         setStats(r.stats);
         setIgnored(r.ignoredEmails);
       } finally {
@@ -62,7 +66,7 @@ export function CampaignAudience({
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [tagIds, emailsRaw]);
+  }, [tagIds, excludeIds, emailsRaw]);
 
   useEffect(() => {
     if (saved) {
@@ -71,10 +75,20 @@ export function CampaignAudience({
     }
   }, [saved]);
 
+  // Un tag est ciblé OU exclu, jamais les deux : le cocher d'un côté le
+  // décoche de l'autre.
   function toggleTag(id: string) {
     setTagIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+    setExcludeIds((prev) => prev.filter((x) => x !== id));
+  }
+
+  function toggleExclude(id: string) {
+    setExcludeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+    setTagIds((prev) => prev.filter((x) => x !== id));
   }
 
   function save() {
@@ -83,7 +97,8 @@ export function CampaignAudience({
       const r = await saveCampaignTargetAction(
         campaignId,
         tagIds,
-        parseEmails(emailsRaw)
+        parseEmails(emailsRaw),
+        excludeIds
       );
       if (r.ok) setSaved(true);
       else setError(r.error);
@@ -92,6 +107,7 @@ export function CampaignAudience({
 
   const excluded = stats
     ? [
+        stats.excluded > 0 && `${stats.excluded} exclu${stats.excluded > 1 ? "s" : ""} par tag`,
         stats.unsubscribed > 0 && `${stats.unsubscribed} désabonné${stats.unsubscribed > 1 ? "s" : ""}`,
         stats.bounced > 0 && `${stats.bounced} adresse${stats.bounced > 1 ? "s" : ""} invalide${stats.bounced > 1 ? "s" : ""}`,
         stats.noEmail > 0 && `${stats.noEmail} sans adresse`,
@@ -135,6 +151,45 @@ export function CampaignAudience({
           <p className="mt-1.5 text-xs text-muted-foreground">
             Union : un lead présent dans plusieurs tags cochés ne reçoit
             qu&apos;un seul email.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          Tags à ne pas cibler
+        </label>
+        {tags.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Aucun tag.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((t) => {
+              const on = excludeIds.includes(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => toggleExclude(t.id)}
+                  className={`rounded-full border px-3 py-1 text-xs transition disabled:opacity-60 ${
+                    on
+                      ? "border-red-600 bg-red-600 text-white"
+                      : "border-border text-muted-foreground hover:border-foreground/40"
+                  }`}
+                >
+                  {on && <span className="mr-1">−</span>}
+                  {t.name}
+                  <span className="ml-1.5 opacity-60">{t.leadCount}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {excludeIds.length > 0 && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Une personne qui porte l&apos;un de ces tags ne reçoit pas, même si
+            elle a aussi un tag ciblé. Les adresses saisies à la main ne sont
+            pas concernées.
           </p>
         )}
       </div>

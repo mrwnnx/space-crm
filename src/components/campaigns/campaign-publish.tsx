@@ -23,6 +23,7 @@ export function CampaignPublish({
   status,
   tags,
   initialTagIds,
+  initialExcludeTagIds,
   initialEmails,
   initialNote,
   recipients,
@@ -35,6 +36,7 @@ export function CampaignPublish({
   status: string;
   tags: Tag[];
   initialTagIds: string[];
+  initialExcludeTagIds: string[];
   initialEmails: string[];
   initialNote: string;
   recipients: RecipientRow[];
@@ -106,6 +108,7 @@ export function CampaignPublish({
                 campaignId={campaignId}
                 tags={tags}
                 initialTagIds={initialTagIds}
+                initialExcludeTagIds={initialExcludeTagIds}
                 initialEmails={initialEmails}
                 readOnly={status !== "draft"}
               />

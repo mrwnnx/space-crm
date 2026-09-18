@@ -78,17 +78,26 @@ export async function saveCampaignContentAction(
  * l'envoi utilisera : le compteur affiché ne peut donc pas diverger de ce qui
  * partira.
  */
-export async function previewAudienceAction(tagIds: string[], emails: string[]) {
+export async function previewAudienceAction(
+  tagIds: string[],
+  emails: string[],
+  excludeTagIds: string[] = []
+) {
   await requireUser();
   const { resolveCampaignAudience } = await import("@/lib/campaigns/audience");
-  const { stats, ignoredEmails } = await resolveCampaignAudience({ tagIds, emails });
+  const { stats, ignoredEmails } = await resolveCampaignAudience({
+    tagIds,
+    excludeTagIds,
+    emails,
+  });
   return { stats, ignoredEmails };
 }
 
 export async function saveCampaignTargetAction(
   id: string,
   tagIds: string[],
-  emails: string[]
+  emails: string[],
+  excludeTagIds: string[] = []
 ) {
   await requireUser();
   const existing = await getCampaignById(id);
@@ -97,7 +106,10 @@ export async function saveCampaignTargetAction(
     return { ok: false as const, error: "Campagne déjà envoyée" };
   }
 
-  await updateCampaign(id, { targetTagIds: tagIds, targetEmails: emails });
+  // Un tag ne peut pas être à la fois ciblé et exclu : l'écran l'empêche, la
+  // base le garantit.
+  const exclude = excludeTagIds.filter((t) => !tagIds.includes(t));
+  await updateCampaign(id, { targetTagIds: tagIds, excludeTagIds: exclude, targetEmails: emails });
   revalidatePath(`/campaigns/${id}`);
   return { ok: true as const };
 }

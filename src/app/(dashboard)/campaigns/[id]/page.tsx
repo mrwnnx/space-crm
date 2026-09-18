@@ -177,6 +177,7 @@ export default async function CampaignDetailPage({
   const recipients = await getCampaignRecipients(campaign.id);
   const { stats: audience } = await resolveCampaignAudience({
     tagIds: (campaign.targetTagIds as string[]) ?? [],
+    excludeTagIds: (campaign.excludeTagIds as string[]) ?? [],
     emails: (campaign.targetEmails as string[]) ?? [],
   });
   const canSend =
@@ -243,6 +244,7 @@ export default async function CampaignDetailPage({
           status={campaign.status}
           tags={tags}
           initialTagIds={(campaign.targetTagIds as string[]) ?? []}
+          initialExcludeTagIds={(campaign.excludeTagIds as string[]) ?? []}
           initialEmails={(campaign.targetEmails as string[]) ?? []}
           initialNote={campaign.internalNote ?? ""}
           recipients={recipients}

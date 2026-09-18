@@ -640,6 +640,9 @@ export const campaigns = pgTable("campaigns", {
   // draft | scheduled | sending | sent | failed
   status: text("status").notNull().default("draft"),
   targetTagIds: jsonb("target_tag_ids").notNull().default([]),
+  /** Tags à ne pas cibler : la personne qui en porte un (sur n'importe quelle
+   *  fiche) est retirée, même si elle a aussi un tag ciblé. */
+  excludeTagIds: jsonb("exclude_tag_ids").notNull().default([]),
   targetEmails: jsonb("target_emails").notNull().default([]),
   /** Note d'équipe, jamais envoyée. Reprise de Kit : savoir de quoi parle une
    *  campagne sans l'ouvrir. */

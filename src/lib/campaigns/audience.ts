@@ -15,6 +15,8 @@ export type AudienceResolution = {
   stats: {
     /** contacts atteints par les tags, avant tout filtre */
     matched: number;
+    /** écartés : la personne porte un tag « à ne pas cibler » */
+    excluded: number;
     /** écartés : désabonnés */
     unsubscribed: number;
     /** écartés : adresse invalide (rebond dur constaté) */
@@ -35,23 +37,28 @@ export type AudienceResolution = {
 const normalize = (e: string) => e.trim().toLowerCase();
 
 /**
- * Résout la cible d'une campagne : tags (union) + adresses saisies à la main.
+ * Résout la cible d'une campagne : tags (union) − tags exclus + adresses
+ * saisies à la main.
  *
  * Fonction UNIQUE, appelée par l'aperçu comme par l'envoi. C'est délibéré :
  * si le compteur affiché et la liste envoyée venaient de deux codes
  * différents, ils divergeraient tôt ou tard, et l'écart ne se verrait qu'une
  * fois les mails partis.
  *
- * Trois exclusions, toujours dans cet ordre : sans email, désabonné, doublon.
+ * Quatre exclusions, toujours dans cet ordre : tag exclu, sans email,
+ * désabonné, doublon.
  */
 export async function resolveCampaignAudience(input: {
   tagIds?: string[];
+  excludeTagIds?: string[];
   emails?: string[];
 }): Promise<AudienceResolution> {
   const tagIds = input.tagIds ?? [];
+  const excludeTagIds = input.excludeTagIds ?? [];
   const rawEmails = (input.emails ?? []).map(normalize).filter(Boolean);
 
   let matched = 0;
+  let excluded = 0;
   let noEmail = 0;
   let unsubscribed = 0;
   let bounced = 0;
@@ -79,7 +86,26 @@ export async function resolveCampaignAudience(input: {
 
     matched = rows.length;
 
+    // L'exclusion joue sur la PERSONNE, pas sur la fiche : une personne avec
+    // une fiche « Spacer » et une autre « Lead » porte Lead — elle ne reçoit
+    // pas. Le ciblage regarde déjà toutes ses fiches ; l'exclusion est
+    // symétrique. Les adresses saisies à la main (plus bas) ne passent pas
+    // par ici : les taper, c'est vouloir les joindre.
+    const excludedContacts = new Set<string>();
+    if (excludeTagIds.length > 0) {
+      const ex = await db
+        .selectDistinct({ contactId: leads.contactId })
+        .from(leadTags)
+        .innerJoin(leads, eq(leads.id, leadTags.leadId))
+        .where(and(inArray(leadTags.tagId, excludeTagIds), isNotNull(leads.contactId)));
+      for (const e of ex) if (e.contactId) excludedContacts.add(e.contactId);
+    }
+
     for (const r of rows) {
+      if (r.contactId && excludedContacts.has(r.contactId)) {
+        excluded++;
+        continue;
+      }
       if (!r.email || !r.email.trim()) {
         noEmail++;
         continue;
@@ -168,6 +194,7 @@ export async function resolveCampaignAudience(input: {
     ignoredEmails: ignored,
     stats: {
       matched,
+      excluded,
       unsubscribed,
       bounced,
       noEmail,
