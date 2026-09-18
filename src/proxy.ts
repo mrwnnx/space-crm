@@ -18,7 +18,8 @@ export async function proxy(request: NextRequest) {
   // Désabonnement : le destinataire d'une campagne n'a évidemment pas de
   // compte CRM. Sans cette sortie, le lien de désinscription renverrait vers
   // /login — un lien mort, donc une obligation légale non remplie.
-  if (pathname.startsWith("/unsubscribe")) {
+  // /api/unsubscribe : le clic « Se désabonner » de Gmail (POST silencieux).
+  if (pathname.startsWith("/unsubscribe") || pathname.startsWith("/api/unsubscribe")) {
     return response;
   }
 

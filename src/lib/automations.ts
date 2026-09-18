@@ -298,6 +298,8 @@ async function executeRule(
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
     "http://localhost:3001";
   const unsubUrl = token ? `${root}/unsubscribe/${token}` : "";
+  // En-tête = route API (POST silencieux de Gmail) ; lien du corps = la page.
+  const oneClickUrl = token ? `${root}/api/unsubscribe/${token}` : "";
 
   const footerExtra = unsubUrl
     ? `<p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#9ca3af">Vous recevez cet email parce que vous avez demandé des informations sur une formation Space Academy.<br><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline">Se désabonner</a></p>`
@@ -324,7 +326,7 @@ async function executeRule(
     // désabonne rien est pire que pas d'en-tête du tout.
     headers: unsubUrl
       ? {
-          "List-Unsubscribe": `<${unsubUrl}>`,
+          "List-Unsubscribe": `<${oneClickUrl}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         }
       : undefined,

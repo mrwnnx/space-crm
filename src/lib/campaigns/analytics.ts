@@ -19,6 +19,8 @@ export type CampaignStats = {
   clicked: number;
   /** désinscriptions déclenchées PAR cette campagne */
   unsubscribed: number;
+  /** pourquoi — clé de unsubscribe-reasons.ts, « none » = sans réponse. Trié par nombre. */
+  unsubscribeReasons: { reason: string; count: number }[];
   /** en % des envoyés, arrondi à l'entier */
   openRate: number;
   clickRate: number;
@@ -70,6 +72,14 @@ export async function getCampaignStats(campaignId: string): Promise<CampaignStat
     where campaign_id = ${campaignId}
   `);
 
+  const reasons = await db.execute<{ reason: string; count: number }>(sql`
+    select coalesce(unsubscribe_reason, 'none') as reason, count(*)::int as count
+    from campaign_recipients
+    where campaign_id = ${campaignId} and unsubscribed_at is not null
+    group by 1
+    order by count desc, reason
+  `);
+
   const [rev] = await db.execute<{ conversions: number; revenue: number }>(sql`
     with attribution as (
       -- DISTINCT ON garde, pour chaque lead converti, la DERNIÈRE campagne
@@ -107,6 +117,7 @@ export async function getCampaignStats(campaignId: string): Promise<CampaignStat
     opened: Number(row?.opened ?? 0),
     clicked: Number(row?.clicked ?? 0),
     unsubscribed: Number(row?.unsubscribed ?? 0),
+    unsubscribeReasons: [...reasons].map((r) => ({ reason: r.reason, count: Number(r.count) })),
     openRate: pct(Number(row?.opened ?? 0), sent),
     clickRate: pct(Number(row?.clicked ?? 0), sent),
     bounceRate: pct(Number(row?.bounced ?? 0), sent),

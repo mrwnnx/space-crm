@@ -1,4 +1,5 @@
 import type { CampaignStats } from "@/lib/campaigns/analytics";
+import { REASON_LABEL } from "@/lib/campaigns/unsubscribe-reasons";
 
 const pct = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
@@ -96,6 +97,20 @@ export function CampaignStatsPanel({
           tone={stats.revenue > 0 ? "good" : "neutral"}
         />
       </div>
+
+      {stats.unsubscribeReasons.length > 0 && (
+        <div className="rounded-lg border border-border px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">Pourquoi ils se sont désinscrits</p>
+          <ul className="mt-1.5 space-y-0.5">
+            {stats.unsubscribeReasons.map((r) => (
+              <li key={r.reason} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-foreground">{REASON_LABEL[r.reason] ?? r.reason}</span>
+                <span className="tabular-nums text-muted-foreground">{r.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {(stats.complained > 0 || stats.skipped > 0 || stats.failed > 0) && (
         <p className="text-xs text-muted-foreground">

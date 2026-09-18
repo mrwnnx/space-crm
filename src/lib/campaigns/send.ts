@@ -223,6 +223,9 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
       // désabonnée, jamais À CAUSE DE QUOI — donc « désinscriptions » serait
       // incalculable par campagne.
       const url = `${root}/unsubscribe/${tokenByContact.get(p.contactId!)}?c=${campaignId}`;
+      // L'en-tête pointe sur la route API : le bouton de Gmail envoie un POST
+      // silencieux, qu'une page ne traite pas. Le lien du corps reste la page.
+      const oneClick = `${root}/api/unsubscribe/${tokenByContact.get(p.contactId!)}?c=${campaignId}`;
       return {
         from,
         to: p.email,
@@ -232,7 +235,7 @@ export async function sendCampaign(campaignId: string): Promise<SendResult> {
         headers: {
           // Permet le désabonnement en un clic depuis Gmail — Google l'exige
           // désormais des expéditeurs de volume, et c'est un signal positif.
-          "List-Unsubscribe": `<${url}>`,
+          "List-Unsubscribe": `<${oneClick}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
       };

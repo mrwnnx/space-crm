@@ -223,6 +223,9 @@ export const contacts = pgTable("contacts", {
   // Désabonnement global aux campagnes. Les échanges 1-à-1 depuis la fiche
   // lead restent possibles : ce sont des réponses, pas du marketing.
   unsubscribedAt: timestamp("unsubscribed_at"),
+  // Dernière raison connue (cf. campaigns/unsubscribe-reasons.ts), campagne ou pas.
+  unsubscribeReason: text("unsubscribe_reason"),
+  unsubscribeNote: text("unsubscribe_note"),
   unsubscribeToken: text("unsubscribe_token")
     .notNull()
     .$defaultFn(() => crypto.randomUUID()),
@@ -684,6 +687,9 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   // Désinscription DÉCLENCHÉE PAR cette campagne. `contacts.unsubscribed_at`
   // dit que la personne est désabonnée ; ceci dit d'où ça vient.
   unsubscribedAt: timestamp("unsubscribed_at"),
+  // Pourquoi — demandé après le désabonnement, facultatif. Ce que les stats comptent.
+  unsubscribeReason: text("unsubscribe_reason"),
+  unsubscribeNote: text("unsubscribe_note"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
