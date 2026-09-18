@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/db";
-import { leadTags, stageTags } from "@/db/schema";
+import { stageTags } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { attachTagToLead } from "@/lib/queries";
 
 /**
  * « Ceux qui entrent dans cette colonne reçoivent ce tag. »
@@ -19,11 +20,9 @@ export async function applyStageTag(leadId: string, statusId: string): Promise<v
 
     // `lead_tags` a une clé composite (lead, tag) : reposer le même tag ne
     // crée rien et ne casse rien. Un lead qui revient dans la colonne n'a donc
-    // pas besoin d'être traité à part.
-    await db
-      .insert(leadTags)
-      .values({ leadId, tagId: rule.tagId })
-      .onConflictDoNothing();
+    // pas besoin d'être traité à part. Posé sur toutes les fiches de la
+    // personne, comme tout tag.
+    await attachTagToLead(leadId, rule.tagId);
   } catch {
     // Le déplacement du lead prime : rater une étiquette ne doit jamais
     // empêcher un glisser-déposer ni un import d'aboutir.

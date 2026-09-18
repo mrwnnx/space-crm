@@ -419,6 +419,7 @@ export async function getLeadById(id: string) {
 
 export async function createLead(data: typeof leads.$inferInsert) {
   const [lead] = await db.insert(leads).values(data).returning();
+  await inheritContactTags(lead.id, lead.contactId);
   return lead;
 }
 
@@ -1481,8 +1482,46 @@ export async function createTag(data: typeof tags.$inferInsert) {
   return tag;
 }
 
+// ── Tags : un fait sur la PERSONNE, pas sur le dossier ────────────
+//
+// Les tags vivent techniquement sur les fiches (lead_tags), mais un tag dit
+// d'où vient quelqu'un et ce qu'il a fait (webinar, Spacer, Lead…) : ça ne
+// change pas d'une formation à l'autre. Décision du 2026-09-18 : un tag se
+// comporte comme un tag de personne — hérité par toute nouvelle fiche, posé
+// et retiré sur toutes ses fiches. L'état d'un dossier, lui, c'est sa colonne.
+
+/** Toutes les fiches de la personne à laquelle appartient cette fiche (elle comprise). */
+async function siblingLeadIds(leadId: string): Promise<string[]> {
+  const rows = await db.execute<{ id: string }>(sql`
+    select l.id from leads l
+    where l.id = ${leadId}
+       or l.contact_id = (select contact_id from leads where id = ${leadId} and contact_id is not null)`);
+  return [...rows].map((r) => r.id);
+}
+
+/** Pose le tag sur cette fiche ET sur les autres fiches de la même personne. */
 export async function attachTagToLead(leadId: string, tagId: string) {
-  await db.insert(leadTags).values({ leadId, tagId }).onConflictDoNothing();
+  const ids = await siblingLeadIds(leadId);
+  await db
+    .insert(leadTags)
+    .values(ids.map((id) => ({ leadId: id, tagId })))
+    .onConflictDoNothing();
+}
+
+/**
+ * Une fiche neuve hérite des tags que la personne porte déjà sur ses autres
+ * fiches — sinon un report, un second formulaire ou un message WhatsApp
+ * créent un dossier « sans tag » pour quelqu'un qu'on connaît (Fatma Ghorbel :
+ * Spacer + webinar en août, rien en septembre — constaté le 2026-09-18).
+ */
+export async function inheritContactTags(leadId: string, contactId: string | null) {
+  if (!contactId) return;
+  await db.execute(sql`
+    insert into lead_tags (lead_id, tag_id)
+    select distinct ${leadId}::uuid, lt.tag_id
+    from lead_tags lt join leads l on l.id = lt.lead_id
+    where l.contact_id = ${contactId} and l.id <> ${leadId}
+    on conflict do nothing`);
 }
 
 // Import CSV : un tag choisi par son nom — réutilisé s'il existe déjà (tags.name est UNIQUE).
@@ -1536,8 +1575,10 @@ export async function findLeadIdByContact(contactId: string): Promise<string | n
   return lead?.id ?? null;
 }
 
+/** Retire le tag de cette fiche ET des autres fiches de la même personne. */
 export async function detachTagFromLead(leadId: string, tagId: string) {
-  await db.delete(leadTags).where(and(eq(leadTags.leadId, leadId), eq(leadTags.tagId, tagId)));
+  const ids = await siblingLeadIds(leadId);
+  await db.delete(leadTags).where(and(inArray(leadTags.leadId, ids), eq(leadTags.tagId, tagId)));
 }
 
 // ── Payment Schedules ──────────────────────────────────
@@ -3170,6 +3211,8 @@ export async function carryLeadsOver(
         stageEnteredAt: new Date(),
       })
       .returning();
+    // Les tags suivent la personne : la fiche reportée les garde.
+    await inheritContactTags(copy.id, copy.contactId);
 
     const calls = await db.execute<{ n: number }>(sql`
       select count(*)::int as n from call_logs

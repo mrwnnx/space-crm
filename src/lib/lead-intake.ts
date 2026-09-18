@@ -7,6 +7,7 @@ import {
   recordStageChange,
   attachTagToLead,
   createActivity,
+  inheritContactTags,
 } from "@/lib/queries";
 
 // Transformation « payload d'un formulaire → lead ».
@@ -248,7 +249,9 @@ export async function ingestSubmission(
       .where(eq(leads.id, leadId));
   }
 
-  // 8. Tags : attache source.defaultTagIds (onConflictDoNothing)
+  // 8. Tags : la fiche neuve hérite de ceux de la personne, puis reçoit
+  //    source.defaultTagIds (onConflictDoNothing)
+  if (created) await inheritContactTags(leadId, contact.id);
   const tagIds = (formSource.defaultTagIds as string[] | null) ?? [];
   for (const tagId of tagIds) {
     await attachTagToLead(leadId, tagId);

@@ -11,7 +11,7 @@ import {
 } from "@/db/schema";
 import { libelleMedia, rapatrierMediaMeta, type MediaKind, type Stocke } from "@/lib/messaging/whatsapp-media";
 import { asc, and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
-import { getOrCreateContactForLead } from "@/lib/queries";
+import { getOrCreateContactForLead, inheritContactTags } from "@/lib/queries";
 
 /**
  * La page « WhatsApp » — une conversation par numéro.
@@ -379,6 +379,8 @@ export async function ingestInboundWhatsApp(input: {
         lastContactedAt: new Date(),
       })
       .returning({ id: leads.id });
+    // Les tags suivent la personne : un numéro connu par ailleurs garde les siens.
+    await inheritContactTags(created.id, contact.id);
     lead = created;
     leadCreated = true;
   }
