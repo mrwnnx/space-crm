@@ -135,3 +135,25 @@ jobs:
             echo "::error::Le digest a répondu $CODE."
             exit 1
           fi
+
+      # Campagnes programmées. Même rythme : l'endpoint envoie celles dont
+      # l'heure est passée. Précision au quart d'heure, jamais en avance.
+      - name: Campagnes programmées
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRM_URL: https://space-crm-psi.vercel.app
+        run: |
+          BODY=$(mktemp)
+          CODE=$(curl -sS --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o "$BODY" -w "%{http_code}" \
+            "$CRM_URL/api/cron/campaigns")
+
+          echo "HTTP $CODE"
+          cat "$BODY"
+
+          if [ "$CODE" != "200" ]; then
+            echo "::error::L'endpoint des campagnes programmées a répondu $CODE."
+            exit 1
+          fi

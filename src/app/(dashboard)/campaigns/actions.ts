@@ -174,6 +174,56 @@ export async function saveCampaignNoteAction(id: string, note: string) {
   return { ok: true as const };
 }
 
+/**
+ * Programme l'envoi à une date et heure. Mêmes garde-fous que l'envoi
+ * immédiat : ce qui ne peut pas partir maintenant ne doit pas pouvoir partir
+ * plus tard sans qu'on le voie. Le départ réel est fait par le cron
+ * `/api/cron/campaigns`, à ~15 min près (cadence du workflow GitHub).
+ */
+export async function scheduleCampaignAction(
+  id: string,
+  atIso: string
+): Promise<{ ok: boolean; error?: string }> {
+  await requireUser();
+  const existing = await getCampaignById(id);
+  if (!existing) return { ok: false, error: "Campagne introuvable" };
+  if (existing.status !== "draft") {
+    return { ok: false, error: "Seul un brouillon peut être programmé." };
+  }
+
+  const at = new Date(atIso);
+  if (Number.isNaN(at.getTime())) return { ok: false, error: "Date invalide." };
+  if (at.getTime() < Date.now() + 60_000) {
+    return { ok: false, error: "La date doit être dans le futur." };
+  }
+
+  const { checkCampaign, hasBlockingError } = await import("@/lib/campaigns/preflight");
+  const checks = checkCampaign({
+    subject: existing.subject ?? "",
+    content: existing.content ?? "",
+  });
+  if (hasBlockingError(checks)) {
+    return {
+      ok: false,
+      error: checks.filter((c) => c.level === "error").map((c) => c.message).join(" "),
+    };
+  }
+
+  const { resolveCampaignAudience } = await import("@/lib/campaigns/audience");
+  const { stats } = await resolveCampaignAudience({
+    tagIds: (existing.targetTagIds as string[]) ?? [],
+    excludeTagIds: (existing.excludeTagIds as string[]) ?? [],
+    emails: (existing.targetEmails as string[]) ?? [],
+  });
+  if (stats.total === 0) return { ok: false, error: "Aucun destinataire." };
+
+  const { scheduleCampaign } = await import("@/lib/campaigns/queries");
+  await scheduleCampaign(id, at);
+  revalidatePath(`/campaigns/${id}`);
+  revalidatePath("/campaigns");
+  return { ok: true };
+}
+
 export async function sendCampaignAction(id: string) {
   await requireUser();
 
@@ -249,16 +299,18 @@ export async function setCampaignStatusAction(
     cancelled: ["draft", "scheduled", "sending", "paused", "failed"],
     // archiver : une fois l'histoire terminée
     archived: ["sent", "cancelled", "failed", "draft"],
-    // désarchiver
-    draft: ["archived"],
+    // désarchiver ; ou reprendre une programmée pour changer la date ou le texte
+    draft: ["archived", "scheduled"],
   };
 
   if (!allowed[next]?.includes(from)) {
     return { ok: false as const, error: `Transition impossible depuis « ${from} »` };
   }
 
-  const { setCampaignStatus } = await import("@/lib/campaigns/queries");
-  await setCampaignStatus(id, next);
+  const { setCampaignStatus, unscheduleCampaign } = await import("@/lib/campaigns/queries");
+  // Quitter « programmée » efface la date : un brouillon daté mentirait.
+  if (from === "scheduled" && next === "draft") await unscheduleCampaign(id);
+  else await setCampaignStatus(id, next);
   revalidatePath(`/campaigns/${id}`);
   revalidatePath("/campaigns");
   return { ok: true as const };

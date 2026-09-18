@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { CampaignAudience } from "./campaign-audience";
 import { CampaignSend } from "./campaign-send";
+import { CampaignSchedule } from "./campaign-schedule";
 import { saveCampaignNoteAction } from "@/app/(dashboard)/campaigns/actions";
 import type { RecipientRow } from "@/lib/campaigns/queries";
 
@@ -21,6 +22,7 @@ type Tag = { id: string; name: string; leadCount: number };
 export function CampaignPublish({
   campaignId,
   status,
+  scheduledAt,
   tags,
   initialTagIds,
   initialExcludeTagIds,
@@ -34,6 +36,8 @@ export function CampaignPublish({
 }: {
   campaignId: string;
   status: string;
+  /** Date de départ, rendue par le serveur en heure de Tunis. */
+  scheduledAt: string | null;
   tags: Tag[];
   initialTagIds: string[];
   initialExcludeTagIds: string[];
@@ -46,7 +50,9 @@ export function CampaignPublish({
   blocking: string[];
   from: string;
 }) {
-  const [armed, setArmed] = useState(false);
+  // Une programmée arrive armée : sa cible et sa date doivent se lire d'emblée.
+  const [armed, setArmed] = useState(status === "scheduled");
+  const [when, setWhen] = useState<"now" | "later">("now");
   const [note, setNote] = useState(initialNote);
   const [noteSaved, setNoteSaved] = useState(true);
   const [, startTransition] = useTransition();
@@ -115,9 +121,35 @@ export function CampaignPublish({
             </Field>
 
             <Field label="Quand ?">
-              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                Maintenant — l&apos;envoi part au clic, il n&apos;y a pas de planification.
-              </p>
+              {status === "scheduled" ? (
+                <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                  Programmée — part le <strong>{scheduledAt}</strong> (heure de Tunis, dans
+                  les 15 minutes qui suivent). Pour changer la date ou le texte :
+                  « Repasser en brouillon », en haut de page.
+                </p>
+              ) : status === "draft" ? (
+                <div className="flex gap-2">
+                  {(
+                    [
+                      ["now", "Maintenant"],
+                      ["later", "À une date et heure"],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setWhen(v)}
+                      className={`rounded-full border px-3 py-1 text-xs transition ${
+                        when === v
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border text-muted-foreground hover:border-foreground/40"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </Field>
 
             <details className="group">
@@ -154,6 +186,12 @@ export function CampaignPublish({
                   ))}
                 </ul>
               </div>
+            ) : status === "draft" && when === "later" ? (
+              <CampaignSchedule
+                campaignId={campaignId}
+                canSend={canSend}
+                recipientCount={recipientCount}
+              />
             ) : (
               <CampaignSend
                 campaignId={campaignId}

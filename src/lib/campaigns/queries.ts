@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db";
 import { campaignRecipients, campaigns, contacts } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 
 export type CampaignRow = {
   id: string;
@@ -201,6 +201,30 @@ export async function setCampaignStatus(id: string, status: CampaignStatus) {
     .where(eq(campaigns.id, id))
     .returning();
   return row;
+}
+
+/** Programme l'envoi : la campagne attend le cron. */
+export async function scheduleCampaign(id: string, at: Date) {
+  await db
+    .update(campaigns)
+    .set({ status: "scheduled", scheduledAt: at, updatedAt: new Date() })
+    .where(eq(campaigns.id, id));
+}
+
+/** Retour au brouillon : la date est effacée, sinon elle mentirait. */
+export async function unscheduleCampaign(id: string) {
+  await db
+    .update(campaigns)
+    .set({ status: "draft", scheduledAt: null, updatedAt: new Date() })
+    .where(eq(campaigns.id, id));
+}
+
+/** Campagnes programmées dont l'heure est passée — ce que le cron envoie. */
+export async function getDueScheduledCampaigns(): Promise<{ id: string; name: string }[]> {
+  return db
+    .select({ id: campaigns.id, name: campaigns.name })
+    .from(campaigns)
+    .where(and(eq(campaigns.status, "scheduled"), lte(campaigns.scheduledAt, new Date())));
 }
 
 /** Lecture minimale du statut — appelée entre chaque lot d'envoi. */

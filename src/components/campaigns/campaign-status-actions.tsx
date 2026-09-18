@@ -11,6 +11,7 @@ function actionsFor(status: string): { label: string; next: Next; confirm?: stri
   switch (status) {
     case "scheduled":
       return [
+        { label: "Repasser en brouillon", next: "draft" },
         { label: "Suspendre", next: "paused" },
         { label: "Annuler", next: "cancelled", confirm: "Annuler définitivement ? Elle ne partira jamais." },
       ];

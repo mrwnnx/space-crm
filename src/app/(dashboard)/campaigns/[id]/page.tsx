@@ -242,6 +242,18 @@ export default async function CampaignDetailPage({
         <CampaignPublish
           campaignId={campaign.id}
           status={campaign.status}
+          scheduledAt={
+            campaign.scheduledAt
+              ? campaign.scheduledAt.toLocaleString("fr-FR", {
+                  timeZone: "Africa/Tunis",
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : null
+          }
           tags={tags}
           initialTagIds={(campaign.targetTagIds as string[]) ?? []}
           initialExcludeTagIds={(campaign.excludeTagIds as string[]) ?? []}
