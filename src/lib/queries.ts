@@ -1497,6 +1497,9 @@ export async function getOrCreateTagByName(name: string) {
 
 // Import CSV : compléter un lead et son contact déjà connus — remplir ce qui est vide, ne jamais écraser.
 // Un nom égal à l'email (ou à sa partie avant le @) est un nom de remplacement : il compte comme vide.
+// Réimport d'une personne connue : le mobile du fichier ÉCRASE l'ancien (décision
+// du 2026-09-18, le CSV est plus récent) ; nom, prénom et téléphone ne remplissent
+// que ce qui est vide.
 export async function completeFromImport(
   leadId: string,
   contactId: string,
@@ -1508,7 +1511,7 @@ export async function completeFromImport(
     .set({
       fullName: sql`case when ${placeholder} then coalesce(${f.fullName}, ${leads.fullName}) else ${leads.fullName} end`,
       firstName: sql`coalesce(nullif(${leads.firstName}, ''), ${f.firstName})`,
-      mobileNo: sql`coalesce(nullif(${leads.mobileNo}, ''), ${f.mobileNo})`,
+      mobileNo: sql`coalesce(nullif(${f.mobileNo}::text, ''), ${leads.mobileNo})`,
       phone: sql`coalesce(nullif(${leads.phone}, ''), ${f.phone})`,
     })
     .where(eq(leads.id, leadId));
@@ -1519,7 +1522,7 @@ export async function completeFromImport(
       fullName: sql`case when ${cPlaceholder} then coalesce(${f.fullName}, ${contacts.fullName}) else ${contacts.fullName} end`,
       firstName: sql`coalesce(nullif(${contacts.firstName}, ''), ${f.firstName})`,
       lastName: sql`coalesce(nullif(${contacts.lastName}, ''), ${f.lastName})`,
-      mobileNo: sql`coalesce(nullif(${contacts.mobileNo}, ''), ${f.mobileNo})`,
+      mobileNo: sql`coalesce(nullif(${f.mobileNo}::text, ''), ${contacts.mobileNo})`,
     })
     .where(eq(contacts.id, contactId));
 }

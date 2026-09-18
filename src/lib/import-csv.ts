@@ -25,13 +25,18 @@ function importRowToFields(row: Record<string, string>, fieldMapping: Record<str
   const lastName = d.lastName || null;
   // Le nom que la ligne donne vraiment (peut être vide) — le repli sur l'email se décide après la dédup.
   const fullName = d.fullName || [firstName, lastName].filter(Boolean).join(" ") || null;
+  // Un seul numéro : en Tunisie « téléphone » est toujours un mobile, et seul Mobile
+  // s'affiche (fiche, kanban, digest, WhatsApp). Un numéro rangé dans Téléphone est
+  // invisible — 666 leads le 2026-09-18. Téléphone ne garde qu'un second numéro distinct.
+  const mobileNo = d.mobileNo || d.phone || null;
+  const phone = d.phone && d.phone !== mobileNo ? d.phone : null;
   return {
     email,
     firstName,
     lastName,
     fullName,
-    mobileNo: d.mobileNo || null,
-    phone: d.phone || null,
+    mobileNo,
+    phone,
     organizationName: d.organizationName || null,
     jobTitle: d.jobTitle || null,
     website: d.website || null,
@@ -88,7 +93,8 @@ export async function importLeads(
         fullName: d.fullName || d.email!,
       });
 
-      // Déjà un lead pour cette personne → pas de doublon : on pose le tag et on remplit ce qui manque, sans rien écraser.
+      // Déjà un lead pour cette personne → pas de doublon : on pose le tag, le numéro du CSV
+      // remplace l'ancien (le fichier est plus récent), le reste ne remplit que ce qui manque.
       const existingLeadId = await findLeadIdByContact(contact.id);
       if (existingLeadId) {
         if (tagId) await attachTagToLead(existingLeadId, tagId);
