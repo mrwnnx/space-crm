@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { campaignRecipients, automationRuns } from "@/db/schema";
 
@@ -43,10 +43,18 @@ export async function sentToday(): Promise<number> {
     .from(campaignRecipients)
     .where(and(eq(campaignRecipients.status, "sent"), gte(campaignRecipients.sentAt, start)));
 
+  // Les WhatsApp (whatsapp_id posé) ne passent pas par Resend : Meta a son
+  // propre plafond. Les compter ici volait des emails au quota du jour.
   const [a] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(automationRuns)
-    .where(and(eq(automationRuns.status, "sent"), gte(automationRuns.sentAt, start)));
+    .where(
+      and(
+        eq(automationRuns.status, "sent"),
+        gte(automationRuns.sentAt, start),
+        isNull(automationRuns.whatsappId)
+      )
+    );
 
   return (c?.n ?? 0) + (a?.n ?? 0);
 }

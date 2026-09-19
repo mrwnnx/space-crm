@@ -244,10 +244,9 @@ async function executeRule(
     const garde = await whatsAppConsentCheck(lead.contact, rule.whatsappTemplate, rule.whatsappLanguage);
     if (!garde.ok) return log("skipped", garde.reason);
 
-    // Le plafond est celui du COMPTE : WhatsApp et email s'y partagent la
-    // journée, comme les campagnes.
-    if ((await sentToday()) >= DAILY_LIMIT) return postpone(rule, leadId, runId);
-
+    // Pas de plafond Resend ici : WhatsApp ne passe pas par lui, et Meta
+    // applique le sien (erreur traduite si atteint). Sinon une journée de
+    // campagne email repoussait tous les WhatsApp au lendemain.
     const vars = buildVariables(lead, false);
     // Meta ne connaît pas les noms : ses modèles portent {{1}}, {{2}}…
     // C'est l'ORDRE de cette liste qui fait la correspondance.
