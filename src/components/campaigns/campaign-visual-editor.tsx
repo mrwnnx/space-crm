@@ -116,6 +116,7 @@ export function CampaignVisualEditor({
           placeholder="Ce que le destinataire voit dans sa boîte"
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
+        {!readOnly && <CampaignPreflight subject={subject} content={markdown} scope="subject" />}
       </div>
 
       {!readOnly && editor && (
@@ -200,7 +201,7 @@ export function CampaignVisualEditor({
         </div>
       </div>
 
-      {!readOnly && <CampaignPreflight subject={subject} content={markdown} />}
+      {!readOnly && <CampaignPreflight subject={subject} content={markdown} scope="content" />}
 
       {!readOnly && (
         <CampaignTestSend
