@@ -243,6 +243,8 @@ export const contacts = pgTable("contacts", {
   whatsappUnsubscribedAt: timestamp("whatsapp_unsubscribed_at"),
   // Meta refuse le marketing vers cette personne (131049) : on attend 24 h.
   whatsappMarketingLimitedUntil: timestamp("whatsapp_marketing_limited_until"),
+  // Dernier modèle MARKETING parti vers elle : jamais plus d'un par 24 h.
+  whatsappMarketingLastAt: timestamp("whatsapp_marketing_last_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1094,7 +1096,8 @@ export const automations = pgTable("automations", {
   bootcampId: uuid("bootcamp_id")
     .notNull()
     .references(() => bootcamps.id, { onDelete: "cascade" }),
-  // Colonne déclencheuse, unique en base : une colonne porte au plus une règle.
+  // Colonne déclencheuse. Plusieurs règles par colonne depuis 0142 : une
+  // séquence, c'est plusieurs règles à des moments différents.
   statusId: uuid("status_id")
     .notNull()
     .references(() => leadStatuses.id, { onDelete: "cascade" }),
@@ -1114,6 +1117,10 @@ export const automations = pgTable("automations", {
   // 0 = envoi immédiat à l'entrée. Sinon file d'attente, vidée toutes les
   // ~15 min : la précision est au quart d'heure, pas à la minute.
   delayMinutes: integer("delay_minutes").notNull().default(0),
+  // « J+3 à 18 h » (heure de Tunis) : quand atHour est posé, il prime sur
+  // delayMinutes — l'envoi part le jour d'entrée + delayDays, à atHour.
+  delayDays: integer("delay_days").notNull().default(0),
+  atHour: integer("at_hour"),
   active: boolean("active").notNull().default(true),
   // Posé quand la règle s'est arrêtée TOUTE SEULE (Meta a mis son modèle en
   // pause) ; effacé quand quelqu'un la réactive.

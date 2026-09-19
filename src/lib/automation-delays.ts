@@ -22,3 +22,44 @@ export const AUTOMATION_DELAYS = [
 export function delayLabel(minutes: number): string {
   return AUTOMATION_DELAYS.find((d) => d.minutes === minutes)?.label ?? `${minutes} min`;
 }
+
+// ── Le moment d'un envoi « J+n à h h », heure de Tunis ──────────────────
+// Tunis est UTC+1 toute l'année (pas d'heure d'été) : une constante suffit,
+// pas besoin d'une bibliothèque de fuseaux.
+const TUNIS_OFFSET_MS = 60 * 60 * 1000;
+
+/** L'heure qu'il est à Tunis (0-23) pour un instant donné. */
+export function heureTunis(d = new Date()): number {
+  return new Date(d.getTime() + TUNIS_OFFSET_MS).getUTCHours();
+}
+
+/**
+ * L'échéance d'une règle « J+delayDays à atHour » comptée depuis `entree`.
+ * Si le moment est déjà passé (J+0 à 10 h, entré à 14 h), c'est le lendemain.
+ */
+export function echeanceTunis(entree: Date, delayDays: number, atHour: number): Date {
+  const local = new Date(entree.getTime() + TUNIS_OFFSET_MS);
+  local.setUTCDate(local.getUTCDate() + delayDays);
+  local.setUTCHours(atHour, 0, 0, 0);
+  if (local.getTime() - TUNIS_OFFSET_MS <= entree.getTime()) local.setUTCDate(local.getUTCDate() + 1);
+  return new Date(local.getTime() - TUNIS_OFFSET_MS);
+}
+
+/** Le prochain 9 h de Tunis strictement après `d` — la fenêtre marketing rouvre. */
+export function prochain9hTunis(d = new Date()): Date {
+  return echeanceTunis(d, 0, MARKETING_START);
+}
+
+/** Fenêtre marketing Meta/maison : 9 h-20 h Tunis. Utilitaire : à toute heure. */
+export const MARKETING_START = 9;
+export const MARKETING_END = 20;
+export function dansFenetreMarketing(d = new Date()): boolean {
+  const h = heureTunis(d);
+  return h >= MARKETING_START && h < MARKETING_END;
+}
+
+/** « J+3 · 18 h » pour le badge de colonne ; sinon le libellé du délai en minutes. */
+export function timingLabel(r: { delayMinutes: number; delayDays?: number | null; atHour?: number | null }): string {
+  if (r.atHour != null) return `J+${r.delayDays ?? 0} · ${r.atHour} h`;
+  return delayLabel(r.delayMinutes);
+}

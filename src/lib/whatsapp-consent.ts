@@ -14,14 +14,17 @@ export type ContactConsent = {
   whatsappConsentAt: Date | null;
   whatsappUnsubscribedAt?: Date | null;
   whatsappMarketingLimitedUntil?: Date | null;
+  whatsappMarketingLastAt?: Date | null;
 };
+
+export const MARKETING_CAP_MS = 24 * 60 * 60 * 1000;
 
 // Les modèles changent rarement : une lecture toutes les 5 min suffit, et
 // évite un appel Meta par envoi d'automatisation.
 let cache: { at: number; categories: Map<string, string> } | null = null;
 const CACHE_MS = 5 * 60 * 1000;
 
-async function categorieDuModele(nom: string, langue: string): Promise<string | null> {
+export async function categorieDuModele(nom: string, langue: string): Promise<string | null> {
   if (!cache || Date.now() - cache.at > CACHE_MS) {
     const modeles = await listWhatsAppTemplates();
     if (!modeles.length) return null; // API muette : on ne sait pas
@@ -54,6 +57,14 @@ export async function whatsAppConsentCheck(
     return {
       ok: false,
       reason: `Meta limite les messages marketing vers cette personne (trop de marketing non lu) : réessayer après le ${limite.toLocaleString("fr-FR")}.`,
+    };
+  }
+  const dernier = contact?.whatsappMarketingLastAt;
+  if (dernier && Date.now() - dernier.getTime() < MARKETING_CAP_MS) {
+    const h = Math.ceil((MARKETING_CAP_MS - (Date.now() - dernier.getTime())) / 3_600_000);
+    return {
+      ok: false,
+      reason: `Un message marketing est déjà parti vers cette personne il y a moins de 24 h : pas plus d'un par jour (encore ${h} h).`,
     };
   }
   if (contact?.whatsappConsentAt) return { ok: true };

@@ -1,8 +1,9 @@
 import "server-only";
 import { db } from "@/db";
-import { automations, automationRuns, leads } from "@/db/schema";
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { activities, automations, automationRuns, contacts, leads } from "@/db/schema";
+import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
 import { DAILY_LIMIT, sentToday } from "@/lib/messaging/quota";
+import { dansFenetreMarketing, echeanceTunis, prochain9hTunis } from "@/lib/automation-delays";
 
 type RunStatus = "pending" | "sent" | "skipped" | "failed" | "cancelled";
 
@@ -60,29 +61,47 @@ export async function runStatusAutomations(
   await applyStageTag(leadId, statusId);
 
   try {
-    // Une colonne porte au plus une règle (index unique sur status_id).
-    const rule = await db.query.automations.findFirst({
+    // Une colonne peut porter plusieurs règles (séquence, 0142) : chacune est
+    // posée à son moment, indépendamment des autres.
+    const rules = await db.query.automations.findMany({
       where: and(eq(automations.statusId, statusId), eq(automations.active, true)),
+      orderBy: [asc(automations.createdAt)],
     });
-    if (!rule) return;
+    const entree = new Date();
+    for (const rule of rules) {
+      try {
+        if (await alreadyHandled(rule.id, leadId)) continue;
 
-    if (await alreadyHandled(rule.id, leadId)) return;
+        const echeance = echeanceDeRegle(rule, entree);
+        if (echeance) {
+          // Rien n'est envoyé maintenant : on pose l'échéance, le cron s'en charge.
+          await db.insert(automationRuns).values({
+            automationId: rule.id,
+            leadId,
+            status: "pending",
+            scheduledAt: echeance,
+          });
+          continue;
+        }
 
-    if (rule.delayMinutes > 0) {
-      // Rien n'est envoyé maintenant : on pose l'échéance, le cron s'en charge.
-      await db.insert(automationRuns).values({
-        automationId: rule.id,
-        leadId,
-        status: "pending",
-        scheduledAt: new Date(Date.now() + rule.delayMinutes * 60_000),
-      });
-      return;
+        await executeRule(rule, leadId);
+      } catch {
+        // Une règle qui casse n'empêche pas les autres.
+      }
     }
-
-    await executeRule(rule, leadId);
   } catch {
     // Le déplacement du lead et l'import priment sur l'automatisation.
   }
+}
+
+/** L'échéance d'une règle depuis l'entrée dans la colonne ; null = tout de suite. */
+function echeanceDeRegle(
+  rule: { delayMinutes: number; delayDays: number; atHour: number | null },
+  entree: Date
+): Date | null {
+  if (rule.atHour != null) return echeanceTunis(entree, rule.delayDays, rule.atHour);
+  if (rule.delayMinutes > 0) return new Date(entree.getTime() + rule.delayMinutes * 60_000);
+  return null;
 }
 
 /**
@@ -163,7 +182,7 @@ export async function processDueAutomations(): Promise<{
       continue;
     }
 
-    const status = await executeRule(rule, run.leadId, run.id);
+    const status = await executeRule(rule, run.leadId, run.id, run.createdAt);
     if (status === "sent") report.sent++;
     else if (status === "failed") report.failed++;
     else if (status === "pending") report.postponed++;
@@ -188,24 +207,39 @@ async function closeRun(runId: string, status: RunStatus, reason: string) {
 async function postpone(
   rule: typeof automations.$inferSelect,
   leadId: string,
-  runId?: string
+  runId?: string,
+  quand: Date = tomorrow(),
+  reason = `Plafond de ${DAILY_LIMIT} emails/jour atteint — reporté au lendemain`
 ): Promise<RunStatus> {
-  const reason = `Plafond de ${DAILY_LIMIT} emails/jour atteint — reporté au lendemain`;
   if (runId) {
     await db
       .update(automationRuns)
-      .set({ scheduledAt: tomorrow(), reason })
+      .set({ scheduledAt: quand, reason })
       .where(eq(automationRuns.id, runId));
   } else {
     await db.insert(automationRuns).values({
       automationId: rule.id,
       leadId,
       status: "pending",
-      scheduledAt: tomorrow(),
+      scheduledAt: quand,
       reason,
     });
   }
   return "pending";
+}
+
+/** Le lead a écrit sur WhatsApp depuis que l'envoi a été programmé ? Alors un humain reprend. */
+async function aEcritDepuis(leadId: string, depuis: Date): Promise<boolean> {
+  const r = await db.query.activities.findFirst({
+    where: and(
+      eq(activities.referenceId, leadId),
+      eq(activities.type, "whatsapp"),
+      eq(activities.direction, "inbound"),
+      gt(activities.createdAt, depuis)
+    ),
+    columns: { id: true },
+  });
+  return !!r;
 }
 
 /**
@@ -215,7 +249,9 @@ async function postpone(
 async function executeRule(
   rule: typeof automations.$inferSelect,
   leadId: string,
-  runId?: string
+  runId?: string,
+  /** Quand le run a été mis en file : sert à voir si le lead a écrit ENTRE-TEMPS. */
+  programmeLe?: Date
 ): Promise<RunStatus> {
   const { getLeadById, getEmailTemplateById, createActivity, getEmailBranding } =
     await import("@/lib/queries");
@@ -239,8 +275,30 @@ async function executeRule(
     if (!rule.whatsappTemplate) return log("failed", "Aucun modèle WhatsApp sur la règle");
     if (!lead.mobileNo) return log("skipped", "Aucun numéro de téléphone sur le lead");
 
+    // Une séquence s'arrête dès qu'un humain a repris : le lead a répondu
+    // depuis la mise en file, ou il est inscrit.
+    if (lead.converted) return log("cancelled", "Le lead est inscrit : plus de message automatique");
+    if (programmeLe && (await aEcritDepuis(leadId, programmeLe))) {
+      return log("cancelled", "Le lead a écrit entre-temps : un humain reprend");
+    }
+
+    // Un MARKETING attend la fenêtre 9 h-20 h (Tunis) et respecte « 1 par
+    // 24 h » — reporté, pas annulé : le message reste dû.
+    const { whatsAppConsentCheck, categorieDuModele, MARKETING_CAP_MS } = await import("@/lib/whatsapp-consent");
+    const categorie = await categorieDuModele(rule.whatsappTemplate, rule.whatsappLanguage);
+    const marketing = categorie !== "UTILITY" && categorie !== "AUTHENTICATION";
+    if (marketing) {
+      if (!dansFenetreMarketing()) {
+        return postpone(rule, leadId, runId, prochain9hTunis(), "Hors fenêtre 9 h-20 h : reporté au prochain 9 h");
+      }
+      const dernier = lead.contact?.whatsappMarketingLastAt;
+      if (dernier && Date.now() - dernier.getTime() < MARKETING_CAP_MS) {
+        const quand = new Date(dernier.getTime() + MARKETING_CAP_MS + 5 * 60_000);
+        return postpone(rule, leadId, runId, quand, "Un marketing est déjà parti il y a moins de 24 h : reporté");
+      }
+    }
+
     // Règle Meta : pas de marketing sans consentement tracé.
-    const { whatsAppConsentCheck } = await import("@/lib/whatsapp-consent");
     const garde = await whatsAppConsentCheck(lead.contact, rule.whatsappTemplate, rule.whatsappLanguage);
     if (!garde.ok) return log("skipped", garde.reason);
 
@@ -289,6 +347,12 @@ async function executeRule(
     // Le wamid rattache les accusés (livré, lu, échec) à cette bulle.
     const { recordWhatsAppSent } = await import("@/lib/whatsapp-inbox");
     await recordWhatsAppSent(envoi.id, activite.id);
+    if (marketing && lead.contactId) {
+      await db
+        .update(contacts)
+        .set({ whatsappMarketingLastAt: new Date() })
+        .where(eq(contacts.id, lead.contactId));
+    }
     return "sent";
   }
 

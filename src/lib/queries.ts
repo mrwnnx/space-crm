@@ -3319,6 +3319,8 @@ export async function getAutomationsByBootcamp(bootcampId: string) {
       whatsappLanguage: automations.whatsappLanguage,
       whatsappVariables: automations.whatsappVariables,
       delayMinutes: automations.delayMinutes,
+      delayDays: automations.delayDays,
+      atHour: automations.atHour,
       active: automations.active,
       pausedReason: automations.pausedReason,
       templateName: emailTemplates.name,
@@ -3326,7 +3328,8 @@ export async function getAutomationsByBootcamp(bootcampId: string) {
     })
     .from(automations)
     .leftJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
-    .where(eq(automations.bootcampId, bootcampId));
+    .where(eq(automations.bootcampId, bootcampId))
+    .orderBy(asc(automations.createdAt));
 }
 
 export async function createAutomation(data: typeof automations.$inferInsert) {

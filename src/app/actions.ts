@@ -286,12 +286,24 @@ export async function saveColumnAutomationAction(
   active: boolean,
   /** Canal de la règle. Absent = email, pour ne pas casser les appels existants. */
   canal: "email" | "whatsapp" = "email",
-  whatsapp?: { template: string; langue: string; variables: string[] }
+  whatsapp?: { template: string; langue: string; variables: string[] },
+  /** « J+n à h h » (Tunis). atHour null = c'est delayMinutes qui compte. */
+  timing?: { delayDays: number; atHour: number | null },
+  /** Règle à modifier ; absent = nouvelle règle (une colonne en porte plusieurs). */
+  automationId?: string
 ) {
   await requireUser();
 
   if (!Number.isInteger(delayMinutes) || delayMinutes < 0 || delayMinutes > 43200) {
     return { error: "Délai invalide (0 à 30 jours)." };
+  }
+  const delayDays = timing?.delayDays ?? 0;
+  const atHour = timing?.atHour ?? null;
+  if (!Number.isInteger(delayDays) || delayDays < 0 || delayDays > 60) {
+    return { error: "Jour invalide (J+0 à J+60)." };
+  }
+  if (atHour !== null && (!Number.isInteger(atHour) || atHour < 0 || atHour > 23)) {
+    return { error: "Heure invalide (0 à 23)." };
   }
 
   const { getEmailTemplateById, getAutomationsByBootcamp, createAutomation, updateAutomation } =
@@ -320,6 +332,8 @@ export async function saveColumnAutomationAction(
       whatsappVariables: whatsapp?.variables ?? [],
       emailTemplateId: null,
       delayMinutes,
+      delayDays,
+      atHour,
       active,
     };
   } else {
@@ -336,13 +350,21 @@ export async function saveColumnAutomationAction(
       emailTemplateId,
       whatsappTemplate: null,
       delayMinutes,
+      delayDays,
+      atHour,
       active,
     };
   }
 
-  const existing = (await getAutomationsByBootcamp(bootcampId)).find(
-    (a) => a.statusId === statusId
-  );
+  // On ne modifie que LA règle désignée, et seulement si elle est bien dans
+  // cette colonne : un identifiant d'ailleurs ne doit pas réécrire une règle
+  // d'une autre formation.
+  const existing = automationId
+    ? (await getAutomationsByBootcamp(bootcampId)).find(
+        (a) => a.id === automationId && a.statusId === statusId
+      )
+    : undefined;
+  if (automationId && !existing) return { error: "Règle introuvable." };
 
   if (existing) {
     // Réactiver une règle arrêtée par Meta efface le motif de l'arrêt.

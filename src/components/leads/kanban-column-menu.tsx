@@ -30,7 +30,7 @@ export function ColumnMenu({
   statusId,
   name,
   kind,
-  automation,
+  automations = [],
   tagRule,
   tags,
   templates,
@@ -39,7 +39,8 @@ export function ColumnMenu({
   statusId: string;
   name: string;
   kind: "normal" | "converted" | "lost";
-  automation?: ColumnAutomation | null;
+  /** Les règles de la colonne — une séquence en a plusieurs. */
+  automations?: ColumnAutomation[];
   /** Règle « les entrants reçoivent ce tag », si la colonne en a une. */
   tagRule?: StageTagRule | null;
   tags?: TagOption[];
@@ -143,7 +144,9 @@ export function ColumnMenu({
                     setAutomating(true);
                   }}
                 >
-                  {automation ? "Modifier l'automatisation" : "Automatiser cette colonne"}
+                  {automations.length
+                    ? `Automatisations (${automations.length})`
+                    : "Automatiser cette colonne"}
                 </button>
 
                 <button
@@ -158,7 +161,7 @@ export function ColumnMenu({
 
                 {/* Lire les résultats ne doit pas obliger à ouvrir le
                     formulaire qui les produit. */}
-                {automation && (
+                {automations.length === 1 && (
                   <button
                     className={menuItemCls}
                     onClick={() => {
@@ -227,11 +230,11 @@ export function ColumnMenu({
         />
       )}
 
-      {showStats && automation && (
+      {showStats && automations.length === 1 && (
         <AutomationStatsDialog
-          automationId={automation.id}
+          automationId={automations[0].id}
           columnName={name}
-          templateName={automation.templateName ?? automation.whatsappTemplate ?? "—"}
+          templateName={automations[0].templateName ?? automations[0].whatsappTemplate ?? "—"}
           onClose={() => setShowStats(false)}
         />
       )}
@@ -241,7 +244,7 @@ export function ColumnMenu({
           bootcampId={bootcampId}
           statusId={statusId}
           columnName={name}
-          automation={automation ?? null}
+          automations={automations}
           templates={templates ?? []}
           onClose={() => setAutomating(false)}
         />

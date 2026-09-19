@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { createActivity, getDefaultLeadStatus, getLeadById, moveLeadToStage, updateLead } from "@/lib/queries";
-import { whatsAppConsentCheck } from "@/lib/whatsapp-consent";
+import { createActivity, getDefaultLeadStatus, getLeadById, moveLeadToStage, updateContact as updateContactQuery, updateLead } from "@/lib/queries";
+import { categorieDuModele, whatsAppConsentCheck } from "@/lib/whatsapp-consent";
 import {
   countTemplateVariables,
   createWhatsAppTemplate,
@@ -161,6 +161,11 @@ export async function replyWhatsAppTemplateAction(
   });
   await recordWhatsAppSent(r.id, activite.id);
   await updateLead(leadId, { lastContactedAt: new Date() });
+  // Un marketing envoyé à la main compte aussi dans « 1 par 24 h ».
+  const categorie = await categorieDuModele(template.name, template.language);
+  if (lead?.contactId && categorie !== "UTILITY" && categorie !== "AUTHENTICATION") {
+    await updateContactQuery(lead.contactId, { whatsappMarketingLastAt: new Date() });
+  }
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);
   return { ok: true as const };

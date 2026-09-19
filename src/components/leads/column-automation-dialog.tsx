@@ -7,7 +7,8 @@ import {
   saveColumnAutomationAction,
   deleteColumnAutomationAction,
 } from "@/app/actions";
-import { AUTOMATION_DELAYS } from "@/lib/automation-delays";
+import { AUTOMATION_DELAYS, timingLabel } from "@/lib/automation-delays";
+import { AutomationStatsDialog } from "@/components/leads/automation-stats-dialog";
 
 /** Règle d'une colonne, telle que la page la charge. */
 export type ColumnAutomation = {
@@ -22,6 +23,9 @@ export type ColumnAutomation = {
   /** Les noms des variables du CRM, dans l'ordre attendu par Meta. */
   whatsappVariables: unknown;
   delayMinutes: number;
+  /** « J+n à h h » (Tunis) ; atHour nul = delayMinutes fait foi. */
+  delayDays?: number;
+  atHour?: number | null;
   active: boolean;
   /** Posé quand Meta a arrêté la règle (modèle en pause) ; nul sinon. */
   pausedReason?: string | null;
@@ -47,7 +51,147 @@ const VARIABLES = [
   "email",
 ] as const;
 
+/**
+ * La fenêtre d'une colonne : la liste de ses règles (une séquence en a
+ * plusieurs), et le formulaire d'une règle quand on en ajoute ou modifie une.
+ */
 export function ColumnAutomationDialog({
+  bootcampId,
+  statusId,
+  columnName,
+  automations,
+  templates,
+  onClose,
+}: {
+  bootcampId: string;
+  statusId: string;
+  columnName: string;
+  automations: ColumnAutomation[];
+  templates: TemplateOption[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  // Sans règle, on ouvre directement le formulaire : c'est ce qu'on venait faire.
+  const [editing, setEditing] = useState<ColumnAutomation | "new" | null>(
+    automations.length === 0 ? "new" : null
+  );
+  const [stats, setStats] = useState<ColumnAutomation | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  if (editing) {
+    return (
+      <RuleForm
+        bootcampId={bootcampId}
+        statusId={statusId}
+        columnName={columnName}
+        automation={editing === "new" ? null : editing}
+        templates={templates}
+        onClose={() => (automations.length === 0 ? onClose() : setEditing(null))}
+      />
+    );
+  }
+
+  function remove(a: ColumnAutomation) {
+    startTransition(async () => {
+      await deleteColumnAutomationAction(bootcampId, a.id);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl"
+      >
+        <h2 className="mb-1 font-heading text-sm font-semibold text-foreground">
+          Automatisations de « {columnName} »
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Chaque message part <strong>une seule fois</strong> par lead, à son moment. La suite
+          s&apos;arrête dès que le lead répond sur WhatsApp, change de colonne ou s&apos;inscrit.
+        </p>
+
+        <ul className="mb-4 space-y-2">
+          {automations.map((a) => (
+            <li key={a.id} className="rounded-lg border border-border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    <span className="mr-1.5 rounded bg-muted px-1 py-0.5 text-[10px] uppercase text-muted-foreground">
+                      {a.channel === "whatsapp" ? "WhatsApp" : "Email"}
+                    </span>
+                    {a.templateName ?? a.whatsappTemplate ?? "—"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {timingLabel(a)}
+                    {!a.active && (
+                      <span className="ml-2 rounded bg-amber-50 px-1 py-0.5 text-amber-700">
+                        {a.pausedReason ? "arrêtée par Meta" : "inactive"}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(a)}
+                    className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStats(a)}
+                    className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
+                  >
+                    Stats
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => remove(a)}
+                    className="rounded-md border border-red-500/30 px-2 py-1 text-[11px] text-red-600 hover:bg-red-500/5 disabled:opacity-50"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setEditing("new")}
+            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            + Ajouter un message
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+          >
+            Fermer
+          </button>
+        </div>
+
+        {stats && (
+          <AutomationStatsDialog
+            automationId={stats.id}
+            columnName={columnName}
+            templateName={stats.templateName ?? stats.whatsappTemplate ?? "—"}
+            onClose={() => setStats(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RuleForm({
   bootcampId,
   statusId,
   columnName,
@@ -75,6 +219,8 @@ export function ColumnAutomationDialog({
       : []
   );
   const [delay, setDelay] = useState(automation?.delayMinutes ?? 0);
+  const [delayDays, setDelayDays] = useState(automation?.delayDays ?? 0);
+  const [atHour, setAtHour] = useState<number | null>(automation?.atHour ?? null);
   const [active, setActive] = useState(automation?.active ?? true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -91,7 +237,9 @@ export function ColumnAutomationDialog({
         canal,
         canal === "whatsapp"
           ? { template: waTemplate, langue: waLangue, variables: waVars }
-          : undefined
+          : undefined,
+        { delayDays, atHour },
+        automation?.id
       );
       if ("error" in res && res.error) {
         setError(res.error);
@@ -121,12 +269,11 @@ export function ColumnAutomationDialog({
         className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl"
       >
         <h2 className="mb-1 font-heading text-sm font-semibold text-foreground">
-          Automatiser « {columnName} »
+          {automation ? "Modifier le message" : "Nouveau message"} — « {columnName} »
         </h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          Chaque lead qui entre dans cette colonne reçoit ce message — <strong>une seule
-          fois</strong>, quel que soit le chemin&nbsp;: glisser-déposer, inscription, ou
-          import du site.
+          Chaque lead qui entre dans cette colonne le reçoit — <strong>une seule fois</strong>,
+          quel que soit le chemin&nbsp;: glisser-déposer, inscription, ou import du site.
         </p>
 
         {/* Le canal se choisit AVANT le modèle : c'est lui qui décide de ce que
@@ -283,9 +430,44 @@ export function ColumnAutomationDialog({
           ))}
         </select>
         <p className="mb-3 text-[11px] text-muted-foreground">
-          {delay === 0
-            ? "Part au moment où le lead entre dans la colonne."
-            : "Précision au quart d'heure : la file part toutes les ~15 min. L'envoi est annulé si le lead a quitté la colonne entre-temps."}
+          {atHour != null
+            ? "Ignoré : c'est le jour et l'heure ci-dessous qui comptent."
+            : delay === 0
+              ? "Part au moment où le lead entre dans la colonne."
+              : "Précision au quart d'heure : la file part toutes les ~5 min. L'envoi est annulé si le lead a quitté la colonne entre-temps."}
+        </p>
+
+        <label className="mb-1 block text-xs font-medium text-foreground">
+          … ou à jour et heure fixes (heure de Tunis)
+        </label>
+        <div className="mb-1 flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">J+</span>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            value={delayDays}
+            onChange={(e) => setDelayDays(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+            className="w-16 rounded-lg border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+          />
+          <span className="text-muted-foreground">à</span>
+          <select
+            value={atHour ?? ""}
+            onChange={(e) => setAtHour(e.target.value === "" ? null : Number(e.target.value))}
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+          >
+            <option value="">— pas d&apos;heure fixe —</option>
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>
+                {h} h
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          « J+3 à 18 h » = trois jours après l&apos;entrée, à 18 h. Un modèle WhatsApp
+          marketing attend de toute façon la fenêtre 9 h-20 h et ne part jamais deux fois en
+          24 h vers la même personne.
         </p>
 
         <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-foreground">
@@ -313,7 +495,7 @@ export function ColumnAutomationDialog({
 
         <div className="flex gap-2">
           <button
-            disabled={isPending || !templateId}
+            disabled={isPending || (canal === "email" ? !templateId : !waTemplate)}
             onClick={save}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
@@ -332,7 +514,7 @@ export function ColumnAutomationDialog({
             onClick={onClose}
             className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
           >
-            Fermer
+            Retour
           </button>
         </div>
 

@@ -12,7 +12,7 @@ import type {
   ColumnAutomation,
   TemplateOption,
 } from "@/components/leads/column-automation-dialog";
-import { delayLabel } from "@/lib/automation-delays";
+import { timingLabel } from "@/lib/automation-delays";
 import {
   FILTRES,
   TRIS,
@@ -106,7 +106,11 @@ export function LeadsKanban({
   const statusMap = new Map(localStatuses.map((s) => [s.id, s]));
 
   // Index statusId → règle d'automatisation (au plus une par colonne).
-  const automationMap = new Map(automations.map((a) => [a.statusId, a]));
+  // Plusieurs règles par colonne (séquence) : on regroupe.
+  const automationMap = new Map<string, ColumnAutomation[]>();
+  for (const a of automations) {
+    automationMap.set(a.statusId, [...(automationMap.get(a.statusId) ?? []), a]);
+  }
   const tagRuleMap = new Map(stageTags.map((r) => [r.statusId, r]));
 
   // Réordonne : déplace la colonne `draggedId` à la place de `targetId`.
@@ -394,18 +398,17 @@ export function LeadsKanban({
                 <div className="flex items-center gap-1">
                   {/* Une colonne qui envoie un email le DIT : sans ce repère,
                       la règle n'existe que dans la tête de celui qui l'a créée. */}
-                  {automationMap.get(status.id)?.active && (
-                    <AutomationStatsBadge
-                      automationId={automationMap.get(status.id)!.id}
-                      columnName={status.name}
-                      templateName={
-                        automationMap.get(status.id)!.templateName ??
-                        automationMap.get(status.id)!.whatsappTemplate ??
-                        "—"
-                      }
-                      delay={delayLabel(automationMap.get(status.id)!.delayMinutes)}
-                    />
-                  )}
+                  {(automationMap.get(status.id) ?? [])
+                    .filter((a) => a.active)
+                    .map((a) => (
+                      <AutomationStatsBadge
+                        key={a.id}
+                        automationId={a.id}
+                        columnName={status.name}
+                        templateName={a.templateName ?? a.whatsappTemplate ?? "—"}
+                        delay={timingLabel(a)}
+                      />
+                    ))}
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">
                     {status.leads.length}
                   </span>
@@ -415,7 +418,7 @@ export function LeadsKanban({
                       statusId={status.id}
                       name={status.name}
                       kind={status.kind}
-                      automation={automationMap.get(status.id) ?? null}
+                      automations={automationMap.get(status.id) ?? []}
                       templates={emailTemplates}
                       tagRule={tagRuleMap.get(status.id) ?? null}
                       tags={tags}
