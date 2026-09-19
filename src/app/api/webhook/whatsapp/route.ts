@@ -186,6 +186,9 @@ export async function POST(request: NextRequest) {
             media: mediaDe(m),
             wamid: m.id ?? null,
             replyToWamid: m.context?.id ?? null,
+            // Un tap sur un bouton de modèle (ou d'un message interactif) :
+            // c'est une intention, le CRM peut agir dessus.
+            isButton: m.type === "button" || !!m.interactive?.button_reply || !!m.interactive?.list_reply,
           });
           recus++;
           if (r.leadCreated) leadsCrees++;

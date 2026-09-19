@@ -11,6 +11,7 @@ import {
   deleteQuickReplyAction,
   deleteTemplateAction,
   saveAutoRepliesAction,
+  saveButtonActionAction,
   setAiReplyAction,
   updateProfileAction,
 } from "@/app/whatsapp-actions";
@@ -51,6 +52,8 @@ export function WhatsAppSettings({
   quickReplies,
   autoReplies,
   envoi,
+  buttonActions,
+  tags,
 }: {
   numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string };
   profil: { ok: true; profil: WhatsAppProfile } | { ok: false; error: string };
@@ -60,6 +63,9 @@ export function WhatsAppSettings({
   autoReplies: AutoReplies;
   /** Mode d'envoi (variable d'environnement) et numéros de test. */
   envoi: { mode: "dry_run" | "allowlist" | "live"; allowlist: string[] };
+  /** Ce que chaque bouton de modèle déclenche. */
+  buttonActions: ActionBoutonInput[];
+  tags: { id: string; name: string }[];
 }) {
   return (
     <div className="space-y-6">
@@ -68,10 +74,19 @@ export function WhatsAppSettings({
       <SectionAuto initial={autoReplies} />
       <SectionIA enabled={aiReplyEnabled} />
       <SectionReponsesRapides items={quickReplies} />
-      <SectionModeles templates={templates} />
+      <SectionModeles templates={templates} buttonActions={buttonActions} tags={tags} />
     </div>
   );
 }
+
+export type ActionBoutonInput = {
+  template: string;
+  buttonText: string;
+  tagId: string | null;
+  replyText: string | null;
+  callSlot: string | null;
+  optOut: boolean;
+};
 
 // ── Bienvenue et absence ──────────────────────────────
 
@@ -593,7 +608,15 @@ const STATUT: Record<string, { label: string; cls: string }> = {
   DISABLED: { label: "Désactivé", cls: "bg-gray-50 text-gray-500" },
 };
 
-function SectionModeles({ templates }: { templates: WhatsAppTemplate[] }) {
+function SectionModeles({
+  templates,
+  buttonActions,
+  tags,
+}: {
+  templates: WhatsAppTemplate[];
+  buttonActions: ActionBoutonInput[];
+  tags: { id: string; name: string }[];
+}) {
   return (
     <Section title="Modèles de message">
       <p className="mb-4 text-xs text-muted-foreground">
@@ -606,7 +629,12 @@ function SectionModeles({ templates }: { templates: WhatsAppTemplate[] }) {
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border">
           {templates.map((t) => (
-            <LigneModele key={t.id} t={t} />
+            <LigneModele
+              key={t.id}
+              t={t}
+              actions={buttonActions.filter((a) => a.template === t.name)}
+              tags={tags}
+            />
           ))}
         </ul>
       )}
@@ -616,7 +644,15 @@ function SectionModeles({ templates }: { templates: WhatsAppTemplate[] }) {
   );
 }
 
-function LigneModele({ t }: { t: WhatsAppTemplate }) {
+function LigneModele({
+  t,
+  actions,
+  tags,
+}: {
+  t: WhatsAppTemplate;
+  actions: ActionBoutonInput[];
+  tags: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const [confirme, setConfirme] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -662,9 +698,15 @@ function LigneModele({ t }: { t: WhatsAppTemplate }) {
       </div>
       {t.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{t.body}</p>}
       {t.buttons.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <div className="mt-1.5 space-y-1.5">
           {t.buttons.map((b) => (
-            <span key={b} className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-foreground">{b}</span>
+            <ActionBouton
+              key={b}
+              template={t.name}
+              button={b}
+              initial={actions.find((a) => a.buttonText === b) ?? null}
+              tags={tags}
+            />
           ))}
         </div>
       )}
@@ -685,6 +727,120 @@ function ConseilSortieHumaine({ texte }: { texte: string }) {
       Meta exige qu&apos;un message automatique dise comment joindre un humain : ajoute un numéro,
       un email, ou « répondez <strong className="font-medium">humain</strong> pour parler à l&apos;équipe ».
     </p>
+  );
+}
+
+// Un bouton = une intention. Ici on dit ce que le CRM en fait : tag,
+// réponse dans la fenêtre que le tap vient d'ouvrir, tâche d'appel au créneau
+// choisi, ou désabonnement. Tout vide = rien de spécial, le tap reste une
+// réponse comme une autre.
+const CRENEAUX = [
+  { value: "", label: "— pas de rappel —" },
+  { value: "now", label: "Rappel : maintenant" },
+  { value: "evening", label: "Rappel : ce soir après 18 h" },
+  { value: "tomorrow", label: "Rappel : demain matin" },
+];
+
+function ActionBouton({
+  template,
+  button,
+  initial,
+  tags,
+}: {
+  template: string;
+  button: string;
+  initial: ActionBoutonInput | null;
+  tags: { id: string; name: string }[];
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [tagId, setTagId] = useState(initial?.tagId ?? "");
+  const [reply, setReply] = useState(initial?.replyText ?? "");
+  const [slot, setSlot] = useState(initial?.callSlot ?? "");
+  const [optOut, setOptOut] = useState(initial?.optOut ?? false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const configure = !!(initial?.tagId || initial?.replyText || initial?.callSlot || initial?.optOut);
+
+  function enregistrer() {
+    setErreur(null);
+    startTransition(async () => {
+      const r = await saveButtonActionAction({
+        template,
+        buttonText: button,
+        tagId: tagId || null,
+        replyText: reply.trim() || null,
+        callSlot: slot || null,
+        optOut,
+      });
+      if (r.ok) {
+        setOpen(false);
+        router.refresh();
+      } else setErreur(r.error);
+    });
+  }
+
+  const resume = [
+    initial?.tagId ? `tag ${tags.find((x) => x.id === initial.tagId)?.name ?? "?"}` : null,
+    initial?.replyText ? "réponse" : null,
+    initial?.callSlot ? CRENEAUX.find((c) => c.value === initial.callSlot)?.label.toLowerCase() : null,
+    initial?.optOut ? "désabonne" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="rounded-md border border-border px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-foreground">{button}</span>
+        <span className="text-[10.5px] text-muted-foreground">{configure ? `→ ${resume}` : "→ rien de spécial"}</span>
+        <span className="flex-1" />
+        <button type="button" onClick={() => setOpen((o) => !o)} className="text-[10.5px] text-primary hover:underline">
+          {open ? "Fermer" : "Régler"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <select value={tagId} onChange={(e) => setTagId(e.target.value)} className={INPUT}>
+              <option value="">— pas de tag —</option>
+              {tags.map((x) => (
+                <option key={x.id} value={x.id}>
+                  Tag : {x.name}
+                </option>
+              ))}
+            </select>
+            <select value={slot} onChange={(e) => setSlot(e.target.value)} className={INPUT}>
+              {CRENEAUX.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            rows={2}
+            placeholder="Réponse envoyée tout de suite (texte libre : le tap a ouvert la fenêtre de 24 h)"
+            className={cn(INPUT, "resize-y")}
+          />
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+            <input type="checkbox" checked={optOut} onChange={(e) => setOptOut(e.target.checked)} className="h-4 w-4 rounded border-border" />
+            Ce bouton = « ne plus m&apos;écrire » (désabonnement WhatsApp, confirmation envoyée)
+          </label>
+          {erreur && <p className="text-[11px] text-red-600">{erreur}</p>}
+          <button
+            type="button"
+            onClick={enregistrer}
+            disabled={isPending}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {isPending ? "…" : "Enregistrer"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

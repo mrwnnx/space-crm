@@ -347,7 +347,7 @@ async function executeRule(
     });
     // Le wamid rattache les accusés (livré, lu, échec) à cette bulle.
     const { recordWhatsAppSent } = await import("@/lib/whatsapp-inbox");
-    await recordWhatsAppSent(envoi.id, activite.id);
+    await recordWhatsAppSent(envoi.id, activite.id, null, rule.whatsappTemplate);
     if (marketing && lead.contactId) {
       await db
         .update(contacts)

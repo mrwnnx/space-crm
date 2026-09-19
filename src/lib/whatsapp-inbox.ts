@@ -346,6 +346,7 @@ export async function ingestInboundWhatsApp(input: {
   media?: MediaEntrant | null;
   wamid?: string | null; // l'identifiant Meta du message reçu — pour le citer et y réagir
   replyToWamid?: string | null; // le lead a répondu à ce message-là
+  isButton?: boolean; // un tap sur un bouton de modèle, pas un texte tapé
 }): Promise<{ leadId: string; leadCreated: boolean }> {
   // Rapprochement par les 8 derniers chiffres : le CRM stocke des numéros
   // tunisiens parfois sans indicatif, Meta les rend toujours avec. Le lead le
@@ -468,6 +469,22 @@ export async function ingestInboundWhatsApp(input: {
     return { leadId: lead.id, leadCreated };
   }
 
+  // Un bouton tapé : l'action configurée (tag, réponse, tâche d'appel,
+  // désabonnement). Si elle a répondu, pas de bienvenue/absence par-dessus.
+  if (input.isButton && lead.mobileNo) {
+    const { trouverAction, appliquerActionBouton } = await import("@/lib/whatsapp-button-actions");
+    const action = await trouverAction(input.text, input.replyToWamid);
+    if (action) {
+      const fiche = await db.query.leads.findFirst({ where: eq(leads.id, lead.id), columns: { fullName: true } });
+      const { aRepondu } = await appliquerActionBouton(
+        action,
+        { id: lead.id, contactId: lead.contactId, mobileNo: lead.mobileNo, fullName: fiche?.fullName ?? "" },
+        input.text
+      );
+      if (aRepondu) return { leadId: lead.id, leadCreated };
+    }
+  }
+
   // Les réponses automatiques à texte fixe (bienvenue, absence) — après que le
   // message est rangé, jamais avant : un raté ne perd pas le message. Import
   // dynamique : ce module-là nous importe aussi.
@@ -481,7 +498,13 @@ export async function ingestInboundWhatsApp(input: {
 // ── Statuts d'envoi ───────────────────────────────────
 
 /** À appeler juste après un envoi réussi : lie le wamid de Meta à la bulle. */
-export async function recordWhatsAppSent(wamid: string, activityId: string, replyToWamid?: string | null) {
+export async function recordWhatsAppSent(
+  wamid: string,
+  activityId: string,
+  replyToWamid?: string | null,
+  /** Le modèle envoyé, pour retrouver l'action d'un bouton tapé dessus. */
+  template?: string | null
+) {
   // Un envoi retenu par le mode dry_run/allowlist n'est jamais parti : la
   // bulle doit le dire, sinon on croit qu'un lead a reçu un message.
   const retenu = wamid.startsWith(DRY_RUN_PREFIX);
@@ -491,6 +514,7 @@ export async function recordWhatsAppSent(wamid: string, activityId: string, repl
       wamid,
       activityId,
       replyToWamid: replyToWamid ?? null,
+      template: template ?? null,
       ...(retenu ? { status: "failed", error: "Mode test : message journalisé, pas envoyé." } : {}),
     })
     .onConflictDoNothing();

@@ -159,7 +159,7 @@ export async function replyWhatsAppTemplateAction(
     subject: `WhatsApp envoyé (modèle ${template.name})`,
     content: rendu,
   });
-  await recordWhatsAppSent(r.id, activite.id);
+  await recordWhatsAppSent(r.id, activite.id, null, template.name);
   await updateLead(leadId, { lastContactedAt: new Date() });
   // Un marketing envoyé à la main compte aussi dans « 1 par 24 h ».
   const categorie = await categorieDuModele(template.name, template.language);
@@ -347,6 +347,24 @@ export async function updateProfileAction(formData: FormData) {
 
   const r = await updateWhatsAppProfile({ about, description, address, email, websites, vertical, profilePictureHandle });
   if (!r.ok) return r;
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+/** Ce qu'un bouton de modèle déclenche (Paramètres → WhatsApp → Modèles). Tout vide = l'action est retirée. */
+export async function saveButtonActionAction(input: {
+  template: string;
+  buttonText: string;
+  tagId: string | null;
+  replyText: string | null;
+  callSlot: string | null;
+  optOut: boolean;
+}) {
+  await requireUser();
+  if (!/^[a-z0-9_]+$/.test(input.template) || !input.buttonText.trim()) return { ok: false as const, error: "Bouton inconnu." };
+  if (input.callSlot && !["now", "evening", "tomorrow"].includes(input.callSlot)) return { ok: false as const, error: "Créneau inconnu." };
+  const { saveButtonAction } = await import("@/lib/whatsapp-button-actions");
+  await saveButtonAction({ ...input, buttonText: input.buttonText.trim() });
   revalidatePath("/settings");
   return { ok: true as const };
 }

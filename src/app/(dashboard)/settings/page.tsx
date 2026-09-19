@@ -1,4 +1,4 @@
-import { getAllowedEmails, getAccountsOutsideAllowlist, getEmailTemplates, getWpConnectionPublic, getEmailBranding } from "@/lib/queries";
+import { getAllowedEmails, getAccountsOutsideAllowlist, getEmailTemplates, getWpConnectionPublic, getEmailBranding, getTags } from "@/lib/queries";
 import { currentActor } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { EmailTemplatesManager } from "@/components/settings/email-templates-manager";
@@ -9,6 +9,7 @@ import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-t
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
 import { getWhatsAppNumber, getWhatsAppProfile, listWhatsAppTemplates, sendMode, allowlist } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
+import { listButtonActions } from "@/lib/whatsapp-button-actions";
 import { getQuickReplies } from "@/lib/whatsapp-inbox";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export default async function SettingsPage({
   const outsideAccounts = current === "team" ? await getAccountsOutsideAllowlist() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
   // WhatsApp : le numéro et les modèles viennent de Meta, l'interrupteur de la base.
-  const [waNumero, waTemplates, waSettings, waQuick, waProfil] =
+  const [waNumero, waTemplates, waSettings, waQuick, waProfil, waActions, waTags] =
     current === "whatsapp"
       ? await Promise.all([
           getWhatsAppNumber(),
@@ -46,8 +47,10 @@ export default async function SettingsPage({
           getWhatsAppSettings(),
           getQuickReplies(),
           getWhatsAppProfile(),
+          listButtonActions(),
+          getTags(),
         ])
-      : [null, [], null, [], null];
+      : [null, [], null, [], null, [], []];
 
   return (
     <>
@@ -149,6 +152,15 @@ export default async function SettingsPage({
               profil={waProfil}
               envoi={{ mode: sendMode(), allowlist: allowlist() }}
               templates={waTemplates}
+              buttonActions={waActions.map((a) => ({
+                template: a.template,
+                buttonText: a.buttonText,
+                tagId: a.tagId,
+                replyText: a.replyText,
+                callSlot: a.callSlot,
+                optOut: a.optOut,
+              }))}
+              tags={waTags.map((t) => ({ id: t.id, name: t.name }))}
               aiReplyEnabled={waSettings.aiReplyEnabled}
               quickReplies={waQuick.map((q) => ({ id: q.id, shortcut: q.shortcut, text: q.text }))}
               autoReplies={{

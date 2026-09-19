@@ -1232,6 +1232,9 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
   activityId: uuid("activity_id")
     .notNull()
     .references(() => activities.id, { onDelete: "cascade" }),
+  // Le nom du modèle envoyé (0143) : un bouton tapé cite ce wamid, et c'est
+  // par là qu'on retrouve l'action à faire.
+  template: text("template"),
   status: text("status").notNull().default("sent"), // sent | delivered | read | failed | received
   error: text("error"),
   replyToWamid: text("reply_to_wamid"), // le message cité, dans un sens ou dans l'autre
@@ -1241,6 +1244,19 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
 });
 
 // Les réponses rapides de la page Messages : « /prix » → un texte prêt.
+// Ce qu'un tap sur un bouton de modèle déclenche dans le CRM (0143).
+export const whatsappButtonActions = pgTable("whatsapp_button_actions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  template: text("template").notNull(),
+  buttonText: text("button_text").notNull(),
+  tagId: uuid("tag_id").references(() => tags.id, { onDelete: "set null" }),
+  replyText: text("reply_text"),
+  // now | evening | tomorrow
+  callSlot: text("call_slot"),
+  optOut: boolean("opt_out").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const whatsappQuickReplies = pgTable("whatsapp_quick_replies", {
   id: uuid("id").primaryKey().defaultRandom(),
   shortcut: text("shortcut").notNull().unique(),
