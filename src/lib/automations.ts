@@ -186,6 +186,7 @@ export async function processDueAutomations(): Promise<{
     if (status === "sent") report.sent++;
     else if (status === "failed") report.failed++;
     else if (status === "pending") report.postponed++;
+    else if (status === "cancelled") report.cancelled++;
     else report.skipped++;
   }
 
