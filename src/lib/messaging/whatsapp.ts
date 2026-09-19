@@ -34,9 +34,43 @@ function normaliser(brut: string): string {
   return chiffres;
 }
 
+// ── Mode d'envoi ──────────────────────────────────────────────────────
+// `dry_run` : rien ne part, le corps exact est journalisé. `allowlist` : seuls
+// les numéros de WHATSAPP_TEST_ALLOWLIST reçoivent, les autres sont traités en
+// dry_run. `live` : tout part. Sans variable : live en production (ne jamais
+// couper la prod en silence), dry_run partout ailleurs — le dev local écrit
+// dans la base de PROD et ne doit pas pouvoir écrire à un vrai lead.
+export type SendMode = "dry_run" | "allowlist" | "live";
+
+export function sendMode(): SendMode {
+  const m = process.env.WHATSAPP_SEND_MODE;
+  if (m === "dry_run" || m === "allowlist" || m === "live") return m;
+  return process.env.NODE_ENV === "production" ? "live" : "dry_run";
+}
+
+export function allowlist(): string[] {
+  return (process.env.WHATSAPP_TEST_ALLOWLIST ?? "")
+    .split(/[,\s]+/)
+    .map((n) => n.replace(/\D/g, ""))
+    .filter((n) => n.length >= 8)
+    .map((n) => (n.length === 8 ? `216${n}` : n));
+}
+
+/** Un identifiant de message qui n'existe pas chez Meta : la bulle le dira. */
+export const DRY_RUN_PREFIX = "dryrun-";
+
+function retenu(corps: Record<string, unknown>): WhatsAppResult {
+  console.info(`[whatsapp ${sendMode()}] retenu, non envoyé :`, JSON.stringify(corps));
+  return { ok: true, id: `${DRY_RUN_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+}
+
 async function envoyer(corps: Record<string, unknown>): Promise<WhatsAppResult> {
   const c = config();
   if (!c) return { ok: false, error: "WhatsApp non configuré (WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent)." };
+
+  const mode = sendMode();
+  if (mode === "dry_run") return retenu(corps);
+  if (mode === "allowlist" && !allowlist().includes(String(corps.to ?? ""))) return retenu(corps);
 
   try {
     const res = await fetch(`${API}/${c.phoneId}/messages`, {

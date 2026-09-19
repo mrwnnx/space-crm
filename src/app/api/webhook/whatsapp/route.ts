@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   applyWhatsAppReaction,
   applyWhatsAppStatus,
@@ -86,9 +87,31 @@ function mediaDe(m: Entrant): MediaEntrant | null {
 // Rapatrier une vidéo de 16 Mo peut dépasser les 10 s par défaut.
 export const maxDuration = 60;
 
+/**
+ * Meta signe chaque événement : `X-Hub-Signature-256: sha256=HMAC(corps brut,
+ * app secret)`. Sans WHATSAPP_APP_SECRET on laisse passer (et on le dit dans
+ * le log) plutôt que de couper la prod ; avec, un corps non signé est refusé.
+ */
+function signatureValide(brut: string, entete: string | null): boolean {
+  const secret = process.env.WHATSAPP_APP_SECRET;
+  if (!secret) {
+    console.warn("[webhook whatsapp] WHATSAPP_APP_SECRET absent : signature non vérifiée");
+    return true;
+  }
+  if (!entete?.startsWith("sha256=")) return false;
+  const attendu = createHmac("sha256", secret).update(brut, "utf8").digest("hex");
+  const recu = entete.slice("sha256=".length);
+  if (recu.length !== attendu.length) return false;
+  return timingSafeEqual(Buffer.from(recu, "hex"), Buffer.from(attendu, "hex"));
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const corps = (await request.json()) as {
+    const brut = await request.text();
+    if (!signatureValide(brut, request.headers.get("x-hub-signature-256"))) {
+      return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
+    }
+    const corps = JSON.parse(brut) as {
       entry?: {
         changes?: {
           field?: string;

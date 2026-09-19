@@ -7,7 +7,7 @@ import { TeamManager } from "@/components/settings/team-manager";
 import { EmailDesignForm } from "@/components/settings/email-design-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
-import { getWhatsAppNumber, getWhatsAppProfile, listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
+import { getWhatsAppNumber, getWhatsAppProfile, listWhatsAppTemplates, sendMode, allowlist } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
 import { getQuickReplies } from "@/lib/whatsapp-inbox";
 
@@ -147,6 +147,7 @@ export default async function SettingsPage({
             <WhatsAppSettings
               numero={waNumero}
               profil={waProfil}
+              envoi={{ mode: sendMode(), allowlist: allowlist() }}
               templates={waTemplates}
               aiReplyEnabled={waSettings.aiReplyEnabled}
               quickReplies={waQuick.map((q) => ({ id: q.id, shortcut: q.shortcut, text: q.text }))}

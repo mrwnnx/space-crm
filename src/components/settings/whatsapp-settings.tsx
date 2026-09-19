@@ -50,6 +50,7 @@ export function WhatsAppSettings({
   aiReplyEnabled,
   quickReplies,
   autoReplies,
+  envoi,
 }: {
   numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string };
   profil: { ok: true; profil: WhatsAppProfile } | { ok: false; error: string };
@@ -57,10 +58,12 @@ export function WhatsAppSettings({
   aiReplyEnabled: boolean;
   quickReplies: QuickReply[];
   autoReplies: AutoReplies;
+  /** Mode d'envoi (variable d'environnement) et numéros de test. */
+  envoi: { mode: "dry_run" | "allowlist" | "live"; allowlist: string[] };
 }) {
   return (
     <div className="space-y-6">
-      <SectionNumero numero={numero} />
+      <SectionNumero numero={numero} envoi={envoi} />
       <SectionProfil profil={profil} nomAffiche={numero.ok ? numero.numero.nom : null} />
       <SectionAuto initial={autoReplies} />
       <SectionIA enabled={aiReplyEnabled} />
@@ -334,11 +337,33 @@ const QUALITE: Record<string, { label: string; cls: string }> = {
   UNKNOWN: { label: "Pas encore mesurée", cls: "bg-gray-50 text-gray-500" },
 };
 
-function SectionNumero({ numero }: { numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string } }) {
+function SectionNumero({
+  numero,
+  envoi,
+}: {
+  numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string };
+  envoi: { mode: "dry_run" | "allowlist" | "live"; allowlist: string[] };
+}) {
+  // Le mode se règle sur Vercel (WHATSAPP_SEND_MODE), pas ici : on l'affiche
+  // pour qu'un « rien ne part » ne soit jamais un mystère.
+  const modeLigne =
+    envoi.mode === "live" ? (
+      <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">Tout part</span>
+    ) : envoi.mode === "allowlist" ? (
+      <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+        Test — seuls {envoi.allowlist.length} numéro{envoi.allowlist.length > 1 ? "s" : ""} reçoivent
+        {envoi.allowlist.length ? ` (+${envoi.allowlist.join(", +")})` : ""}
+      </span>
+    ) : (
+      <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">
+        Rien ne part — tout est journalisé
+      </span>
+    );
   if (!numero.ok) {
     return (
       <Section title="Le numéro">
         <p className="text-xs text-red-600">{numero.error}</p>
+        <p className="mt-2 text-xs">Mode d&apos;envoi : {modeLigne}</p>
       </Section>
     );
   }
@@ -373,6 +398,10 @@ function SectionNumero({ numero }: { numero: { ok: true; numero: WhatsAppNumber 
         <div>
           <dt className="text-muted-foreground">Débit</dt>
           <dd className="text-foreground">{n.debit ?? "?"}</dd>
+        </div>
+        <div className="col-span-2 sm:col-span-3">
+          <dt className="text-muted-foreground">Mode d&apos;envoi</dt>
+          <dd>{modeLigne}</dd>
         </div>
       </dl>
       <p className="mt-3 text-[10.5px] text-muted-foreground/70">

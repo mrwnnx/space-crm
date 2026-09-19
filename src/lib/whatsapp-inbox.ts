@@ -11,6 +11,7 @@ import {
   whatsappQuickReplies,
 } from "@/db/schema";
 import { libelleMedia, rapatrierMediaMeta, type MediaKind, type Stocke } from "@/lib/messaging/whatsapp-media";
+import { DRY_RUN_PREFIX } from "@/lib/messaging/whatsapp";
 import { asc, and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getOrCreateContactForLead, inheritContactTags } from "@/lib/queries";
 
@@ -481,9 +482,17 @@ export async function ingestInboundWhatsApp(input: {
 
 /** À appeler juste après un envoi réussi : lie le wamid de Meta à la bulle. */
 export async function recordWhatsAppSent(wamid: string, activityId: string, replyToWamid?: string | null) {
+  // Un envoi retenu par le mode dry_run/allowlist n'est jamais parti : la
+  // bulle doit le dire, sinon on croit qu'un lead a reçu un message.
+  const retenu = wamid.startsWith(DRY_RUN_PREFIX);
   await db
     .insert(whatsappMessages)
-    .values({ wamid, activityId, replyToWamid: replyToWamid ?? null })
+    .values({
+      wamid,
+      activityId,
+      replyToWamid: replyToWamid ?? null,
+      ...(retenu ? { status: "failed", error: "Mode test : message journalisé, pas envoyé." } : {}),
+    })
     .onConflictDoNothing();
 }
 
