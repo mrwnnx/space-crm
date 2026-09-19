@@ -3320,6 +3320,7 @@ export async function getAutomationsByBootcamp(bootcampId: string) {
       whatsappVariables: automations.whatsappVariables,
       delayMinutes: automations.delayMinutes,
       active: automations.active,
+      pausedReason: automations.pausedReason,
       templateName: emailTemplates.name,
       templateSubject: emailTemplates.subject,
     })

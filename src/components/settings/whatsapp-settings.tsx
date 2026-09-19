@@ -127,6 +127,7 @@ function SectionAuto({ initial }: { initial: AutoReplies }) {
               className={cn(INPUT, "mt-2 resize-y")}
             />
           )}
+          {v.welcomeEnabled && <ConseilSortieHumaine texte={v.welcomeText} />}
         </div>
 
         <div className="rounded-lg border border-border p-3">
@@ -152,6 +153,7 @@ function SectionAuto({ initial }: { initial: AutoReplies }) {
                 placeholder={"Merci pour ton message ! L'équipe est absente pour le moment — on te répond dès l'ouverture."}
                 className={cn(INPUT, "resize-y")}
               />
+              <ConseilSortieHumaine texte={v.awayText} />
               <div className="flex flex-wrap items-center gap-3 text-xs">
                 <span className="text-muted-foreground">Ouvert de</span>
                 <select
@@ -640,6 +642,20 @@ function LigneModele({ t }: { t: WhatsAppTemplate }) {
       {t.rejectedReason && <p className="mt-1 text-[10.5px] text-red-600">Motif de Meta : {t.rejectedReason}</p>}
       {erreur && <p className="mt-1 text-[10.5px] text-red-600">{erreur}</p>}
     </li>
+  );
+}
+
+// Règle Meta : toute réponse automatique doit offrir une sortie vers un
+// humain (téléphone, email, ou « écrivez humain »). Un conseil, pas un
+// blocage : le texte reste à Marwen.
+function ConseilSortieHumaine({ texte }: { texte: string }) {
+  const ok = /humain|appel|t[ée]l[ée]phone|\+216|@|email|e-mail|mail/i.test(texte);
+  if (ok) return null;
+  return (
+    <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+      Meta exige qu&apos;un message automatique dise comment joindre un humain : ajoute un numéro,
+      un email, ou « répondez <strong className="font-medium">humain</strong> pour parler à l&apos;équipe ».
+    </p>
   );
 }
 

@@ -28,9 +28,10 @@ export const ALLOWED_LEAD_FIELDS = [
   "organizationName",
 ] as const;
 
-// Champs étendus hors whitelist lead : vont sur le contact (whatsapp, age)
-// ou sur le lead avec coercition (intendedPlan dérivé d'un texte, promoCode).
-export const CONTACT_EXTRA_FIELDS = ["whatsapp", "age"] as const;
+// Champs étendus hors whitelist lead : vont sur le contact (whatsapp, age,
+// whatsappConsent) ou sur le lead avec coercition (intendedPlan dérivé d'un
+// texte, promoCode).
+export const CONTACT_EXTRA_FIELDS = ["whatsapp", "age", "whatsappConsent"] as const;
 export const LEAD_EXTRA_FIELDS = ["intendedPlan", "promoCode", "motivation", "wantsCall"] as const;
 
 /** Colonnes proposables dans un éditeur de mapping. */
@@ -66,6 +67,16 @@ export function deriveYesNo(raw?: string): boolean | null {
   if (/^(oui|yes|o|y)\b/.test(s) || s.startsWith("نعم") || s.startsWith("إيه") || s.startsWith("ايه")) return true;
   if (/^(non|no|n)\b/.test(s) || s.startsWith("لا")) return false;
   return null;
+}
+
+// Une case à cocher Elementor envoie le LIBELLÉ de l'option quand elle est
+// cochée, et rien (ou vide) sinon ; un champ « acceptation » envoie « on ».
+// Toute valeur non vide vaut donc consentement, sauf un non explicite.
+export function deriveConsent(raw?: string): boolean {
+  if (!raw) return false;
+  const s = raw.trim().toLowerCase();
+  if (!s) return false;
+  return !/^(non|no|off|0|false|لا)$/.test(s);
 }
 
 export type IngestResult =
@@ -128,9 +139,27 @@ export async function ingestSubmission(
   });
 
   // 6.5 Enrichit un contact EXISTANT si whatsapp/age étaient vides (re-soumission)
-  const contactPatch: { whatsapp?: string; age?: number } = {};
+  const contactPatch: {
+    whatsapp?: string;
+    age?: number;
+    whatsappConsentAt?: Date;
+    whatsappConsentSource?: string;
+    whatsappConsentText?: string;
+    whatsappUnsubscribedAt?: null;
+  } = {};
   if (whatsapp && !contact.whatsapp) contactPatch.whatsapp = whatsapp;
   if (age !== null && contact.age === null) contactPatch.age = age;
+  // Consentement WhatsApp : la première preuve est gardée, jamais écrasée —
+  // sauf après un STOP, où une case cochée à nouveau vaut nouveau consentement.
+  if (
+    deriveConsent(extra.whatsappConsent) &&
+    (!contact.whatsappConsentAt || contact.whatsappUnsubscribedAt)
+  ) {
+    contactPatch.whatsappConsentAt = new Date();
+    contactPatch.whatsappConsentSource = formSource.name;
+    contactPatch.whatsappConsentText = extra.whatsappConsent.trim();
+    contactPatch.whatsappUnsubscribedAt = null;
+  }
   if (Object.keys(contactPatch).length > 0) {
     await db.update(contacts).set(contactPatch).where(eq(contacts.id, contact.id));
   }

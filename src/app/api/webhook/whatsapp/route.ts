@@ -91,7 +91,13 @@ export async function POST(request: NextRequest) {
     const corps = (await request.json()) as {
       entry?: {
         changes?: {
+          field?: string;
           value?: {
+            // Champ `message_template_status_update` (à abonner dans l'app Meta).
+            event?: string; // APPROVED | REJECTED | PAUSED | DISABLED | PENDING_DELETION…
+            message_template_name?: string;
+            message_template_language?: string;
+            reason?: string | null;
             messages?: Entrant[];
             statuses?: {
               id?: string;
@@ -111,6 +117,23 @@ export async function POST(request: NextRequest) {
     for (const entry of corps.entry ?? []) {
       for (const change of entry.changes ?? []) {
         const v = change.value;
+
+        // Un modèle mis en pause, désactivé ou refusé par Meta : les règles qui
+        // l'envoient s'arrêtent (cf. règles Meta — 3 h, 6 h, puis définitif).
+        if (change.field === "message_template_status_update") {
+          const ev = v?.event ?? "";
+          if (["PAUSED", "DISABLED", "REJECTED"].includes(ev) && v?.message_template_name) {
+            const { pauseAutomationsForTemplate } = await import("@/lib/automations");
+            const quand = new Date().toLocaleString("fr-FR");
+            const motif = v.reason && v.reason !== "NONE" ? ` (${v.reason})` : "";
+            await pauseAutomationsForTemplate(
+              v.message_template_name,
+              v.message_template_language ?? "fr",
+              `Arrêtée le ${quand} : Meta a passé le modèle « ${v.message_template_name} » en ${ev}${motif}.`
+            );
+          }
+          continue;
+        }
 
         // Les accusés : envoyé, livré, lu, échec — un par message, par wamid.
         for (const st of v?.statuses ?? []) {

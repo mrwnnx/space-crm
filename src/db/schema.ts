@@ -233,6 +233,16 @@ export const contacts = pgTable("contacts", {
   // absence temporaire n'entre pas ici : on ne bannit pas quelqu'un en congé.
   bouncedAt: timestamp("bounced_at"),
   bounceReason: text("bounce_reason"),
+  // Consentement WhatsApp : Meta exige la preuve (quand, où, quel texte)
+  // avant tout premier message. Posé une fois, jamais écrasé.
+  whatsappConsentAt: timestamp("whatsapp_consent_at"),
+  whatsappConsentSource: text("whatsapp_consent_source"), // nom du formulaire
+  whatsappConsentText: text("whatsapp_consent_text"), // libellé de la case cochée
+  // A répondu STOP : plus aucun modèle automatique ; un START ou une nouvelle
+  // case cochée le lève.
+  whatsappUnsubscribedAt: timestamp("whatsapp_unsubscribed_at"),
+  // Meta refuse le marketing vers cette personne (131049) : on attend 24 h.
+  whatsappMarketingLimitedUntil: timestamp("whatsapp_marketing_limited_until"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1105,6 +1115,9 @@ export const automations = pgTable("automations", {
   // ~15 min : la précision est au quart d'heure, pas à la minute.
   delayMinutes: integer("delay_minutes").notNull().default(0),
   active: boolean("active").notNull().default(true),
+  // Posé quand la règle s'est arrêtée TOUTE SEULE (Meta a mis son modèle en
+  // pause) ; effacé quand quelqu'un la réactive.
+  pausedReason: text("paused_reason"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -30,6 +30,7 @@ const MAPPABLE = [
   { value: "organizationName", label: "Organisation" },
   { value: "motivation", label: "Motivation (texte libre)" },
   { value: "wantsCall", label: "Souhaite être rappelé (oui/non)" },
+  { value: "whatsappConsent", label: "Consentement WhatsApp (case cochée)" },
 ];
 
 type LinkedSource = {

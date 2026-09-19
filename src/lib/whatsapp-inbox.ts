@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db";
 import {
   activities,
+  contacts,
   leads,
   leadSources,
   whatsappConversations,
@@ -352,7 +353,7 @@ export async function ingestInboundWhatsApp(input: {
   let lead = await db.query.leads.findFirst({
     where: ilike(leads.mobileNo, `%${fin}%`),
     orderBy: [desc(leads.createdAt)],
-    columns: { id: true },
+    columns: { id: true, contactId: true, mobileNo: true },
   });
   let leadCreated = false;
 
@@ -378,7 +379,7 @@ export async function ingestInboundWhatsApp(input: {
         stageEnteredAt: new Date(),
         lastContactedAt: new Date(),
       })
-      .returning({ id: leads.id });
+      .returning({ id: leads.id, contactId: leads.contactId, mobileNo: leads.mobileNo });
     // Les tags suivent la personne : un numéro connu par ailleurs garde les siens.
     await inheritContactTags(created.id, contact.id);
     lead = created;
@@ -455,6 +456,17 @@ export async function ingestInboundWhatsApp(input: {
     .set({ archivedAt: null })
     .where(eq(whatsappConversations.leadId, lead.id));
 
+  // STOP / START : l'opt-out passe AVANT toute réponse automatique — la
+  // confirmation remplace la bienvenue ou l'absence. Import dynamique : ce
+  // module-là nous importe aussi.
+  const { motCleOptOut } = await import("@/lib/whatsapp-consent");
+  const motCle = input.media ? null : motCleOptOut(input.text);
+  if (motCle && lead.mobileNo) {
+    const { appliquerOptOut } = await import("@/lib/whatsapp-optout");
+    await appliquerOptOut({ id: lead.id, contactId: lead.contactId, mobileNo: lead.mobileNo }, motCle, input.text);
+    return { leadId: lead.id, leadCreated };
+  }
+
   // Les réponses automatiques à texte fixe (bienvenue, absence) — après que le
   // message est rangé, jamais avant : un raté ne perd pas le message. Import
   // dynamique : ce module-là nous importe aussi.
@@ -516,6 +528,7 @@ const ERREURS: Record<number, string> = {
   131026: "Ce numéro n'est pas sur WhatsApp, ou a bloqué le numéro de l'école.",
   131047: "Plus de 24 h sans réponse de cette personne : seul un modèle approuvé peut partir.",
   131049: "Meta a limité les messages marketing vers cette personne pour l'instant.",
+  132015: "Meta a mis ce modèle en pause (retours négatifs) : le message n'est pas parti.",
   131053: "Le fichier joint n'a pas pu être envoyé.",
   130472: "Cette personne fait partie d'un test de Meta : le message n'a pas été livré.",
   131042: "Problème de paiement sur le compte WhatsApp de l'école.",
@@ -548,6 +561,25 @@ export async function applyWhatsAppStatus(input: {
     .update(whatsappMessages)
     .set({ status: statut, error, updatedAt: new Date() })
     .where(eq(whatsappMessages.wamid, input.wamid));
+
+  // 131049 : Meta plafonne le marketing vers CETTE personne. Réessayer avant
+  // 24 h déclenche un blocage de 24 h — on pose la date et le garde-fou
+  // d'envoi la lit (whatsapp-consent.ts).
+  if (statut === "failed" && e?.code === 131049) {
+    const act = await db.query.activities.findFirst({
+      where: eq(activities.id, existant.activityId),
+      columns: { referenceId: true },
+    });
+    const lead = act?.referenceId
+      ? await db.query.leads.findFirst({ where: eq(leads.id, act.referenceId), columns: { contactId: true } })
+      : null;
+    if (lead?.contactId) {
+      await db
+        .update(contacts)
+        .set({ whatsappMarketingLimitedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000) })
+        .where(eq(contacts.id, lead.contactId));
+    }
+  }
 }
 
 /** Rattache un média déjà stocké (envoi depuis le CRM) à sa bulle. */

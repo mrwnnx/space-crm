@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { createActivity, getDefaultLeadStatus, moveLeadToStage, updateLead } from "@/lib/queries";
+import { createActivity, getDefaultLeadStatus, getLeadById, moveLeadToStage, updateLead } from "@/lib/queries";
+import { whatsAppConsentCheck } from "@/lib/whatsapp-consent";
 import {
   countTemplateVariables,
   createWhatsAppTemplate,
@@ -132,6 +133,11 @@ export async function replyWhatsAppTemplateAction(
   variables: string[]
 ) {
   await requireUser();
+  // Règle Meta : pas de marketing sans consentement tracé.
+  const lead = await getLeadById(leadId);
+  const garde = await whatsAppConsentCheck(lead?.contact, template.name, template.language);
+  if (!garde.ok) return { ok: false as const, error: garde.reason };
+
   const r = await sendWhatsAppTemplate({
     to,
     template: template.name,

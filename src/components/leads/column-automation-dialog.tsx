@@ -23,6 +23,8 @@ export type ColumnAutomation = {
   whatsappVariables: unknown;
   delayMinutes: number;
   active: boolean;
+  /** Posé quand Meta a arrêté la règle (modèle en pause) ; nul sinon. */
+  pausedReason?: string | null;
   /** Nuls sur une règle WhatsApp (jointure externe). */
   templateName: string | null;
   templateSubject: string | null;
@@ -295,6 +297,13 @@ export function ColumnAutomationDialog({
           />
           Règle active
         </label>
+        {automation?.pausedReason && !automation.active && (
+          // Arrêt décidé par Meta, pas par l'équipe : dire pourquoi avant
+          // qu'on ne réactive à l'aveugle.
+          <p className="mb-4 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700">
+            {automation.pausedReason} Vérifie le modèle chez Meta avant de réactiver.
+          </p>
+        )}
 
         {error && (
           <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400">

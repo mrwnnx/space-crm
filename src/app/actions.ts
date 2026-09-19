@@ -345,7 +345,8 @@ export async function saveColumnAutomationAction(
   );
 
   if (existing) {
-    await updateAutomation(existing.id, champs);
+    // Réactiver une règle arrêtée par Meta efface le motif de l'arrêt.
+    await updateAutomation(existing.id, { ...champs, ...(active ? { pausedReason: null } : {}) });
   } else {
     const { currentActor } = await import("@/lib/auth");
     await createAutomation({
@@ -567,6 +568,34 @@ export async function updateLeadContactFieldAction(
     await updateContactQuery(contactId, { whatsapp: value.trim() || null });
   }
   revalidatePath(`/leads/${leadId}`);
+}
+
+/**
+ * Consentement WhatsApp donné de vive voix (pendant l'appel). Meta accepte
+ * l'opt-in oral s'il est tracé : la date, et QUI l'a recueilli. Une trace dans
+ * le fil aussi, pour que ça se lise sans ouvrir la base.
+ */
+export async function grantWhatsAppConsentByPhoneAction(leadId: string, contactId: string) {
+  await requireUser();
+  const { currentActor } = await import("@/lib/auth");
+  const auteur = (await currentActor()) ?? "équipe";
+  const now = new Date();
+  await updateContactQuery(contactId, {
+    whatsappConsentAt: now,
+    whatsappConsentSource: `Téléphone — ${auteur}`,
+    whatsappConsentText: "A accepté de vive voix de recevoir les messages WhatsApp de The Space Academy",
+    whatsappUnsubscribedAt: null,
+  });
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "note",
+    subject: "Consentement WhatsApp donné par téléphone",
+    content: `Recueilli par ${auteur} le ${now.toLocaleDateString("fr-FR")}.`,
+    createdBy: auteur,
+  });
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true as const };
 }
 
 export async function updateLeadStatusAction(

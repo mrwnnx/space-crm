@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateLeadFieldAction, updateLeadContactFieldAction } from "@/app/actions";
+import {
+  updateLeadFieldAction,
+  updateLeadContactFieldAction,
+  grantWhatsAppConsentByPhoneAction,
+} from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { OfferDialog } from "@/components/leads/offer-dialog";
 import type { LeadSource, Bootcamp } from "@/db/schema";
@@ -25,6 +29,9 @@ type LeadData = {
 type ContactData = {
   whatsapp: string | null;
   age: number | null;
+  whatsappConsentAt?: Date | null;
+  whatsappConsentSource?: string | null;
+  whatsappUnsubscribedAt?: Date | null;
   unsubscribedAt?: Date | null;
   bouncedAt?: Date | null;
   bounceReason?: string | null;
@@ -59,6 +66,7 @@ export function LeadSidePanel({
 }) {
   const router = useRouter();
   const [editingOffer, setEditingOffer] = useState(false);
+  const [consentPending, startConsent] = useTransition();
   return (
     <div className="flex flex-col gap-0.5 p-4">
       {(lead.qualification || lead.nextFollowUpAt) && (
@@ -132,6 +140,39 @@ export function LeadSidePanel({
             value={contact.whatsapp}
             onSave={(f, v) => updateLeadContactFieldAction(leadId, contactId, f, v)}
           />
+          {contact.whatsappUnsubscribedAt ? (
+            <p className="mb-1 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700">
+              A répondu STOP le {new Date(contact.whatsappUnsubscribedAt).toLocaleDateString("fr-FR")} —
+              plus aucun message automatique WhatsApp (un START ou une nouvelle case cochée le lève)
+            </p>
+          ) : contact.whatsappConsentAt ? (
+            // Preuve exigée par Meta avant tout premier message : lecture
+            // seule, c'est la personne qui l'a donnée, pas nous.
+            <p className="mb-1 rounded-md bg-green-50 px-2 py-1 text-xs text-green-700">
+              A accepté d'être contacté sur WhatsApp le{" "}
+              {new Date(contact.whatsappConsentAt).toLocaleDateString("fr-FR")}
+              {contact.whatsappConsentSource ? ` (${contact.whatsappConsentSource})` : ""}
+            </p>
+          ) : (
+            <div className="mb-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+              Pas de consentement WhatsApp — seul un message lié à sa demande peut partir.{" "}
+              {/* L'opt-in oral compte pour Meta s'il est tracé : la date et
+                  l'auteur sont posés par l'action, pas par ce bouton. */}
+              <button
+                type="button"
+                disabled={consentPending}
+                onClick={() =>
+                  startConsent(async () => {
+                    await grantWhatsAppConsentByPhoneAction(leadId, contactId);
+                    router.refresh();
+                  })
+                }
+                className="font-medium text-primary underline disabled:opacity-50"
+              >
+                {consentPending ? "Enregistrement…" : "Il a dit oui par téléphone"}
+              </button>
+            </div>
+          )}
           <EditableField
             field="age"
             label="Âge"

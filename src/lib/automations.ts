@@ -86,6 +86,33 @@ export async function runStatusAutomations(
 }
 
 /**
+ * Meta a mis un modèle en pause, l'a désactivé ou refusé (webhook
+ * `message_template_status_update`) : les règles qui l'envoient s'arrêtent
+ * d'elles-mêmes — l'API refuserait de toute façon, et insister nourrit la
+ * mauvaise note. La raison reste visible dans le dialogue de la règle jusqu'à
+ * ce que quelqu'un la réactive.
+ */
+export async function pauseAutomationsForTemplate(
+  template: string,
+  language: string,
+  reason: string
+): Promise<number> {
+  const rows = await db
+    .update(automations)
+    .set({ active: false, pausedReason: reason })
+    .where(
+      and(
+        eq(automations.channel, "whatsapp"),
+        eq(automations.whatsappTemplate, template),
+        eq(automations.whatsappLanguage, language),
+        eq(automations.active, true)
+      )
+    )
+    .returning({ id: automations.id });
+  return rows.length;
+}
+
+/**
  * Vide la file : envoie les automatisations dont l'échéance est passée.
  *
  * ⚠️ Les garde-fous sont évalués À L'ÉCHÉANCE, pas au moment du déclenchement :
@@ -211,6 +238,11 @@ async function executeRule(
   if (rule.channel === "whatsapp") {
     if (!rule.whatsappTemplate) return log("failed", "Aucun modèle WhatsApp sur la règle");
     if (!lead.mobileNo) return log("skipped", "Aucun numéro de téléphone sur le lead");
+
+    // Règle Meta : pas de marketing sans consentement tracé.
+    const { whatsAppConsentCheck } = await import("@/lib/whatsapp-consent");
+    const garde = await whatsAppConsentCheck(lead.contact, rule.whatsappTemplate, rule.whatsappLanguage);
+    if (!garde.ok) return log("skipped", garde.reason);
 
     // Le plafond est celui du COMPTE : WhatsApp et email s'y partagent la
     // journée, comme les campagnes.

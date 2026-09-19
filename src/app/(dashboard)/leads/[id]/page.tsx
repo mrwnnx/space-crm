@@ -288,6 +288,9 @@ export default async function LeadDetailPage({
             contact={{
               whatsapp: lead.contact?.whatsapp ?? null,
               age: lead.contact?.age ?? null,
+              whatsappConsentAt: lead.contact?.whatsappConsentAt ?? null,
+              whatsappConsentSource: lead.contact?.whatsappConsentSource ?? null,
+              whatsappUnsubscribedAt: lead.contact?.whatsappUnsubscribedAt ?? null,
               unsubscribedAt: lead.contact?.unsubscribedAt ?? null,
               bouncedAt: lead.contact?.bouncedAt ?? null,
               bounceReason: lead.contact?.bounceReason ?? null,
