@@ -17,6 +17,8 @@ export type AudienceResolution = {
     matched: number;
     /** écartés : la personne porte un tag « à ne pas cibler » */
     excluded: number;
+    /** écartés : pas de numéro de téléphone (option « seulement avec numéro ») */
+    noPhone: number;
     /** écartés : désabonnés */
     unsubscribed: number;
     /** écartés : adresse invalide (rebond dur constaté) */
@@ -51,14 +53,17 @@ const normalize = (e: string) => e.trim().toLowerCase();
 export async function resolveCampaignAudience(input: {
   tagIds?: string[];
   excludeTagIds?: string[];
+  requirePhone?: boolean;
   emails?: string[];
 }): Promise<AudienceResolution> {
   const tagIds = input.tagIds ?? [];
   const excludeTagIds = input.excludeTagIds ?? [];
+  const requirePhone = input.requirePhone ?? false;
   const rawEmails = (input.emails ?? []).map(normalize).filter(Boolean);
 
   let matched = 0;
   let excluded = 0;
+  let noPhone = 0;
   let noEmail = 0;
   let unsubscribed = 0;
   let bounced = 0;
@@ -75,6 +80,7 @@ export async function resolveCampaignAudience(input: {
         contactId: contacts.id,
         email: contacts.email,
         fullName: contacts.fullName,
+        mobileNo: contacts.mobileNo,
         unsubscribeToken: contacts.unsubscribeToken,
         unsubscribedAt: contacts.unsubscribedAt,
         bouncedAt: contacts.bouncedAt,
@@ -104,6 +110,13 @@ export async function resolveCampaignAudience(input: {
     for (const r of rows) {
       if (r.contactId && excludedContacts.has(r.contactId)) {
         excluded++;
+        continue;
+      }
+      // Le numéro est lu sur la PERSONNE (contacts.mobile_no) — l'import y
+      // recopie celui des fiches. Les adresses saisies à la main, plus bas, ne
+      // passent pas par ce filtre.
+      if (requirePhone && !r.mobileNo?.trim()) {
+        noPhone++;
         continue;
       }
       if (!r.email || !r.email.trim()) {
@@ -195,6 +208,7 @@ export async function resolveCampaignAudience(input: {
     stats: {
       matched,
       excluded,
+      noPhone,
       unsubscribed,
       bounced,
       noEmail,

@@ -44,6 +44,7 @@ export async function materializeRecipients(campaignId: string): Promise<number>
   const { recipients } = await resolveCampaignAudience({
     tagIds: (campaign.targetTagIds as string[]) ?? [],
     excludeTagIds: (campaign.excludeTagIds as string[]) ?? [],
+    requirePhone: campaign.requirePhone,
     emails: (campaign.targetEmails as string[]) ?? [],
   });
   if (recipients.length === 0) return 0;

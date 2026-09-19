@@ -98,6 +98,7 @@ export async function updateCampaign(
     content: string;
     targetTagIds: string[];
     excludeTagIds: string[];
+    requirePhone: boolean;
     targetEmails: string[];
     internalNote: string | null;
     scheduledAt: Date | null;

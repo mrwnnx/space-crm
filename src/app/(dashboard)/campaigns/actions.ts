@@ -81,13 +81,15 @@ export async function saveCampaignContentAction(
 export async function previewAudienceAction(
   tagIds: string[],
   emails: string[],
-  excludeTagIds: string[] = []
+  excludeTagIds: string[] = [],
+  requirePhone = false
 ) {
   await requireUser();
   const { resolveCampaignAudience } = await import("@/lib/campaigns/audience");
   const { stats, ignoredEmails } = await resolveCampaignAudience({
     tagIds,
     excludeTagIds,
+    requirePhone,
     emails,
   });
   return { stats, ignoredEmails };
@@ -97,7 +99,8 @@ export async function saveCampaignTargetAction(
   id: string,
   tagIds: string[],
   emails: string[],
-  excludeTagIds: string[] = []
+  excludeTagIds: string[] = [],
+  requirePhone = false
 ) {
   await requireUser();
   const existing = await getCampaignById(id);
@@ -109,7 +112,12 @@ export async function saveCampaignTargetAction(
   // Un tag ne peut pas être à la fois ciblé et exclu : l'écran l'empêche, la
   // base le garantit.
   const exclude = excludeTagIds.filter((t) => !tagIds.includes(t));
-  await updateCampaign(id, { targetTagIds: tagIds, excludeTagIds: exclude, targetEmails: emails });
+  await updateCampaign(id, {
+    targetTagIds: tagIds,
+    excludeTagIds: exclude,
+    requirePhone,
+    targetEmails: emails,
+  });
   revalidatePath(`/campaigns/${id}`);
   return { ok: true as const };
 }
@@ -213,6 +221,7 @@ export async function scheduleCampaignAction(
   const { stats } = await resolveCampaignAudience({
     tagIds: (existing.targetTagIds as string[]) ?? [],
     excludeTagIds: (existing.excludeTagIds as string[]) ?? [],
+    requirePhone: existing.requirePhone,
     emails: (existing.targetEmails as string[]) ?? [],
   });
   if (stats.total === 0) return { ok: false, error: "Aucun destinataire." };

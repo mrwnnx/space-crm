@@ -646,6 +646,8 @@ export const campaigns = pgTable("campaigns", {
   /** Tags à ne pas cibler : la personne qui en porte un (sur n'importe quelle
    *  fiche) est retirée, même si elle a aussi un tag ciblé. */
   excludeTagIds: jsonb("exclude_tag_ids").notNull().default([]),
+  /** Ne garder que les personnes qui ont un Mobile. */
+  requirePhone: boolean("require_phone").notNull().default(false),
   targetEmails: jsonb("target_emails").notNull().default([]),
   /** Note d'équipe, jamais envoyée. Reprise de Kit : savoir de quoi parle une
    *  campagne sans l'ouvrir. */

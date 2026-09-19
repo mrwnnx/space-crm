@@ -11,6 +11,7 @@ type Tag = { id: string; name: string; leadCount: number };
 type Stats = {
   matched: number;
   excluded: number;
+  noPhone: number;
   unsubscribed: number;
   bounced: number;
   noEmail: number;
@@ -30,6 +31,7 @@ export function CampaignAudience({
   tags,
   initialTagIds,
   initialExcludeTagIds,
+  initialRequirePhone,
   initialEmails,
   readOnly,
 }: {
@@ -37,11 +39,13 @@ export function CampaignAudience({
   tags: Tag[];
   initialTagIds: string[];
   initialExcludeTagIds: string[];
+  initialRequirePhone: boolean;
   initialEmails: string[];
   readOnly: boolean;
 }) {
   const [tagIds, setTagIds] = useState<string[]>(initialTagIds);
   const [excludeIds, setExcludeIds] = useState<string[]>(initialExcludeTagIds);
+  const [requirePhone, setRequirePhone] = useState(initialRequirePhone);
   const [emailsRaw, setEmailsRaw] = useState(initialEmails.join("\n"));
   const [stats, setStats] = useState<Stats | null>(null);
   const [ignored, setIgnored] = useState<string[]>([]);
@@ -58,7 +62,7 @@ export function CampaignAudience({
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await previewAudienceAction(tagIds, parseEmails(emailsRaw), excludeIds);
+        const r = await previewAudienceAction(tagIds, parseEmails(emailsRaw), excludeIds, requirePhone);
         setStats(r.stats);
         setIgnored(r.ignoredEmails);
       } finally {
@@ -66,7 +70,7 @@ export function CampaignAudience({
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [tagIds, excludeIds, emailsRaw]);
+  }, [tagIds, excludeIds, requirePhone, emailsRaw]);
 
   useEffect(() => {
     if (saved) {
@@ -98,7 +102,8 @@ export function CampaignAudience({
         campaignId,
         tagIds,
         parseEmails(emailsRaw),
-        excludeIds
+        excludeIds,
+        requirePhone
       );
       if (r.ok) setSaved(true);
       else setError(r.error);
@@ -108,6 +113,7 @@ export function CampaignAudience({
   const excluded = stats
     ? [
         stats.excluded > 0 && `${stats.excluded} exclu${stats.excluded > 1 ? "s" : ""} par tag`,
+        stats.noPhone > 0 && `${stats.noPhone} sans numéro`,
         stats.unsubscribed > 0 && `${stats.unsubscribed} désabonné${stats.unsubscribed > 1 ? "s" : ""}`,
         stats.bounced > 0 && `${stats.bounced} adresse${stats.bounced > 1 ? "s" : ""} invalide${stats.bounced > 1 ? "s" : ""}`,
         stats.noEmail > 0 && `${stats.noEmail} sans adresse`,
@@ -193,6 +199,17 @@ export function CampaignAudience({
           </p>
         )}
       </div>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+        <input
+          type="checkbox"
+          checked={requirePhone}
+          disabled={readOnly}
+          onChange={(e) => setRequirePhone(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        Seulement ceux qui ont un numéro de téléphone
+      </label>
 
       <div>
         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
