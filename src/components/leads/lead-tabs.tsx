@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { refreshLeadInsightAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { AskAssistantButton } from "@/components/assistant/ask-assistant-button";
 import type { Recommendation } from "@/lib/lead-recommendation";
@@ -19,6 +21,7 @@ type Insight = {
   intent: string;
   objection: string | null;
   recommendation: string | null;
+  createdAt?: Date | string | null;
 } | null;
 
 const INTENT: Record<string, { label: string; cls: string }> = {
@@ -40,6 +43,7 @@ const KIND: Record<TimelineEvent["kind"], { dot: string; ring: string }> = {
   stage: { dot: "bg-slate-400", ring: "ring-slate-100" },
   call: { dot: "bg-sky-500", ring: "ring-sky-100" },
   email: { dot: "bg-indigo-400", ring: "ring-indigo-100" },
+  whatsapp: { dot: "bg-green-500", ring: "ring-green-100" },
   engagement: { dot: "bg-emerald-500", ring: "ring-emerald-100" },
   payment: { dot: "bg-amber-500", ring: "ring-amber-100" },
   note: { dot: "bg-slate-300", ring: "ring-slate-100" },
@@ -56,7 +60,35 @@ function stamp(at: Date | string): string {
   });
 }
 
+/**
+ * À l'ouverture d'une fiche, l'IA relit le dossier si quelque chose a changé
+ * (gratuit sinon, borné à une fois par heure). Rendu : la carte se met à jour
+ * toute seule, un petit « relecture… » pendant ce temps.
+ */
+function useInsightRefresh(leadId: string) {
+  const router = useRouter();
+  const [enCours, setEnCours] = useState(false);
+  const [, start] = useTransition();
+  const relire = (force = false) => {
+    setEnCours(true);
+    start(async () => {
+      try {
+        const r = await refreshLeadInsightAction(leadId, force);
+        if (r.outcome === "analysé") router.refresh();
+      } finally {
+        setEnCours(false);
+      }
+    });
+  };
+  useEffect(() => {
+    relire(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
+  return { enCours, relire };
+}
+
 export function LeadTabs({
+  leadId,
   overview,
   history,
   exchanges,
@@ -64,6 +96,7 @@ export function LeadTabs({
   recommendation,
   timeline,
 }: {
+  leadId: string;
   /** L'onglet Aperçu, calculé par la page. */
   overview: React.ReactNode;
   /** Historiques (appels, campagnes) posés au-dessus de la chronologie. */
@@ -76,6 +109,7 @@ export function LeadTabs({
   // Aperçu d'abord : on ouvre une fiche pour savoir où on en est, pas pour écrire.
   const [tab, setTab] = useState<"overview" | "exchanges" | "score" | "activity">("overview");
   const tone = TONE[recommendation.tone];
+  const { enCours, relire } = useInsightRefresh(leadId);
 
   return (
     <div className="flex flex-col lg:flex-1 lg:overflow-hidden">
@@ -132,6 +166,24 @@ export function LeadTabs({
             <p className="mt-2 text-[12px] text-muted-foreground">
               Déduit de ses actes — ne dépend d&apos;aucune IA.
             </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[12px] text-muted-foreground">
+              {enCours
+                ? "Relecture du dossier par l'IA…"
+                : insight?.createdAt
+                  ? `Lecture IA du ${new Date(insight.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })} — relue à chaque changement`
+                  : "Pas encore de lecture IA"}
+            </p>
+            <button
+              type="button"
+              disabled={enCours}
+              onClick={() => relire(true)}
+              className="text-[12px] font-medium text-primary underline disabled:opacity-50"
+            >
+              Relire maintenant
+            </button>
           </div>
 
           {/* La lecture IA ci-dessous est un instantané, parfois ancien. Ce

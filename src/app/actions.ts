@@ -383,6 +383,26 @@ export async function saveColumnAutomationAction(
   return { ok: true };
 }
 
+/**
+ * Relecture IA d'une fiche à son ouverture. Gratuite quand rien n'a changé
+ * (même hash → « inchangé »), au plus une lecture par heure par fiche sinon.
+ * `force` = le bouton « relire maintenant ».
+ */
+export async function refreshLeadInsightAction(leadId: string, force = false) {
+  await requireUser();
+  const { getLeadById, getInsightForLead } = await import("@/lib/queries");
+  const existing = await getInsightForLead(leadId);
+  if (!force && existing && Date.now() - new Date(existing.createdAt).getTime() < 3_600_000) {
+    return { outcome: "récent" as const };
+  }
+  const lead = await getLeadById(leadId);
+  if (!lead) return { outcome: "erreur" as const, error: "Lead introuvable" };
+  const { analyzeLead } = await import("@/lib/ai/lead-insights");
+  const res = await analyzeLead(lead);
+  if (res.outcome === "analysé") revalidatePath(`/leads/${leadId}`);
+  return res;
+}
+
 export async function deleteColumnAutomationAction(bootcampId: string, automationId: string) {
   await requireUser();
   const { deleteAutomation } = await import("@/lib/queries");

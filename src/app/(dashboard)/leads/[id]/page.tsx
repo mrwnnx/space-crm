@@ -242,6 +242,7 @@ export default async function LeadDetailPage({
       <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* Main: 3 lectures du lead — agir, décider, comprendre. */}
         <LeadTabs
+          leadId={lead.id}
           insight={insight}
           recommendation={reco}
           timeline={timeline}

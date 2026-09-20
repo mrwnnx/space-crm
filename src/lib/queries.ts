@@ -2762,7 +2762,7 @@ export async function getReturningForLead(leadId: string): Promise<ReturningInfo
 export type TimelineEvent = {
   at: Date;
   /** Famille d'événement — décide de la pastille à l'écran. */
-  kind: "form" | "stage" | "call" | "email" | "engagement" | "payment" | "note";
+  kind: "form" | "stage" | "call" | "email" | "whatsapp" | "engagement" | "payment" | "note";
   label: string;
   detail?: string | null;
   /** Qui l'a fait. Null = le lead lui-même ou la machine. */
@@ -2947,12 +2947,23 @@ export async function getLeadTimeline(leadId: string): Promise<TimelineEvent[]> 
     // L'arrivée par formulaire est déjà l'événement n°1, en mieux nommé.
     if (a.type === "webhook_in") continue;
     const base = ACT_LABEL[String(a.type)] ?? String(a.type);
+    const kind: TimelineEvent["kind"] =
+      a.type === "call" ? "call" : a.type === "whatsapp" ? "whatsapp" : a.type === "note" || a.type === "comment" ? "note" : "email";
     out.push({
       at: a.at,
-      kind: a.type === "call" ? "call" : "email",
+      kind,
       label: a.subject ? `${base} — « ${a.subject} »` : base,
       actor: a.by,
     });
+  }
+
+  // 6 bis. Les commentaires de l'équipe (table à part, ils n'étaient jamais dans la chronologie).
+  const coms = await db
+    .select({ at: comments.createdAt, content: comments.content, by: comments.createdBy })
+    .from(comments)
+    .where(and(eq(comments.referenceType, "lead"), eq(comments.referenceId, leadId)));
+  for (const c of coms) {
+    out.push({ at: c.at, kind: "note", label: "Commentaire", detail: c.content, actor: c.by });
   }
 
   // 7. Les paiements réellement encaissés.
@@ -3003,6 +3014,7 @@ export async function getInsightForLead(leadId: string) {
       intent: leadInsights.intent,
       objection: leadInsights.objection,
       recommendation: leadInsights.recommendation,
+      createdAt: leadInsights.createdAt,
     })
     .from(leadInsights)
     .where(eq(leadInsights.leadId, leadId))

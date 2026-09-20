@@ -4,15 +4,16 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { createHash } from "node:crypto";
 import { db } from "@/db";
-import { leadInsights } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { activities, comments, leadInsights, leadTags, tags, tasks } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
+import { getLeadTimeline } from "@/lib/queries";
 
 const MODEL = "claude-opus-5";
 
 const InsightSchema = z.object({
   summary: z
     .string()
-    .describe("Une seule phrase, en français, qui résume qui est cette personne et ce qu'elle cherche. 20 mots maximum."),
+    .describe("Une ou deux phrases, en français : qui est cette personne, ce qu'elle cherche, et OÙ ON EN EST avec elle d'après le dossier (dernier contact, ce qu'elle a répondu). 40 mots maximum."),
   intent: z
     .enum(["serieux", "curieux", "hors_cible", "indetermine"])
     .describe(
@@ -26,28 +27,99 @@ const InsightSchema = z.object({
   recommendation: z
     .string()
     .describe(
-      "Ce que le commercial devrait faire au prochain contact, en UNE phrase de 20 mots maximum, à l'impératif. Parle de l'action et de l'angle, pas de généralités : « Rappelle-le et pars de son budget, il a choisi le paiement en trois fois. » Vide si tu n'as vraiment rien pour trancher."
+      "La prochaine action concrète, en UNE phrase de 25 mots maximum, à l'impératif, déduite du dossier : « Réponds à son WhatsApp d'hier sur les horaires du soir, puis propose l'appel. » Parle de l'action et de l'angle, pas de généralités. Vide si tu n'as vraiment rien pour trancher."
     ),
 });
 
 const SYSTEM = `Tu qualifies des candidats à une formation UX/UI en Tunisie (The Space Academy).
 
+Tu reçois le formulaire d'inscription ET tout le dossier de la personne : ses messages WhatsApp et emails dans les deux sens, les appels et leur résultat, les notes et commentaires de l'équipe, les changements de colonne, les tâches, les paiements, les messages automatiques envoyés. Le dossier va du plus récent au plus ancien.
+
 Les textes sont écrits en français, en arabe tunisien (derija) ou dans un mélange des deux. Lis-les tels quels, ne traduis pas.
 
-Ton rôle est d'aider un commercial à décider qui rappeler en premier. Sois franc : si quelqu'un n'a rien écrit de substantiel, dis « indetermine » plutôt que d'inventer un profil. Si une personne cherche manifestement autre chose que cette formation, dis « hors_cible ».
+Ton rôle est d'aider un commercial à décider quoi faire MAINTENANT avec cette personne. Ce qu'elle a dit ou fait récemment pèse plus que le formulaire d'origine : une réponse WhatsApp d'hier compte plus qu'une motivation écrite il y a un mois. Sois franc : si rien de substantiel n'est écrit, dis « indetermine » plutôt que d'inventer un profil. Si la personne cherche manifestement autre chose que cette formation, dis « hors_cible ». Si elle a dit non, ou demandé qu'on arrête, dis-le dans la recommandation.
 
 Réponds en français, brièvement. Pas de politesse, pas de préambule.`;
 
+const DOSSIER_MAX = 12_000; // caractères : au-delà, on coupe le plus ancien
+
+/**
+ * Tout ce qui s'est passé avec cette personne, du plus récent au plus ancien,
+ * en texte : c'est ce que le modèle lit en plus du formulaire. Chaque
+ * nouvelle activité change ce texte, donc le hash, donc déclenche une relecture.
+ */
+async function buildDossier(leadId: string): Promise<string> {
+  const [acts, coms, timeline, taches, etiquettes] = await Promise.all([
+    db
+      .select({ at: activities.createdAt, type: activities.type, direction: activities.direction, subject: activities.subject, content: activities.content, by: activities.createdBy })
+      .from(activities)
+      .where(and(eq(activities.referenceType, "lead"), eq(activities.referenceId, leadId)))
+      .orderBy(desc(activities.createdAt)),
+    db
+      .select({ at: comments.createdAt, content: comments.content, by: comments.createdBy })
+      .from(comments)
+      .where(and(eq(comments.referenceType, "lead"), eq(comments.referenceId, leadId)))
+      .orderBy(desc(comments.createdAt)),
+    getLeadTimeline(leadId),
+    db
+      .select({ title: tasks.title, status: tasks.status, dueDate: tasks.dueDate })
+      .from(tasks)
+      .where(and(eq(tasks.referenceType, "lead"), eq(tasks.referenceId, leadId))),
+    db
+      .select({ name: tags.name })
+      .from(leadTags)
+      .innerJoin(tags, eq(tags.id, leadTags.tagId))
+      .where(eq(leadTags.leadId, leadId)),
+  ]);
+
+  const quand = (d: Date) => d.toLocaleString("fr-FR", { timeZone: "Africa/Tunis", dateStyle: "short", timeStyle: "short" });
+  const TYPE: Record<string, string> = {
+    email: "Email", whatsapp: "WhatsApp", sms: "SMS", call: "Appel", note: "Note de l'équipe", comment: "Commentaire de l'équipe", webhook_in: "Formulaire", status_change: "Changement de colonne", task: "Tâche",
+  };
+  const qui = (a: { direction: string; by: string | null }) =>
+    a.direction === "inbound" ? "reçu de la personne" : a.by === "automation" ? "envoyé automatiquement" : `envoyé par ${a.by ?? "l'équipe"}`;
+
+  const lignes: { at: Date; texte: string }[] = [];
+  for (const a of acts) {
+    const corps = (a.content ?? "").replace(/\s+/g, " ").trim().slice(0, 600);
+    lignes.push({ at: a.at, texte: `[${quand(a.at)}] ${TYPE[String(a.type)] ?? a.type} — ${qui(a)}${a.subject ? ` — ${a.subject}` : ""}${corps ? ` : ${corps}` : ""}` });
+  }
+  for (const c of coms) {
+    lignes.push({ at: c.at, texte: `[${quand(c.at)}] Commentaire de ${c.by ?? "l'équipe"} : ${c.content.replace(/\s+/g, " ").trim().slice(0, 600)}` });
+  }
+  // La chronologie apporte ce que les activités n'ont pas : colonnes, appels
+  // avec résultat, ouvertures et clics, paiements. Sans doubler les emails.
+  for (const e of timeline) {
+    if (e.kind === "email" || e.kind === "note") continue;
+    lignes.push({ at: e.at, texte: `[${quand(e.at)}] ${e.label}${e.detail ? ` — ${e.detail}` : ""}${e.actor ? ` (${e.actor})` : ""}` });
+  }
+  lignes.sort((x, y) => y.at.getTime() - x.at.getTime());
+
+  const entete = [
+    etiquettes.length ? `Tags : ${etiquettes.map((t) => t.name).join(", ")}` : null,
+    taches.length
+      ? `Tâches : ${taches.map((t) => `${t.title} (${t.status === "done" ? "faite" : "à faire"}${t.dueDate ? `, ${quand(t.dueDate)}` : ""})`).join(" · ")}`
+      : null,
+  ].filter(Boolean);
+
+  let corps = lignes.map((l) => l.texte).join("\n");
+  if (corps.length > DOSSIER_MAX) corps = corps.slice(0, DOSSIER_MAX) + "\n[… plus ancien coupé]";
+  return [...entete, "", corps || "(aucun échange, aucune action pour l'instant)"].join("\n");
+}
+
 /** Ce qui est envoyé au modèle. Le hash de ce texte évite de repayer pour rien. */
-function buildInput(lead: {
-  fullName: string | null;
-  jobTitle: string | null;
-  motivation: string | null;
-  intendedPlan: string | null;
-  promoCode: string | null;
-  bootcamp?: { name: string } | null;
-  contact?: { age: number | null } | null;
-}) {
+function buildInput(
+  lead: {
+    fullName: string | null;
+    jobTitle: string | null;
+    motivation: string | null;
+    intendedPlan: string | null;
+    promoCode: string | null;
+    bootcamp?: { name: string } | null;
+    contact?: { age: number | null } | null;
+  },
+  dossier: string
+) {
   const lines = [
     `Formation visée : ${lead.bootcamp?.name ?? "inconnue"}`,
     `Situation déclarée : ${lead.jobTitle || "non renseignée"}`,
@@ -63,6 +135,9 @@ function buildInput(lead: {
     "",
     "Ce que la personne a écrit quand on lui a demandé pourquoi elle veut suivre la formation :",
     lead.motivation?.trim() || "(elle n'a rien écrit)",
+    "",
+    "── LE DOSSIER, du plus récent au plus ancien ──",
+    dossier,
   ];
   return lines.join("\n");
 }
@@ -81,7 +156,7 @@ export async function analyzeLead(lead: Parameters<typeof buildInput>[0] & { id:
   outcome: AnalyzeOutcome;
   error?: string;
 }> {
-  const input = buildInput(lead);
+  const input = buildInput(lead, await buildDossier(lead.id));
   const sourceHash = hashInput(input);
 
   const existing = await db.query.leadInsights.findFirst({
@@ -119,7 +194,8 @@ export async function analyzeLead(lead: Parameters<typeof buildInput>[0] & { id:
       // Classification courte : « low » réduit la profondeur de réflexion et la
       // latence, ce qui compte quand on enchaîne des dizaines de leads sous la
       // limite de durée d'une fonction serverless.
-      output_config: { format: zodOutputFormat(InsightSchema), effort: "low" },
+      // « medium » : le dossier demande plus de jugement qu'un formulaire seul.
+      output_config: { format: zodOutputFormat(InsightSchema), effort: "medium" },
       system: SYSTEM,
       messages: [{ role: "user", content: input }],
     });
