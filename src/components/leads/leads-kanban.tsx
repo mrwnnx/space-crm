@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, memo } from "react";
+import { useState, useEffect, useRef, useTransition, memo } from "react";
 import Link from "next/link";
 import { updateLeadStatusAction, reorderStagesAction } from "@/app/actions";
 import { cn, statusColor, initials, formatRelative, actorInitials, actorLabel, isHumanActor } from "@/lib/utils";
@@ -104,6 +104,39 @@ export function LeadsKanban({
 
   // Index rapide statusId → status (pour connaître le kind de la colonne cible)
   const statusMap = new Map(localStatuses.map((s) => [s.id, s]));
+
+  // Pendant un glisser, le tableau défile tout seul quand la carte approche
+  // d'un bord : sans ça, les dernières colonnes sont hors de portée dès que la
+  // pipeline dépasse l'écran (demande Marwen, 2026-09-20). Drag & drop natif :
+  // la seule information fiable est la position du curseur sur `dragover`.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollVitesse = useRef(0);
+  const scrollAnim = useRef<number | null>(null);
+  function autoScroll(e: React.DragEvent) {
+    const el = scrollRef.current;
+    if (!el) return;
+    const BORD = 90; // px : la zone qui déclenche
+    const { left, right } = el.getBoundingClientRect();
+    let v = 0;
+    if (e.clientX > right - BORD) v = Math.ceil((e.clientX - (right - BORD)) / 6); // plus près = plus vite
+    else if (e.clientX < left + BORD) v = -Math.ceil((left + BORD - e.clientX) / 6);
+    scrollVitesse.current = v;
+    if (v !== 0 && scrollAnim.current === null) {
+      const tick = () => {
+        const s = scrollRef.current;
+        if (!s || scrollVitesse.current === 0) {
+          scrollAnim.current = null;
+          return;
+        }
+        s.scrollLeft += scrollVitesse.current;
+        scrollAnim.current = requestAnimationFrame(tick);
+      };
+      scrollAnim.current = requestAnimationFrame(tick);
+    }
+  }
+  const stopAutoScroll = () => {
+    scrollVitesse.current = 0;
+  };
 
   // Index statusId → règle d'automatisation (au plus une par colonne).
   // Plusieurs règles par colonne (séquence) : on regroupe.
@@ -336,7 +369,14 @@ export function LeadsKanban({
         </div>
       )}
 
-      <div className="flex flex-1 overflow-x-auto p-4">
+      <div
+        ref={scrollRef}
+        className="flex flex-1 overflow-x-auto p-4"
+        onDragOver={autoScroll}
+        onDragLeave={stopAutoScroll}
+        onDrop={stopAutoScroll}
+        onDragEnd={stopAutoScroll}
+      >
       <div className="flex h-full gap-3">
         {visibleStatuses.map((status) => {
           const sc = statusColor(status.color);
