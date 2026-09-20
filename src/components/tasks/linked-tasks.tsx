@@ -18,10 +18,13 @@ export function LinkedTasks({
   tasks,
   referenceType,
   referenceId,
+  embedded = false,
 }: {
   tasks: Task[];
   referenceType: "lead" | "deal" | "contact" | "organization";
   referenceId: string;
+  /** Posé dans un bloc qui a déjà son cadre et son titre (onglet Aperçu). */
+  embedded?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -34,10 +37,10 @@ export function LinkedTasks({
   }
 
   return (
-    <div className="border-t border-border p-4">
+    <div className={embedded ? "" : "border-t border-border p-4"}>
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Tasks ({tasks.length})
+          {embedded ? "Tâches" : "Tasks"} ({tasks.length})
         </p>
       </div>
 

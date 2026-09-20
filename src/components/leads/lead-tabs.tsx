@@ -57,17 +57,24 @@ function stamp(at: Date | string): string {
 }
 
 export function LeadTabs({
+  overview,
+  history,
   exchanges,
   insight,
   recommendation,
   timeline,
 }: {
+  /** L'onglet Aperçu, calculé par la page. */
+  overview: React.ReactNode;
+  /** Historiques (appels, campagnes) posés au-dessus de la chronologie. */
+  history?: React.ReactNode;
   exchanges: React.ReactNode;
   insight: Insight;
   recommendation: Recommendation;
   timeline: TimelineEvent[];
 }) {
-  const [tab, setTab] = useState<"exchanges" | "score" | "activity">("exchanges");
+  // Aperçu d'abord : on ouvre une fiche pour savoir où on en est, pas pour écrire.
+  const [tab, setTab] = useState<"overview" | "exchanges" | "score" | "activity">("overview");
   const tone = TONE[recommendation.tone];
 
   return (
@@ -75,6 +82,7 @@ export function LeadTabs({
       <div className="flex shrink-0 gap-1 border-b border-border px-4 pt-3">
         {(
           [
+            ["overview", "Aperçu"],
             ["exchanges", "Échanges"],
             ["score", "Score"],
             ["activity", "Activité"],
@@ -97,6 +105,8 @@ export function LeadTabs({
           </button>
         ))}
       </div>
+
+      {tab === "overview" && overview}
 
       {tab === "exchanges" && exchanges}
 
@@ -179,7 +189,9 @@ export function LeadTabs({
       )}
 
       {tab === "activity" && (
-        <div className="p-4 lg:flex-1 lg:overflow-y-auto">
+        <div className="lg:flex-1 lg:overflow-y-auto">
+          {history}
+          <div className="p-4">
           {timeline.length === 0 ? (
             <p className="text-xs text-muted-foreground">Rien encore.</p>
           ) : (
@@ -211,6 +223,7 @@ export function LeadTabs({
               })}
             </ol>
           )}
+          </div>
         </div>
       )}
     </div>

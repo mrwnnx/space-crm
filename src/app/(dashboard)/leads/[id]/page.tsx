@@ -9,6 +9,7 @@ import {
 } from "@/lib/queries";
 import { recommend } from "@/lib/lead-recommendation";
 import { LeadTabs } from "@/components/leads/lead-tabs";
+import { LeadOverview, type OverviewData } from "@/components/leads/lead-overview";
 import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
@@ -16,11 +17,10 @@ import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { DuplicateBanner } from "@/components/leads/duplicate-banner";
 import { getDuplicateInfo } from "@/lib/duplicates";
-import { getReturningForLead, getCarriedOrigin, getAllowedEmails } from "@/lib/queries";
+import { getReturningForLead, getCarriedOrigin, getAllowedEmails, getPendingAutomationsForLead } from "@/lib/queries";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { CallHistory } from "@/components/leads/call-history";
 import { ActivityPanel } from "@/components/activities/activity-panel";
-import { LinkedTasks } from "@/components/tasks/linked-tasks";
 import { LeadCampaignHistory } from "@/components/campaigns/lead-campaign-history";
 import { getCampaignsForContact } from "@/lib/campaigns/analytics";
 import type { Metadata } from "next";
@@ -131,6 +131,92 @@ export default async function LeadDetailPage({
     hasPhone: !!lead.mobileNo,
   });
 
+  // ── L'onglet Aperçu : tout vient de ce qui est déjà chargé, sauf les
+  // messages automatiques en attente.
+  const pendingRuns = await getPendingAutomationsForLead(lead.id);
+  const acts = lead.activities;
+  const jours = (d: Date | string) => Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+  const derniereEntrante = acts.find((a) => a.direction === "inbound" && (a.type === "whatsapp" || a.type === "email"));
+  const dernierAppelRepondu = callLogs.find((c) => c.status === "completed");
+  const dernierContactDuLead = [derniereEntrante?.createdAt, dernierAppelRepondu?.createdAt]
+    .filter((d): d is Date => !!d)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  const dernierWa = acts.find((a) => a.type === "whatsapp");
+  const derniereWaEntrante = acts.find((a) => a.type === "whatsapp" && a.direction === "inbound");
+  const fenetre = derniereWaEntrante ? new Date(new Date(derniereWaEntrante.createdAt).getTime() + 24 * 3600 * 1000) : null;
+  const prochaineEcheance = schedule?.items.find((e) => !e.isPaid) ?? null;
+  const overview: OverviewData = {
+    stageName: lead.status?.name ?? null,
+    stageDays: jours(lead.stageEnteredAt ?? lead.createdAt),
+    qualification: lead.qualification,
+    nextFollowUpAt: lead.nextFollowUpAt,
+    silenceDays: dernierContactDuLead ? jours(dernierContactDuLead) : null,
+    email: {
+      address: lead.email,
+      bounced: !!lead.contact?.bouncedAt,
+      unsubscribed: !!lead.contact?.unsubscribedAt,
+      lastCampaign: campaignHistory[0]
+        ? { name: campaignHistory[0].name, sentAt: campaignHistory[0].sentAt, openedAt: campaignHistory[0].openedAt, clickedAt: campaignHistory[0].clickedAt }
+        : null,
+    },
+    whatsapp: {
+      number: lead.contact?.whatsapp ?? lead.mobileNo,
+      consentAt: lead.contact?.whatsappConsentAt ?? null,
+      consentSource: lead.contact?.whatsappConsentSource ?? null,
+      unsubscribedAt: lead.contact?.whatsappUnsubscribedAt ?? null,
+      windowOpenUntil: fenetre && fenetre.getTime() > Date.now() ? fenetre : null,
+      last: dernierWa ? { at: dernierWa.createdAt, direction: dernierWa.direction === "inbound" ? "inbound" : "outbound" } : null,
+    },
+    phone: {
+      number: lead.mobileNo,
+      wantsCall: lead.wantsCall,
+      callCount: callLogs.length,
+      lastCall: lastCall ? { at: lastCall.createdAt, status: lastCall.status } : null,
+    },
+    lastExchange: derniereEntrante
+      ? {
+          at: derniereEntrante.createdAt,
+          channel: derniereEntrante.type === "whatsapp" ? "WhatsApp" : "Email",
+          excerpt: (derniereEntrante.content ?? "").replace(/\s+/g, " ").slice(0, 220),
+        }
+      : dernierAppelRepondu
+        ? { at: dernierAppelRepondu.createdAt, channel: "Téléphone", excerpt: "Appel répondu" }
+        : null,
+    money: schedule
+      ? {
+          offer:
+            lead.intendedPlan === "total"
+              ? `Comptant — ${lead.offerTotal ?? lead.bootcamp?.priceTotal ?? "?"} ${lead.bootcamp?.currency ?? "TND"}`
+              : lead.intendedPlan === "monthly"
+                ? `${lead.offerMonthlyCount ?? lead.bootcamp?.monthlyCount ?? "?"} × ${lead.offerMonthlyAmount ?? lead.bootcamp?.monthlyAmount ?? "?"} ${lead.bootcamp?.currency ?? "TND"}`
+                : null,
+          paidCount: schedule.summary.paidCount,
+          count: schedule.summary.count,
+          paidAmount: schedule.items.filter((e) => e.isPaid).reduce((n, e) => n + (e.amount ? Number(e.amount) : 0), 0),
+          total: schedule.summary.total,
+          currency: lead.bootcamp?.currency ?? "TND",
+          nextDue: prochaineEcheance
+            ? { dueDate: prochaineEcheance.dueDate ? new Date(prochaineEcheance.dueDate) : null, amount: prochaineEcheance.amount ? Number(prochaineEcheance.amount) : null }
+            : null,
+        }
+      : null,
+    origin: {
+      source: lead.source?.name ?? null,
+      createdAt: lead.createdAt,
+      situation: lead.jobTitle,
+      motivation: lead.motivation,
+      carriedFrom: carriedFrom?.bootcamp_name ?? null,
+      multiForm: multiSet.has(lead.id),
+    },
+    scheduled: pendingRuns.map((r) => ({
+      id: r.id,
+      at: r.scheduledAt,
+      label: r.channel === "whatsapp" ? (r.whatsappTemplate ?? "modèle ?") : (r.emailTemplateName ?? "email"),
+      channel: r.channel,
+      reason: r.reason,
+    })),
+  };
+
   return (
     <>
       <MarkLeadSeen leadId={lead.id} />
@@ -159,6 +245,23 @@ export default async function LeadDetailPage({
           insight={insight}
           recommendation={reco}
           timeline={timeline}
+          overview={
+            <LeadOverview data={overview} recommendation={reco} leadId={lead.id} tasks={lead.tasks} />
+          }
+          history={
+            <>
+              <CallHistory
+                logs={callLogs.map((c) => ({
+                  id: c.id,
+                  status: c.status,
+                  duration: c.duration,
+                  callerId: c.callerId,
+                  createdAt: c.createdAt,
+                }))}
+              />
+              <LeadCampaignHistory rows={campaignHistory} />
+            </>
+          }
           exchanges={
           <ActivityPanel
             referenceType="lead"
@@ -317,24 +420,6 @@ export default async function LeadDetailPage({
               team={team}
             />
           )}
-
-          <CallHistory
-            logs={callLogs.map((c) => ({
-              id: c.id,
-              status: c.status,
-              duration: c.duration,
-              callerId: c.callerId,
-              createdAt: c.createdAt,
-            }))}
-          />
-
-          <LeadCampaignHistory rows={campaignHistory} />
-
-          <LinkedTasks
-            tasks={lead.tasks}
-            referenceType="lead"
-            referenceId={lead.id}
-          />
 
           <div className="mt-auto border-t border-border p-4 text-xs text-muted-foreground">
             <div className="flex justify-between py-1">

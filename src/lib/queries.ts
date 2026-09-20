@@ -3864,3 +3864,25 @@ export async function getCalledByBootcamp(bootcampId: string): Promise<Set<strin
   `);
   return new Set(rows.map((r) => r.id));
 }
+
+/**
+ * Les messages automatiques encore À VENIR pour ce lead — ce que l'onglet
+ * Aperçu montre dans « À venir ». Une règle WhatsApp donne son modèle, une
+ * règle email le nom du modèle d'email.
+ */
+export async function getPendingAutomationsForLead(leadId: string) {
+  return db
+    .select({
+      id: automationRuns.id,
+      scheduledAt: automationRuns.scheduledAt,
+      reason: automationRuns.reason,
+      channel: automations.channel,
+      whatsappTemplate: automations.whatsappTemplate,
+      emailTemplateName: emailTemplates.name,
+    })
+    .from(automationRuns)
+    .innerJoin(automations, eq(automations.id, automationRuns.automationId))
+    .leftJoin(emailTemplates, eq(emailTemplates.id, automations.emailTemplateId))
+    .where(and(eq(automationRuns.leadId, leadId), eq(automationRuns.status, "pending")))
+    .orderBy(asc(automationRuns.scheduledAt));
+}
