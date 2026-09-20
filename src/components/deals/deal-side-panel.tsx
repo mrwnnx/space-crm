@@ -19,7 +19,7 @@ export function DealSidePanel({
 }) {
   return (
     <div className="flex flex-col gap-0.5 p-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Deal
       </p>
       <EditableField

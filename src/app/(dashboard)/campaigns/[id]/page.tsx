@@ -34,7 +34,7 @@ function Section({
 }) {
   return (
     <section>
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h2>
       {children}

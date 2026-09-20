@@ -86,7 +86,7 @@ export function LeadSidePanel({
         </div>
       )}
 
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Coordonnées
       </p>
       <EditableField
@@ -183,7 +183,7 @@ export function LeadSidePanel({
         </>
       )}
 
-      <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Classification
       </p>
       <EditableSelect
@@ -246,7 +246,7 @@ export function LeadSidePanel({
 
       {lead.motivation && (
         <>
-          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
             Motivation
           </p>
           <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-2 py-2 text-xs leading-relaxed text-foreground">

@@ -16,7 +16,7 @@ export function LeadCampaignHistory({ rows }: { rows: LeadCampaignRow[] }) {
 
   return (
     <div className="border-t border-border p-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Campagnes reçues ({rows.length})
       </p>
       <ul className="space-y-2">

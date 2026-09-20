@@ -138,7 +138,7 @@ async function DealDetailPageLegacy({
           {/* Contacts linked */}
           {deal.contacts.length > 0 && (
             <div className="border-t border-border p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Contacts ({deal.contacts.length})
               </p>
               <div className="space-y-1.5">
@@ -168,7 +168,7 @@ async function DealDetailPageLegacy({
           {/* Products */}
           {deal.dealProducts.length > 0 && (
             <div className="border-t border-border p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Products ({deal.dealProducts.length})
               </p>
               <div className="space-y-1.5">

@@ -28,7 +28,7 @@ export function CallHistory({ logs }: { logs: CallHistoryEntry[] }) {
 
   return (
     <div className="border-t border-border p-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Appels ({logs.length})
       </p>
 

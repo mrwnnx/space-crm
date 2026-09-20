@@ -30,7 +30,7 @@ export function LeadTags({
 
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Tags
       </p>
 

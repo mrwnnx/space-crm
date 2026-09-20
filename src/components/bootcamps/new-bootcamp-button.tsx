@@ -54,7 +54,7 @@ export function NewBootcampButton() {
 
             {/* Section Offre & paiement */}
             <div className="mt-4 border-t border-border pt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Offre &amp; paiement
               </p>
 

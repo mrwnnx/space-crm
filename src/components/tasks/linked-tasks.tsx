@@ -36,7 +36,7 @@ export function LinkedTasks({
   return (
     <div className="border-t border-border p-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
           Tasks ({tasks.length})
         </p>
       </div>
