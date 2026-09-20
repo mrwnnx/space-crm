@@ -89,14 +89,15 @@ export const maxDuration = 60;
 
 /**
  * Meta signe chaque événement : `X-Hub-Signature-256: sha256=HMAC(corps brut,
- * app secret)`. Sans WHATSAPP_APP_SECRET on laisse passer (et on le dit dans
- * le log) plutôt que de couper la prod ; avec, un corps non signé est refusé.
+ * app secret)`. Sans WHATSAPP_APP_SECRET on refuse tout : un POST forgé
+ * créerait des leads, injecterait des messages et déclencherait les actions
+ * de boutons (tags, réponses, désabonnement). Même règle que Resend.
  */
 function signatureValide(brut: string, entete: string | null): boolean {
   const secret = process.env.WHATSAPP_APP_SECRET;
   if (!secret) {
-    console.warn("[webhook whatsapp] WHATSAPP_APP_SECRET absent : signature non vérifiée");
-    return true;
+    console.error("[webhook whatsapp] WHATSAPP_APP_SECRET absent : événement refusé");
+    return false;
   }
   if (!entete?.startsWith("sha256=")) return false;
   const attendu = createHmac("sha256", secret).update(brut, "utf8").digest("hex");
