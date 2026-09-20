@@ -83,7 +83,7 @@ export function LeadTabs({
         {(
           [
             ["overview", "Aperçu"],
-            ["exchanges", "Échanges"],
+            ["exchanges", "Actions"],
             ["score", "Score"],
             ["activity", "Activité"],
           ] as const
