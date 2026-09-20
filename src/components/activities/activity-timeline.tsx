@@ -53,7 +53,7 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
                     {activity.subject ?? activity.type}
                   </span>
                   {isInbound && (
-                    <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600">
+                    <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[12px] font-medium text-green-600">
                       Reçu
                     </span>
                   )}
@@ -64,11 +64,11 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
                 {actorLabel(activity.createdBy) && (
                   <div className="mt-1 flex items-center gap-1.5">
                     {isHumanActor(activity.createdBy) && (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary">
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
                         {actorInitials(activity.createdBy)}
                       </span>
                     )}
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[13px] text-muted-foreground">
                       {isHumanActor(activity.createdBy) ? "par " : ""}
                       {actorLabel(activity.createdBy)}
                     </span>

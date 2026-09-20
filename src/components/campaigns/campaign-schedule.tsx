@@ -56,7 +56,7 @@ export function CampaignSchedule({
         }}
         className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
       />
-      <p className="mt-1.5 text-[11px] text-muted-foreground">
+      <p className="mt-1.5 text-[13px] text-muted-foreground">
         Heure de Tunis. Le départ se fait dans les 15 minutes qui suivent, jamais avant.
       </p>
 

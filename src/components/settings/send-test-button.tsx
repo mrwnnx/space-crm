@@ -50,7 +50,7 @@ export function SendTestButton({
       </button>
       {result && (
         <span
-          className={result.ok ? "text-[11px] text-green-600" : "text-[11px] text-red-600"}
+          className={result.ok ? "text-[13px] text-green-600" : "text-[13px] text-red-600"}
         >
           {result.message}
         </span>

@@ -22,7 +22,7 @@ import {
  * quelqu'un qui n'a pas écrit depuis 24 h.
  */
 
-const LABEL = "mb-1 block text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground";
+const LABEL = "mb-1 block text-[12.5px] font-medium uppercase tracking-wider text-muted-foreground";
 const INPUT =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
 
@@ -286,7 +286,7 @@ function SectionReponsesRapides({ items }: { items: QuickReply[] }) {
                 type="button"
                 onClick={() => supprimer(q.id)}
                 disabled={isPending}
-                className="shrink-0 text-[10.5px] text-muted-foreground hover:text-red-600"
+                className="shrink-0 text-[12.5px] text-muted-foreground hover:text-red-600"
               >
                 Supprimer
               </button>
@@ -392,7 +392,7 @@ function SectionNumero({
         {n.nom && <span className="text-sm text-muted-foreground">{n.nom}</span>}
         <span
           className={cn(
-            "rounded-full px-2 py-0.5 text-[10.5px] font-medium",
+            "rounded-full px-2 py-0.5 text-[12.5px] font-medium",
             connecte ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
           )}
         >
@@ -419,7 +419,7 @@ function SectionNumero({
           <dd>{modeLigne}</dd>
         </div>
       </dl>
-      <p className="mt-3 text-[10.5px] text-muted-foreground/70">
+      <p className="mt-3 text-[12.5px] text-muted-foreground/70">
         La qualité, c&apos;est Meta qui la mesure sur les blocages et signalements des destinataires. Elle passe
         au rouge quand trop de gens bloquent le numéro — et Meta réduit alors le nombre d&apos;envois permis.
       </p>
@@ -479,7 +479,7 @@ function SectionProfil({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={apercu ?? p.profilePictureUrl ?? ""} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+              <div className="flex h-full w-full items-center justify-center text-[12px] text-muted-foreground">
                 Pas de photo
               </div>
             )}
@@ -496,10 +496,10 @@ function SectionProfil({
               }}
               className="block text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium"
             />
-            <p className="text-[10.5px] text-muted-foreground/70">JPG ou PNG, carré de préférence, 5 Mo maximum.</p>
+            <p className="text-[12.5px] text-muted-foreground/70">JPG ou PNG, carré de préférence, 5 Mo maximum.</p>
             <p className="pt-1 text-xs text-foreground">
               Nom affiché : <span className="font-medium">{nomAffiche ?? "?"}</span>
-              <span className="ml-2 text-[10.5px] text-muted-foreground">
+              <span className="ml-2 text-[12.5px] text-muted-foreground">
                 (le changer passe par WhatsApp Manager et une revue Meta — pas d&apos;ici)
               </span>
             </p>
@@ -671,10 +671,10 @@ function LigneModele({
     <li className="px-3 py-2.5">
       <div className="flex items-center gap-2">
         <span className="font-mono text-xs font-medium text-foreground">{t.name}</span>
-        <span className="text-[10.5px] text-muted-foreground">
+        <span className="text-[12.5px] text-muted-foreground">
           {LANGUES.find((l) => l.code === t.language)?.label ?? t.language} · {t.category.toLowerCase()}
         </span>
-        <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-medium", s.cls)}>{s.label}</span>
+        <span className={cn("rounded-full px-2 py-0.5 text-[12.5px] font-medium", s.cls)}>{s.label}</span>
         <span className="flex-1" />
         {confirme ? (
           <>
@@ -682,16 +682,16 @@ function LigneModele({
               type="button"
               onClick={supprimer}
               disabled={isPending}
-              className="text-[10.5px] font-medium text-red-600 hover:underline disabled:opacity-40"
+              className="text-[12.5px] font-medium text-red-600 hover:underline disabled:opacity-40"
             >
               {isPending ? "…" : "Confirmer la suppression"}
             </button>
-            <button type="button" onClick={() => setConfirme(false)} className="text-[10.5px] text-muted-foreground hover:underline">
+            <button type="button" onClick={() => setConfirme(false)} className="text-[12.5px] text-muted-foreground hover:underline">
               Annuler
             </button>
           </>
         ) : (
-          <button type="button" onClick={() => setConfirme(true)} className="text-[10.5px] text-muted-foreground hover:text-red-600 hover:underline">
+          <button type="button" onClick={() => setConfirme(true)} className="text-[12.5px] text-muted-foreground hover:text-red-600 hover:underline">
             Supprimer
           </button>
         )}
@@ -710,8 +710,8 @@ function LigneModele({
           ))}
         </div>
       )}
-      {t.rejectedReason && <p className="mt-1 text-[10.5px] text-red-600">Motif de Meta : {t.rejectedReason}</p>}
-      {erreur && <p className="mt-1 text-[10.5px] text-red-600">{erreur}</p>}
+      {t.rejectedReason && <p className="mt-1 text-[12.5px] text-red-600">Motif de Meta : {t.rejectedReason}</p>}
+      {erreur && <p className="mt-1 text-[12.5px] text-red-600">{erreur}</p>}
     </li>
   );
 }
@@ -723,7 +723,7 @@ function ConseilSortieHumaine({ texte }: { texte: string }) {
   const ok = /humain|appel|t[ée]l[ée]phone|\+216|@|email|e-mail|mail/i.test(texte);
   if (ok) return null;
   return (
-    <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+    <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[13px] text-amber-700">
       Meta exige qu&apos;un message automatique dise comment joindre un humain : ajoute un numéro,
       un email, ou « répondez <strong className="font-medium">humain</strong> pour parler à l&apos;équipe ».
     </p>
@@ -792,10 +792,10 @@ function ActionBouton({
   return (
     <div className="rounded-md border border-border px-2 py-1.5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-foreground">{button}</span>
-        <span className="text-[10.5px] text-muted-foreground">{configure ? `→ ${resume}` : "→ rien de spécial"}</span>
+        <span className="rounded-full border border-border px-2 py-0.5 text-[12.5px] text-foreground">{button}</span>
+        <span className="text-[12.5px] text-muted-foreground">{configure ? `→ ${resume}` : "→ rien de spécial"}</span>
         <span className="flex-1" />
-        <button type="button" onClick={() => setOpen((o) => !o)} className="text-[10.5px] text-primary hover:underline">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="text-[12.5px] text-primary hover:underline">
           {open ? "Fermer" : "Régler"}
         </button>
       </div>
@@ -829,7 +829,7 @@ function ActionBouton({
             <input type="checkbox" checked={optOut} onChange={(e) => setOptOut(e.target.checked)} className="h-4 w-4 rounded border-border" />
             Ce bouton = « ne plus m&apos;écrire » (désabonnement WhatsApp, confirmation envoyée)
           </label>
-          {erreur && <p className="text-[11px] text-red-600">{erreur}</p>}
+          {erreur && <p className="text-[13px] text-red-600">{erreur}</p>}
           <button
             type="button"
             onClick={enregistrer}
@@ -906,7 +906,7 @@ function NouveauModele({ existants }: { existants: string[] }) {
             className={cn(INPUT, "font-mono")}
             required
           />
-          {nomPris && <span className="text-[10.5px] text-red-600">Ce nom existe déjà.</span>}
+          {nomPris && <span className="text-[12.5px] text-red-600">Ce nom existe déjà.</span>}
         </label>
         <label>
           <span className={LABEL}>Langue</span>
@@ -942,7 +942,7 @@ function NouveauModele({ existants }: { existants: string[] }) {
           className={cn(INPUT, "resize-y")}
           required
         />
-        <span className="text-[10.5px] text-muted-foreground">
+        <span className="text-[12.5px] text-muted-foreground">
           {"{{1}}"}, {"{{2}}"}… sont les variables, remplies à l&apos;envoi. {body.length}/1024
         </span>
       </label>
@@ -965,7 +965,7 @@ function NouveauModele({ existants }: { existants: string[] }) {
               />
             </label>
           ))}
-          <p className="text-[10.5px] text-muted-foreground sm:col-span-2">
+          <p className="text-[12.5px] text-muted-foreground sm:col-span-2">
             Meta relit le message avec ces exemples à la place des variables.
           </p>
         </div>
@@ -988,7 +988,7 @@ function NouveauModele({ existants }: { existants: string[] }) {
             />
           ))}
         </div>
-        <span className="text-[10.5px] text-muted-foreground">
+        <span className="text-[12.5px] text-muted-foreground">
           Un tap sur un bouton compte comme une réponse du lead : la fenêtre de 24 h s&apos;ouvre et on peut lui écrire librement.
         </span>
       </div>

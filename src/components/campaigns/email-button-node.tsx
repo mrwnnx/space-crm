@@ -66,20 +66,20 @@ function EmailButtonView({ node, updateAttributes, deleteNode, selected }: NodeV
         >
           {node.attrs.label || "Texte du bouton"}
         </span>
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="text-[12px] uppercase tracking-wide text-muted-foreground">
           {secondary ? "secondaire" : "principal"}
         </span>
         <button
           type="button"
           onClick={() => updateAttributes({ variant: secondary ? "primary" : "secondary" })}
-          className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted"
+          className="rounded-md border border-border px-2 py-0.5 text-[13px] text-muted-foreground hover:bg-muted"
         >
           Changer de style
         </button>
         <button
           type="button"
           onClick={() => deleteNode()}
-          className="ml-auto rounded-md px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-red-600"
+          className="ml-auto rounded-md px-2 py-0.5 text-[13px] text-muted-foreground hover:bg-muted hover:text-red-600"
         >
           Retirer
         </button>

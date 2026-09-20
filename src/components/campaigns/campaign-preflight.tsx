@@ -60,7 +60,7 @@ export function CampaignPreflight({
         </p>
       )}
       {tips.length > 0 && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           Les conseils viennent de nos propres envois mesurés, pas de règles générales. Ils ne
           bloquent pas.
         </p>

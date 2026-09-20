@@ -131,7 +131,7 @@ function KanbanCard({
         </div>
       )}
 
-      <p className="mt-2 text-[10px] text-muted-foreground/70">
+      <p className="mt-2 text-[12px] text-muted-foreground/70">
         {formatRelative(deal.createdAt)}
       </p>
     </Link>

@@ -207,7 +207,7 @@ export function LeadsList({
 
       {bulkResult && (
         <div
-          className={`flex items-center justify-between gap-2 border-b border-border px-4 py-1.5 text-[11px] ${
+          className={`flex items-center justify-between gap-2 border-b border-border px-4 py-1.5 text-[13px] ${
             bulkResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
           }`}
         >
@@ -322,7 +322,7 @@ export function LeadsList({
                     </td>
                     <td>
                       {lead.converted ? (
-                        <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
                           Oui
                         </span>
                       ) : (
@@ -410,7 +410,7 @@ function TagFilter({
       </button>
       {open && (
         <div className="absolute left-0 top-full z-20 mt-1 w-64 rounded-lg border border-border bg-popover p-2 shadow-md">
-          <div className="mb-2 flex gap-1 rounded-md bg-muted p-0.5 text-[11px]">
+          <div className="mb-2 flex gap-1 rounded-md bg-muted p-0.5 text-[13px]">
             {(["any", "all"] as const).map((v) => (
               <button
                 key={v}

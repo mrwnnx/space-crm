@@ -213,7 +213,7 @@ export default async function LeadDetailPage({
               <p className="text-xs font-medium text-amber-900">
                 ↪ Reporté de « {carriedFrom.bootcamp_name} » — déjà contacté, jamais conclu
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
                 {carriedFrom.qualification
                   ? `Dernière qualification : ${carriedFrom.qualification} · `
                   : ""}
@@ -245,7 +245,7 @@ export default async function LeadDetailPage({
                   ? "★ Ancien inscrit — cette personne s'est déjà inscrite chez vous"
                   : "↺ Déjà venu — cette personne a déjà été un lead sur une autre formation"}
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
                 {returning.formations.join(" · ")}
               </p>
             </div>

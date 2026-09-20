@@ -114,7 +114,7 @@ export function AssistantConversation({ large = false }: { large?: boolean }) {
           ))}
 
           {isPending && (
-            <p className="animate-pulse font-mono text-[10.5px] uppercase tracking-wider text-primary">
+            <p className="animate-pulse font-mono text-[12.5px] uppercase tracking-wider text-primary">
               Hani nkhamem…
             </p>
           )}
@@ -143,12 +143,12 @@ export function AssistantConversation({ large = false }: { large?: boolean }) {
             {msgs.length > 0 ? (
               <button
                 onClick={vider}
-                className="text-[10.5px] text-muted-foreground underline hover:text-foreground"
+                className="text-[12.5px] text-muted-foreground underline hover:text-foreground"
               >
                 Effacer la conversation
               </button>
             ) : (
-              <span className="font-mono text-[9.5px] text-muted-foreground">⌘J</span>
+              <span className="font-mono text-[11.5px] text-muted-foreground">⌘J</span>
             )}
             <button
               onClick={() => envoyer()}

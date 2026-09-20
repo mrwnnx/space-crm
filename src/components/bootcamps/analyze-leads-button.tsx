@@ -63,7 +63,7 @@ export function AnalyzeLeadsButton({
       >
         <HugeiconsIcon icon={AiMagicIcon} size={16} className={running ? "animate-pulse" : undefined} />
         {left > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 min-w-[15px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[15px] text-primary-foreground tabular-nums">
+          <span className="absolute -right-0.5 -top-0.5 min-w-[15px] rounded-full bg-primary px-1 text-[11px] font-semibold leading-[15px] text-primary-foreground tabular-nums">
             {left > 99 ? "99+" : left}
           </span>
         )}
@@ -86,10 +86,10 @@ export function AnalyzeLeadsButton({
         {running ? `Lecture… ${done} lus` : `Analyser ${left} lead${left > 1 ? "s" : ""}`}
       </button>
       {done > 0 && !running && (
-        <span className="text-[11px] text-green-600">{done} lead(s) analysé(s).</span>
+        <span className="text-[13px] text-green-600">{done} lead(s) analysé(s).</span>
       )}
       {error && (
-        <span className="text-[11px] text-red-600">{error}</span>
+        <span className="text-[13px] text-red-600">{error}</span>
       )}
     </div>
   );

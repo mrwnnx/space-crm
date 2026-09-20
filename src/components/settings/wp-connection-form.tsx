@@ -68,7 +68,7 @@ export function WpConnectionForm({ connection }: { connection: PublicConnection 
           autoComplete="new-password"
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/30"
         />
-        <p className="mt-1 text-[10px] text-muted-foreground/70">
+        <p className="mt-1 text-[12px] text-muted-foreground/70">
           WordPress → Utilisateurs → Profil → Application Passwords. Il n'est jamais
           réaffiché après enregistrement.
         </p>
@@ -103,7 +103,7 @@ export function WpConnectionForm({ connection }: { connection: PublicConnection 
       )}
 
       {!feedback && connection?.lastTestedAt && (
-        <p className="text-[10px] text-muted-foreground/70">
+        <p className="text-[12px] text-muted-foreground/70">
           Dernier test {new Date(connection.lastTestedAt).toLocaleString("fr-FR")} —{" "}
           <span className={connection.lastTestOk ? "text-green-700" : "text-red-700"}>
             {connection.lastTestMessage}

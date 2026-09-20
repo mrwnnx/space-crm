@@ -63,14 +63,14 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
                   </Link>
                   {lead.intent && (
                     <span
-                      className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                      className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
                         INTENT_STYLE[lead.intent] ?? INTENT_STYLE.indetermine
                       }`}
                     >
                       {INTENT_LABEL[lead.intent] ?? lead.intent}
                     </span>
                   )}
-                  <span className="text-[10px] text-muted-foreground/70">
+                  <span className="text-[12px] text-muted-foreground/70">
                     {lead.bootcampName} · {lead.statusName}
                   </span>
                 </div>
@@ -83,13 +83,13 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
                 )}
 
                 {lead.nextFollowUpAt && (
-                  <p className="mt-1 text-[11px] font-medium text-primary">
+                  <p className="mt-1 text-[13px] font-medium text-primary">
                     À rappeler le{" "}
                     {new Date(lead.nextFollowUpAt).toLocaleDateString("fr-FR")}
                   </p>
                 )}
 
-                <p className="mt-1 text-[10px] text-muted-foreground/70">
+                <p className="mt-1 text-[12px] text-muted-foreground/70">
                   {lead.reasons.join(" · ")}
                   {lead.lastCallAt && ` · dernier appel ${formatRelative(lead.lastCallAt)}`}
                 </p>
@@ -106,11 +106,11 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
                   </a>
                 )}
                 {closed ? (
-                  <span className="text-[11px] text-green-600">{closed}</span>
+                  <span className="text-[13px] text-green-600">{closed}</span>
                 ) : (
                   <button
                     onClick={() => setOpenId(openId === lead.id ? null : lead.id)}
-                    className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
+                    className="rounded-md border border-border px-2 py-1 text-[13px] text-foreground hover:bg-muted"
                   >
                     {openId === lead.id ? "Fermer" : "Noter l'appel"}
                   </button>

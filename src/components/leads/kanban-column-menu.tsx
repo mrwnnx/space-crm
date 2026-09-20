@@ -111,13 +111,13 @@ export function ColumnMenu({
                     onClick={() =>
                       run(() => renameStageAction(bootcampId, statusId, value))
                     }
-                    className="flex-1 rounded bg-primary px-2 py-1 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    className="flex-1 rounded bg-primary px-2 py-1 text-[12px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
                     Enregistrer
                   </button>
                   <button
                     onClick={() => setRenaming(false)}
-                    className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+                    className="rounded border border-border px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted"
                   >
                     Annuler
                   </button>
@@ -211,7 +211,7 @@ export function ColumnMenu({
             )}
 
             {error && (
-              <p className="px-3 py-1.5 text-[10px] font-medium text-red-600">
+              <p className="px-3 py-1.5 text-[12px] font-medium text-red-600">
                 {error}
               </p>
             )}
@@ -292,13 +292,13 @@ export function AddColumnButton({ bootcampId }: { bootcampId: string }) {
         <button
           disabled={isPending}
           onClick={submit}
-          className="flex-1 rounded bg-primary px-2 py-1 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="flex-1 rounded bg-primary px-2 py-1 text-[12px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           Créer
         </button>
         <button
           onClick={() => setAdding(false)}
-          className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+          className="rounded border border-border px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted"
         >
           Annuler
         </button>

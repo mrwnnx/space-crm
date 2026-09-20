@@ -72,7 +72,7 @@ export function StatsAdvice({
         onClick={ouvrir}
         title="Que faire de ce chiffre ?"
         aria-label="Que faire de ce chiffre ?"
-        className="grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full bg-primary text-[10px] leading-none text-primary-foreground ring-[3px] ring-primary/15 transition-shadow hover:ring-primary/30"
+        className="grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full bg-primary text-[12px] leading-none text-primary-foreground ring-[3px] ring-primary/15 transition-shadow hover:ring-primary/30"
       >
         ✦
       </button>
@@ -88,7 +88,7 @@ export function StatsAdvice({
           >
             <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3.5">
               <div className="min-w-0">
-                <p className="font-mono text-[9.5px] font-semibold uppercase tracking-wider text-primary">
+                <p className="font-mono text-[11.5px] font-semibold uppercase tracking-wider text-primary">
                   {isPending ? "Hani nkhamem…" : "Ce que je ferais"}
                 </p>
                 <h3 className="mt-0.5 font-heading text-sm font-semibold text-foreground">{title}</h3>
@@ -121,7 +121,7 @@ export function StatsAdvice({
                         <li key={i}>
                           {c.action}
                           {c.pourquoi && (
-                            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                            <span className="mt-0.5 block text-[13px] text-muted-foreground">
                               {c.pourquoi}
                             </span>
                           )}
@@ -131,14 +131,14 @@ export function StatsAdvice({
                   )}
 
                   {data.avertissement && (
-                    <p className="mb-4 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-500">
+                    <p className="mb-4 rounded-lg bg-amber-500/10 px-3 py-2 text-[13px] leading-relaxed text-amber-700 dark:text-amber-500">
                       {data.avertissement}
                     </p>
                   )}
 
                   {data.cibles.length > 0 && (
                     <>
-                      <p className="mb-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <p className="mb-1.5 font-mono text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                         {data.cibles.length} personnes concernées
                       </p>
                       <ul className="overflow-hidden rounded-lg border border-border">
@@ -152,11 +152,11 @@ export function StatsAdvice({
                                 {c.name ?? "Sans nom"}
                               </span>
                               {c.phone && (
-                                <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                                <span className="shrink-0 font-mono text-[13px] tabular-nums text-muted-foreground">
                                   {c.phone}
                                 </span>
                               )}
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                              <span className="shrink-0 text-[12px] text-muted-foreground">
                                 {c.raison}
                               </span>
                             </Link>

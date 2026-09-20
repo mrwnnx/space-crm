@@ -62,7 +62,7 @@ export function SavedViewsDropdown({
         className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         Views
-        <span className="text-[10px]">▾</span>
+        <span className="text-[12px]">▾</span>
       </button>
 
       {open && (
@@ -97,7 +97,7 @@ export function SavedViewsDropdown({
                 >
                   {view.label}
                   {view.public && (
-                    <span className="ml-1.5 text-[10px] text-muted-foreground/70">
+                    <span className="ml-1.5 text-[12px] text-muted-foreground/70">
                       public
                     </span>
                   )}
@@ -135,7 +135,7 @@ export function SavedViewsDropdown({
                 autoFocus
                 className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
               />
-              <label className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={isPublic}
@@ -147,7 +147,7 @@ export function SavedViewsDropdown({
               <button
                 type="submit"
                 disabled={isPending || !label.trim()}
-                className="w-full rounded-md bg-primary px-2 py-1 text-[10px] font-medium text-primary-foreground disabled:opacity-50"
+                className="w-full rounded-md bg-primary px-2 py-1 text-[12px] font-medium text-primary-foreground disabled:opacity-50"
               >
                 {isPending ? "..." : "Sauvegarder"}
               </button>

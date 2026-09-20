@@ -168,7 +168,7 @@ export function CampaignPublish({
                     placeholder="Visible seulement par l'équipe. Affichée sous l'objet dans la liste."
                     className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 text-[13px] text-muted-foreground">
                     {noteSaved ? "Enregistrée." : "Enregistrement…"} Elle ne part jamais
                     dans l&apos;email.
                   </p>

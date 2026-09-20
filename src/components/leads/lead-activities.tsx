@@ -96,7 +96,7 @@ export function LeadActivities({
                       {activity.subject ?? activity.type}
                     </span>
                     {isInbound && (
-                      <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600">
+                      <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[12px] font-medium text-green-600">
                         Reçu
                       </span>
                     )}

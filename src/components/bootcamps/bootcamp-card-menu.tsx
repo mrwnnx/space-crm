@@ -127,7 +127,7 @@ export function BootcampCardMenu({
 
       {open && (
         <div className="absolute right-0 top-8 z-30 w-52 rounded-lg border border-border bg-card p-1 shadow-lg">
-          <p className="px-2 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <p className="px-2 pb-1 pt-1.5 text-[12px] font-medium uppercase tracking-wide text-muted-foreground/70">
             Statut
           </p>
           {STATUSES.map((s) => (
@@ -140,7 +140,7 @@ export function BootcampCardMenu({
               }`}
             >
               {s.label}
-              {bootcamp.status === s.value && <span className="text-[10px]">●</span>}
+              {bootcamp.status === s.value && <span className="text-[12px]">●</span>}
             </button>
           ))}
 
@@ -218,7 +218,7 @@ export function BootcampCardMenu({
             </div>
 
             <div className="border-t border-border pt-3">
-              <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
                 Offre &amp; paiement
               </p>
               <div className="grid grid-cols-3 gap-3">

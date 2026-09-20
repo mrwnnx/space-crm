@@ -275,7 +275,7 @@ export function LeadsKanban({
         <div className="mx-4 mt-2 space-y-3 rounded-xl border border-border bg-card p-3">
           {formSources.length > 1 && (
             <div>
-              <p className="mb-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="mb-1.5 font-mono text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Formulaire d&apos;origine
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -287,7 +287,7 @@ export function LeadsKanban({
                       type="button"
                       onClick={() => setSourceId(sourceId === f.id ? null : f.id)}
                       className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                        "rounded-full border px-2.5 py-1 text-[13px] transition-colors",
                         sourceId === f.id
                           ? "border-primary bg-primary/10 text-foreground"
                           : "border-border text-muted-foreground hover:bg-muted"
@@ -304,7 +304,7 @@ export function LeadsKanban({
 
           {(["demande", "fait", "traitement"] as Groupe[]).map((groupe) => (
             <div key={groupe}>
-              <p className="mb-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="mb-1.5 font-mono text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {GROUPE_LABEL[groupe]}
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -318,7 +318,7 @@ export function LeadsKanban({
                       disabled={n === 0 && !actifs.has(f.id)}
                       title={n === 0 ? "Aucun lead ne correspond" : undefined}
                       className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                        "rounded-full border px-2.5 py-1 text-[13px] transition-colors",
                         actifs.has(f.id)
                           ? "border-primary bg-primary/10 text-foreground"
                           : "border-border text-muted-foreground hover:bg-muted",
@@ -390,7 +390,7 @@ export function LeadsKanban({
                     {status.name}
                   </h2>
                   {status.isSystem && (
-                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground">
+                    <span className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                       système
                     </span>
                   )}
@@ -520,7 +520,7 @@ const KanbanCard = memo(function KanbanCard({
       )}
     >
       {lead.isNew && (
-        <span className="absolute right-2 top-2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+        <span className="absolute right-2 top-2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
           Non traité
         </span>
       )}
@@ -542,7 +542,7 @@ const KanbanCard = memo(function KanbanCard({
             // l'inscription en connaissant le prix.
             <span
               title="A téléchargé la brochure puis rempli le formulaire d'inscription"
-              className="mt-1 mr-1 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-800"
+              className="mt-1 mr-1 inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-800"
             >
               🔥 Brochure + inscription
             </span>
@@ -556,7 +556,7 @@ const KanbanCard = memo(function KanbanCard({
                   ? "A cliqué sur la vidéo dans l'email reçu"
                   : "A cliqué sur un lien de l'email reçu"
               }
-              className="mt-1 mr-1 inline-block rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800"
+              className="mt-1 mr-1 inline-block rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800"
             >
               {lead.engaged.video ? "▶ A vu la vidéo" : "↗ A cliqué"}
             </span>
@@ -567,7 +567,7 @@ const KanbanCard = memo(function KanbanCard({
             <span
               title={`Déjà présent sur : ${lead.returning.formations.join(", ")}`}
               className={cn(
-                "mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                "mt-1 inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
                 lead.returning.alumni
                   ? "bg-violet-100 text-violet-800"
                   : "bg-sky-100 text-sky-800"
@@ -583,17 +583,17 @@ const KanbanCard = memo(function KanbanCard({
         <div className="mt-2">
           <span
             className={cn(
-              "inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+              "inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
               INTENT_STYLE[lead.insight.intent] ?? INTENT_STYLE.indetermine
             )}
           >
             {INTENT_LABEL[lead.insight.intent] ?? lead.insight.intent}
           </span>
-          <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+          <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
             {lead.insight.summary}
           </p>
           {lead.insight.objection && (
-            <p className="mt-0.5 text-[10px] text-amber-700">
+            <p className="mt-0.5 text-[12px] text-amber-700">
               Frein : {lead.insight.objection}
             </p>
           )}
@@ -608,21 +608,21 @@ const KanbanCard = memo(function KanbanCard({
       )}
 
       {lead.organization?.name && (
-        <p className="mt-2 truncate text-[10px] text-muted-foreground/70">
+        <p className="mt-2 truncate text-[12px] text-muted-foreground/70">
           {lead.organization.name}
         </p>
       )}
 
       <div className="mt-2 flex items-center gap-1.5">
-        <p className="text-[10px] text-muted-foreground/70">
+        <p className="text-[12px] text-muted-foreground/70">
           {formatRelative(lead.createdAt)}
         </p>
         {isHumanActor(lead.lastActor) && (
           <span
-            className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground/70"
+            className="ml-auto flex items-center gap-1 text-[12px] text-muted-foreground/70"
             title={`Dernière intervention : ${lead.lastActor}`}
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
               {actorInitials(lead.lastActor)}
             </span>
             {actorLabel(lead.lastActor)}

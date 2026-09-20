@@ -207,7 +207,7 @@ export function LeadsBulkBar({
       </div>
 
       {!singleBootcamp && bootcampIds.length > 1 && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
+        <p className="mt-1.5 text-[13px] text-muted-foreground">
           Sélection répartie sur {bootcampIds.length} formations — « Déplacer » et
           « Reporter » demandent une seule formation.
         </p>

@@ -63,7 +63,7 @@ export function CallOutcomeForm({
             type="button"
             onClick={() => setOutcome(v)}
             className={cn(
-              "rounded-md border px-2 py-1 text-[11px]",
+              "rounded-md border px-2 py-1 text-[13px]",
               outcome === v
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-border text-muted-foreground hover:bg-muted"
@@ -84,7 +84,7 @@ export function CallOutcomeForm({
                 type="button"
                 onClick={() => setQualification(qualification === q.value ? null : q.value)}
                 className={cn(
-                  "rounded-md border px-2 py-1 text-[11px] font-medium",
+                  "rounded-md border px-2 py-1 text-[13px] font-medium",
                   qualification === q.value ? q.style : "border-border text-muted-foreground hover:bg-muted"
                 )}
               >
@@ -99,21 +99,21 @@ export function CallOutcomeForm({
             type="number"
             min={0}
             placeholder="durée (min)"
-            className="w-28 rounded-md border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-ring"
+            className="w-28 rounded-md border border-border bg-background px-2 py-1 text-[13px] outline-none focus:border-ring"
           />
         </>
       )}
 
       {/* À rappeler le… — c'est ce champ qui fait remonter le lead au bon moment. */}
       <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 text-[10px] text-muted-foreground">Rappeler :</span>
+        <span className="mr-1 text-[12px] text-muted-foreground">Rappeler :</span>
         {FOLLOW_UPS.map((f) => (
           <button
             key={f.days}
             type="button"
             onClick={() => setFollowUpDays(followUpDays === f.days ? null : f.days)}
             className={cn(
-              "rounded-md border px-2 py-1 text-[11px]",
+              "rounded-md border px-2 py-1 text-[13px]",
               followUpDays === f.days
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border text-muted-foreground hover:bg-muted"
@@ -129,14 +129,14 @@ export function CallOutcomeForm({
         onChange={(e) => setNote(e.target.value)}
         rows={2}
         placeholder="Ce qui s'est dit — visible par toute l'équipe"
-        className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-[11px] outline-none focus:border-ring"
+        className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-[13px] outline-none focus:border-ring"
       />
 
       <button
         type="button"
         onClick={save}
         disabled={isPending}
-        className="rounded-md bg-primary px-3 py-1.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {isPending ? "Enregistrement…" : "Enregistrer l'appel"}
       </button>

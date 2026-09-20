@@ -135,18 +135,18 @@ function TaskCard({
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", pr.classes)}>
+        <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-medium", pr.classes)}>
           {pr.label}
         </span>
         {task.dueDate && (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[12px] text-muted-foreground">
             {formatDate(task.dueDate)}
           </span>
         )}
         {task.referenceType && task.referenceId && (
           <Link
             href={refHref(task.referenceType, task.referenceId)}
-            className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15"
+            className="rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-medium text-primary hover:bg-primary/15"
           >
             {task.referenceType} →
           </Link>

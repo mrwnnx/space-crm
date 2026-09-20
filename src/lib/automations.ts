@@ -306,7 +306,8 @@ async function executeRule(
     // Pas de plafond Resend ici : WhatsApp ne passe pas par lui, et Meta
     // applique le sien (erreur traduite si atteint). Sinon une journée de
     // campagne email repoussait tous les WhatsApp au lendemain.
-    const vars = buildVariables(lead, false);
+    // Un modèle en arabe reçoit ses dates en arabe (« 28 سبتمبر »).
+    const vars = buildVariables(lead, rule.whatsappLanguage.startsWith("ar"));
     // Meta ne connaît pas les noms : ses modèles portent {{1}}, {{2}}…
     // C'est l'ORDRE de cette liste qui fait la correspondance.
     const noms = (rule.whatsappVariables as string[]) ?? [];

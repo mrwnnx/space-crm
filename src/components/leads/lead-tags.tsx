@@ -35,7 +35,7 @@ export function LeadTags({
       </p>
 
       {allTags.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground/70">
+        <p className="text-[13px] text-muted-foreground/70">
           Aucun tag créé.{" "}
           <Link href="/tags" className="underline hover:text-foreground">
             En créer un
@@ -52,7 +52,7 @@ export function LeadTags({
                 onClick={() => toggle(tag)}
                 disabled={isPending}
                 title={on ? `Retirer « ${tag.name} »` : `Poser « ${tag.name} »`}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity disabled:opacity-60 ${
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[13px] font-medium transition-opacity disabled:opacity-60 ${
                   on
                     ? `${sc.bg} ${sc.text}`
                     : "bg-transparent text-muted-foreground/70 ring-1 ring-inset ring-border hover:text-foreground"

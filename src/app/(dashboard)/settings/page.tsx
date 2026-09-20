@@ -99,13 +99,13 @@ export default async function SettingsPage({
               ].map((v, i) => (
                 <span key={v}>
                   {i > 0 && ", "}
-                  <code className="rounded bg-muted px-1 text-[10px]">{`{{${v}}}`}</code>
+                  <code className="rounded bg-muted px-1 text-[12px]">{`{{${v}}}`}</code>
                 </span>
               ))}
             </p>
             {/* Dit franchement où elles sont remplacées : ailleurs elles
                 partent vides, et rien à l'écran ne le signalerait. */}
-            <p className="mb-4 text-[11px] text-muted-foreground/80">
+            <p className="mb-4 text-[13px] text-muted-foreground/80">
               Les variables du lead ({`{{firstName}}`}, {`{{formation}}`},{" "}
               {`{{dateDebut}}`}, {`{{offre}}`}) sont remplacées dans les{" "}
               <strong className="font-medium">automatisations de colonne</strong>{" "}
@@ -191,7 +191,7 @@ export default async function SettingsPage({
                 configured={!!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID}
               />
             </div>
-            <p className="mt-3 text-[10px] text-muted-foreground/70">
+            <p className="mt-3 text-[12px] text-muted-foreground/70">
               Configurez les clés dans .env.local pour activer l'envoi.
             </p>
           </section>

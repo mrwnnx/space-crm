@@ -118,12 +118,12 @@ export function ColumnAutomationDialog({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">
-                    <span className="mr-1.5 rounded bg-muted px-1 py-0.5 text-[10px] uppercase text-muted-foreground">
+                    <span className="mr-1.5 rounded bg-muted px-1 py-0.5 text-[12px] uppercase text-muted-foreground">
                       {a.channel === "whatsapp" ? "WhatsApp" : "Email"}
                     </span>
                     {a.templateName ?? a.whatsappTemplate ?? "—"}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
                     {timingLabel(a)}
                     {!a.active && (
                       <span className="ml-2 rounded bg-amber-50 px-1 py-0.5 text-amber-700">
@@ -136,14 +136,14 @@ export function ColumnAutomationDialog({
                   <button
                     type="button"
                     onClick={() => setEditing(a)}
-                    className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
+                    className="rounded-md border border-border px-2 py-1 text-[13px] text-foreground hover:bg-muted"
                   >
                     Modifier
                   </button>
                   <button
                     type="button"
                     onClick={() => setStats(a)}
-                    className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
+                    className="rounded-md border border-border px-2 py-1 text-[13px] text-foreground hover:bg-muted"
                   >
                     Stats
                   </button>
@@ -151,7 +151,7 @@ export function ColumnAutomationDialog({
                     type="button"
                     disabled={isPending}
                     onClick={() => remove(a)}
-                    className="rounded-md border border-red-500/30 px-2 py-1 text-[11px] text-red-600 hover:bg-red-500/5 disabled:opacity-50"
+                    className="rounded-md border border-red-500/30 px-2 py-1 text-[13px] text-red-600 hover:bg-red-500/5 disabled:opacity-50"
                   >
                     Supprimer
                   </button>
@@ -312,7 +312,7 @@ function RuleForm({
                 placeholder="brochure_programme"
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 Minuscules, chiffres et underscores uniquement. Le modèle doit exister et être
                 approuvé dans le WhatsApp Manager — sinon l&apos;envoi échoue au premier lead.
               </p>
@@ -326,7 +326,7 @@ function RuleForm({
                 placeholder="fr"
                 className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-[13px] text-muted-foreground">
                 Exactement le code déclaré avec le modèle : <code>fr</code>, <code>en_US</code>,
                 <code>ar</code>…
               </p>
@@ -348,7 +348,7 @@ function RuleForm({
                           prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
                         )
                       }
-                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                      className={`rounded-full border px-2.5 py-1 text-[13px] transition-colors ${
                         rang >= 0
                           ? "border-primary bg-primary/10 text-foreground"
                           : "border-border text-muted-foreground hover:bg-muted"
@@ -362,14 +362,14 @@ function RuleForm({
                   );
                 })}
               </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 Meta ne connaît pas les noms : ses modèles portent{" "}
                 <code>{"{{1}}"}</code>, <code>{"{{2}}"}</code>… C&apos;est l&apos;ordre de
                 sélection qui fait la correspondance. Clique pour ajouter ou retirer.
               </p>
             </div>
 
-            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-500">
+            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[13px] leading-relaxed text-amber-700 dark:text-amber-500">
               Un lead sans numéro de téléphone est ignoré, comme une règle email ignore un lead
               sans adresse.
             </p>
@@ -404,7 +404,7 @@ function RuleForm({
                 </option>
               ))}
             </select>
-            <p className="mb-3 text-[11px] text-muted-foreground">
+            <p className="mb-3 text-[13px] text-muted-foreground">
               <Link href="/settings?tab=emails" className="text-primary underline">
                 Créer ou modifier un modèle
               </Link>
@@ -429,7 +429,7 @@ function RuleForm({
             </option>
           ))}
         </select>
-        <p className="mb-3 text-[11px] text-muted-foreground">
+        <p className="mb-3 text-[13px] text-muted-foreground">
           {atHour != null
             ? "Ignoré : c'est le jour et l'heure ci-dessous qui comptent."
             : delay === 0
@@ -464,7 +464,7 @@ function RuleForm({
             ))}
           </select>
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">
+        <p className="mb-3 text-[13px] text-muted-foreground">
           « J+3 à 18 h » = trois jours après l&apos;entrée, à 18 h. Un modèle WhatsApp
           marketing attend de toute façon la fenêtre 9 h-20 h et ne part jamais deux fois en
           24 h vers la même personne.

@@ -108,7 +108,7 @@ async function DealDetailPageLegacy({
               href={`/leads/${deal.lead.id}`}
               className="flex items-center gap-2 border-b border-border p-3 text-xs text-muted-foreground transition-colors hover:bg-muted/40"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-muted-foreground">
                 {initials(deal.lead.fullName)}
               </div>
               <span>
@@ -148,14 +148,14 @@ async function DealDetailPageLegacy({
                     href={`/contacts/${c.id}`}
                     className="flex items-center gap-2 rounded-md p-1.5 transition-colors hover:bg-muted/40"
                   >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-muted-foreground">
                       {initials(c.fullName)}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-xs font-medium text-foreground">
                         {c.fullName}
                       </p>
-                      <p className="truncate text-[10px] text-muted-foreground">
+                      <p className="truncate text-[12px] text-muted-foreground">
                         {c.email || c.mobileNo || ""}
                       </p>
                     </div>
@@ -181,7 +181,7 @@ async function DealDetailPageLegacy({
                       <p className="text-xs font-medium text-foreground">
                         {dp.product.name}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-[12px] text-muted-foreground">
                         {dp.qty} × {Number(dp.rate).toLocaleString("fr-FR")} €
                       </p>
                     </div>

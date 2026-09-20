@@ -256,7 +256,7 @@ export default async function HistoriquePage({
                         {detail}
                       </p>
                     )}
-                    <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                    <p className="mt-0.5 text-[13px] tabular-nums text-muted-foreground">
                       {stamp(e.at)}
                     </p>
                   </div>

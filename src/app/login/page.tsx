@@ -119,7 +119,7 @@ function LoginContent({
                         fallait passer par le tableau de bord Supabase. */}
                     <Link
                       href="/login?mode=forgot"
-                      className="text-[11px] text-muted-foreground underline hover:text-foreground"
+                      className="text-[13px] text-muted-foreground underline hover:text-foreground"
                     >
                       Oublié ?
                     </Link>
@@ -172,7 +172,7 @@ function LoginContent({
                 >
                   Créer un compte
                 </button>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[13px] text-muted-foreground">
                   Réservé aux adresses invitées par l&apos;administrateur.
                 </p>
               </form>

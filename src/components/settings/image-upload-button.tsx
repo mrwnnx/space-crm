@@ -52,7 +52,7 @@ export function ImageUploadButton({
       {message && (
         <span
           className={
-            message.ok ? "text-[11px] text-amber-700" : "text-[11px] text-red-600"
+            message.ok ? "text-[13px] text-amber-700" : "text-[13px] text-red-600"
           }
         >
           {message.text}

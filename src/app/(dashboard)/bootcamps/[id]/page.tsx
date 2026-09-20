@@ -121,7 +121,7 @@ export default async function BootcampDetailPage({
             </h1>
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                "rounded-full px-2 py-0.5 text-[12px] font-medium",
                 statusColor(statusColors[bootcamp.status] || "gray")
               )}
             >

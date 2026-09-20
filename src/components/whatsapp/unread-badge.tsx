@@ -28,7 +28,7 @@ export function WhatsAppUnreadBadge() {
 
   if (n === 0) return null;
   return (
-    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
+    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[12px] font-semibold leading-none text-primary-foreground">
       {n}
     </span>
   );

@@ -72,7 +72,7 @@ export function ImportFormsButton({
         <button
           onClick={() => setResult(null)}
           title="Masquer"
-          className={`hidden max-w-[220px] truncate rounded-full px-2 py-0.5 text-[11px] font-medium sm:block ${
+          className={`hidden max-w-[220px] truncate rounded-full px-2 py-0.5 text-[13px] font-medium sm:block ${
             result.ok
               ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
               : "bg-amber-500/10 text-amber-700 dark:text-amber-400"

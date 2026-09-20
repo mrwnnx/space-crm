@@ -107,7 +107,7 @@ export function PaymentBlock({
         </p>
         <span
           className={cn(
-            "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+            "rounded-full border px-2 py-0.5 text-[12px] font-medium",
             statusConfig[summary.status]?.style
           )}
         >
@@ -116,7 +116,7 @@ export function PaymentBlock({
       </div>
 
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {summary.paidCount} / {summary.count} payées
           {summary.total > 0 && ` · total ${summary.total.toLocaleString("fr-FR")} ${currency ?? "TND"}`}
         </p>
@@ -124,7 +124,7 @@ export function PaymentBlock({
             une remise accordée après coup ne pouvait plus être enregistrée. */}
         <button
           onClick={() => setEditing(true)}
-          className="shrink-0 text-[11px] text-muted-foreground underline hover:text-foreground"
+          className="shrink-0 text-[13px] text-muted-foreground underline hover:text-foreground"
         >
           Modifier l&apos;offre
         </button>
@@ -171,7 +171,7 @@ export function PaymentBlock({
                   </span>
                 </div>
                 {ech.paidAt && (
-                  <span className="shrink-0 text-[10px] text-emerald-600 dark:text-emerald-400">
+                  <span className="shrink-0 text-[12px] text-emerald-600 dark:text-emerald-400">
                     payée
                   </span>
                 )}
@@ -180,7 +180,7 @@ export function PaymentBlock({
               {/* Une échéance encaissée dit où est l'argent et ce qui le prouve.
                   Le manque s'affiche aussi : c'est ce qui permet de rattraper. */}
               {ech.isPaid && (
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-[22px] text-[10px] text-muted-foreground">
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-[22px] text-[12px] text-muted-foreground">
                   <span title={ech.receivedBy ?? undefined}>
                     {ech.receivedBy ? `chez ${personne(ech.receivedBy)}` : "détenteur non précisé"}
                   </span>

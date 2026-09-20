@@ -151,7 +151,7 @@ export function OfferDialog({
         )}
 
         {enrolled && (
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
             Ce lead est inscrit : son échéancier sera refait.{" "}
             <strong className="text-foreground">
               Les {dejaPaye.toLocaleString("fr-FR")} {currency} déjà encaissés ne bougent
@@ -162,11 +162,11 @@ export function OfferDialog({
         )}
 
         {tropBas && (
-          <p className="mt-2 text-[11px] font-medium text-red-600">
+          <p className="mt-2 text-[13px] font-medium text-red-600">
             Ce total est inférieur à ce qu&apos;il a déjà versé.
           </p>
         )}
-        {error && <p className="mt-2 text-[11px] font-medium text-red-600">{error}</p>}
+        {error && <p className="mt-2 text-[13px] font-medium text-red-600">{error}</p>}
 
         <div className="mt-4 flex gap-2">
           <button

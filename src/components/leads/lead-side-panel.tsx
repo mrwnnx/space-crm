@@ -79,7 +79,7 @@ export function LeadSidePanel({
             </p>
           )}
           {lead.nextFollowUpAt && (
-            <p className="mt-0.5 text-[11px] text-primary">
+            <p className="mt-0.5 text-[13px] text-primary">
               À rappeler le {new Date(lead.nextFollowUpAt).toLocaleDateString("fr-FR")}
             </p>
           )}
@@ -210,11 +210,11 @@ export function LeadSidePanel({
             {/* Dire quand le montant vient du catalogue et non d'une
                 négociation : les deux se ressemblent à l'écran. */}
             {lead.intendedPlan && !lead.offerTotal && (
-              <p className="text-[10px] text-muted-foreground">tarif de la formation</p>
+              <p className="text-[12px] text-muted-foreground">tarif de la formation</p>
             )}
             <button
               onClick={() => setEditingOffer(true)}
-              className="mt-0.5 text-[11px] font-medium text-primary underline"
+              className="mt-0.5 text-[13px] font-medium text-primary underline"
             >
               Changer l&apos;offre
             </button>

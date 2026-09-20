@@ -57,15 +57,15 @@ function Card({
           />
         )}
       </h2>
-      {sub && <p className="mt-0.5 mb-3 text-[11px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-0.5 mb-3 text-[13px] text-muted-foreground">{sub}</p>}
       {children}
       {gap && (
-        <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-500">
+        <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[13px] leading-relaxed text-amber-700 dark:text-amber-500">
           {gap.constat}
         </p>
       )}
       {!gap && verdict && (
-        <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-[13px] leading-relaxed text-muted-foreground">
           {verdict}
         </p>
       )}
@@ -91,15 +91,15 @@ function Row({
     tone === "alert" ? "bg-amber-600" : tone === "good" ? "bg-emerald-600"
       : tone === "soft" ? "bg-primary/25" : "bg-primary";
   return (
-    <div className="grid grid-cols-[minmax(0,7rem)_1fr_3rem] items-center gap-2 text-[11.5px]">
+    <div className="grid grid-cols-[minmax(0,7rem)_1fr_3rem] items-center gap-2 text-[13.5px]">
       <span className={`truncate ${tone === "alert" ? "font-medium text-amber-700 dark:text-amber-500" : "text-muted-foreground"}`}>
         {label}
-        {hint && <span className="ml-1 font-mono text-[9.5px] opacity-70">{hint}</span>}
+        {hint && <span className="ml-1 font-mono text-[11.5px] opacity-70">{hint}</span>}
       </span>
       <span className="h-3.5 overflow-hidden rounded bg-muted">
         <span className={`block h-full rounded ${fill}`} style={{ width: `${Math.max(pct, 0)}%` }} />
       </span>
-      <span className="text-right font-mono text-[11.5px] font-semibold tabular-nums">{value}</span>
+      <span className="text-right font-mono text-[13.5px] font-semibold tabular-nums">{value}</span>
     </div>
   );
 }
@@ -113,7 +113,7 @@ function Big({ value, unit, label, tone }: { value: string; unit?: string; label
         {value}
         {unit && <span className="ml-0.5 text-xs font-normal text-muted-foreground">{unit}</span>}
       </p>
-      <p className="mt-1 text-[10.5px] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-[12.5px] text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -157,7 +157,7 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
           <h1 className="truncate font-heading text-sm font-semibold text-foreground">Statistiques</h1>
           <p className="truncate text-xs text-muted-foreground">{bootcamp.name}</p>
         </div>
-        <span className="hidden shrink-0 rounded-full border border-primary bg-primary/10 px-3 py-1 text-[10.5px] font-medium text-primary sm:block">
+        <span className="hidden shrink-0 rounded-full border border-primary bg-primary/10 px-3 py-1 text-[12.5px] font-medium text-primary sm:block">
           Toute la formation
           {bootcamp.startDate ? ` · depuis le ${formatDate(bootcamp.startDate)}` : ""}
         </span>
@@ -173,11 +173,11 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
             { v: dt(s.socle.inscrits), k: "inscrits", alert: false },
           ].map((k) => (
             <div key={k.k} className="bg-card px-3.5 py-3">
-              <p className={`font-mono text-[22px] font-semibold leading-none tracking-tight ${
+              <p className={`font-mono text-[24px] font-semibold leading-none tracking-tight ${
                 k.alert ? "text-amber-700 dark:text-amber-500" : "text-foreground"}`}>
                 {k.v}
               </p>
-              <p className="mt-1 text-[10.5px] text-muted-foreground">{k.k}</p>
+              <p className="mt-1 text-[12.5px] text-muted-foreground">{k.k}</p>
             </div>
           ))}
         </div>
@@ -204,7 +204,7 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
                     className="relative flex-1 rounded-t-[3px] bg-primary/25"
                     style={{ height: `${Math.max((r.arrivees / maxJour) * 124, 2)}px` }}
                   >
-                    <span className="absolute -top-3.5 left-0 right-0 text-center font-mono text-[9.5px] font-semibold text-muted-foreground">
+                    <span className="absolute -top-3.5 left-0 right-0 text-center font-mono text-[11.5px] font-semibold text-muted-foreground">
                       {r.arrivees}
                     </span>
                   </div>
@@ -212,16 +212,16 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
                     className="relative flex-1 rounded-t-[3px] bg-primary"
                     style={{ height: `${Math.max((r.appels / maxJour) * 124, 2)}px` }}
                   >
-                    <span className="absolute -top-3.5 left-0 right-0 text-center font-mono text-[9.5px] font-semibold text-primary">
+                    <span className="absolute -top-3.5 left-0 right-0 text-center font-mono text-[11.5px] font-semibold text-primary">
                       {r.appels}
                     </span>
                   </div>
                 </div>
-                <p className="text-center font-mono text-[9.5px] text-muted-foreground">{r.jour}</p>
+                <p className="text-center font-mono text-[11.5px] text-muted-foreground">{r.jour}</p>
               </div>
             ))}
           </div>
-          <div className="mt-3 flex gap-4 text-[11px] text-muted-foreground">
+          <div className="mt-3 flex gap-4 text-[13px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-primary/25" />Leads entrés
             </span>
@@ -269,14 +269,14 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
                 <Big value={String(s.delais.max).replace(".", ",")} unit="j" label="le plus lent" />
               </div>
             ) : (
-              <p className="text-[11.5px] text-muted-foreground">
+              <p className="text-[13.5px] text-muted-foreground">
                 Aucune inscription pour l&apos;instant — le délai apparaîtra à la première.
               </p>
             )}
 
             {s.sejours.length > 0 && (
               <>
-                <p className="mb-2.5 mt-4 text-[11px] text-muted-foreground">
+                <p className="mb-2.5 mt-4 text-[13px] text-muted-foreground">
                   Temps médian passé dans chaque colonne
                 </p>
                 <div className="space-y-1.5">
@@ -310,16 +310,16 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
           }
         >
           {s.gens.length === 0 ? (
-            <p className="text-[11.5px] text-muted-foreground">Aucune action humaine enregistrée.</p>
+            <p className="text-[13.5px] text-muted-foreground">Aucune action humaine enregistrée.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[30rem] border-collapse text-[11.5px]">
+              <table className="w-full min-w-[30rem] border-collapse text-[13.5px]">
                 <thead>
                   <tr className="border-b border-border">
                     {["Personne", "Appels", "Aboutis", "Taux", "Déplacements", "Commentaires"].map((h, i) => (
                       <th
                         key={h}
-                        className={`pb-2 font-mono text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground ${
+                        className={`pb-2 font-mono text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground ${
                           i === 0 ? "text-left" : "text-right"}`}
                       >
                         {h}
@@ -337,7 +337,7 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
                       <td className="py-2 text-right font-mono tabular-nums">{g.aboutis}</td>
                       <td className="py-2 text-right">
                         {g.appels > 0 ? (
-                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-500">
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-500">
                             {pc(g.aboutis, g.appels)} %
                           </span>
                         ) : (
@@ -374,7 +374,7 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
 
             {s.argent.parMoyen.length > 0 && (
               <>
-                <p className="mb-2.5 mt-4 text-[11px] text-muted-foreground">Par moyen de paiement</p>
+                <p className="mb-2.5 mt-4 text-[13px] text-muted-foreground">Par moyen de paiement</p>
                 <div className="space-y-1.5">
                   {s.argent.parMoyen.map((m) => {
                     const max = Math.max(1, ...s.argent.parMoyen.map((x) => x.n));
@@ -401,7 +401,7 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
             bootcampId={id}
           >
             {s.emails.envoyes === 0 ? (
-              <p className="text-[11.5px] text-muted-foreground">
+              <p className="text-[13.5px] text-muted-foreground">
                 Aucun email d&apos;automatisation envoyé sur cette formation.
               </p>
             ) : (
@@ -414,7 +414,7 @@ export default async function StatistiquesPage({ params }: { params: Promise<{ i
 
                 {s.emails.liens.length > 0 && (
                   <>
-                    <p className="mb-2.5 mt-4 text-[11px] text-muted-foreground">Liens les plus cliqués</p>
+                    <p className="mb-2.5 mt-4 text-[13px] text-muted-foreground">Liens les plus cliqués</p>
                     <div className="space-y-1.5">
                       {s.emails.liens.map((l) => (
                         <Row

@@ -64,7 +64,7 @@ export function CarryOverPanel({
           <p className="text-sm font-medium text-foreground">
             Reporter les leads non conclus
           </p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {movable.length} personne{movable.length > 1 ? "s" : ""} ni inscrite
             {movable.length > 1 ? "s" : ""} ni perdue{movable.length > 1 ? "s" : ""}.
             Elles gardent leur qualification et un lien vers leur fiche d&apos;origine.
@@ -81,7 +81,7 @@ export function CarryOverPanel({
       {open && (
         <div className="mt-3 space-y-2 border-t border-border pt-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Vers :</span>
+            <span className="text-[12px] text-muted-foreground">Vers :</span>
             <select
               value={target}
               onChange={(e) => setTarget(e.target.value)}
@@ -100,7 +100,7 @@ export function CarryOverPanel({
             >
               {isPending ? "…" : `Reporter ${selected.size}`}
             </button>
-            {result && <span className="text-[11px] text-green-600">{result}</span>}
+            {result && <span className="text-[13px] text-green-600">{result}</span>}
           </div>
 
           <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -124,17 +124,17 @@ export function CarryOverPanel({
                   {c.fullName || c.email}
                 </span>
                 {c.qualification && (
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[12px] text-muted-foreground">
                     {QUALIF_LABEL[c.qualification] ?? c.qualification}
                   </span>
                 )}
                 {c.calls > 0 && (
-                  <span className="text-[10px] text-muted-foreground/70">
+                  <span className="text-[12px] text-muted-foreground/70">
                     {c.calls} appel{c.calls > 1 ? "s" : ""}
                   </span>
                 )}
                 {c.alreadyThere && (
-                  <span className="text-[10px] text-muted-foreground/70">déjà présent</span>
+                  <span className="text-[12px] text-muted-foreground/70">déjà présent</span>
                 )}
               </label>
             ))}

@@ -94,7 +94,7 @@ export function AutomationStatsDialog({
             <h2 className="text-sm font-semibold text-foreground">
               Résultats — «&nbsp;{columnName}&nbsp;»
             </h2>
-            <p className="truncate text-[11px] text-muted-foreground">{templateName}</p>
+            <p className="truncate text-[13px] text-muted-foreground">{templateName}</p>
           </div>
           <button
             onClick={onClose}
@@ -128,7 +128,7 @@ export function AutomationStatsDialog({
             </div>
 
             {/* Dit franchement pourquoi le chiffre d'ouverture est grisé. */}
-            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
               Les ouvertures sont gonflées : Apple et Gmail préchargent l&apos;image de
               suivi, ce qui compte des ouvertures que personne n&apos;a faites. Le clic,
               lui, ne ment pas.
@@ -136,14 +136,14 @@ export function AutomationStatsDialog({
 
             {stats.liens.length > 0 && (
               <div className="mt-4">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Quel lien a marché
                 </p>
                 <ul className="space-y-1">
                   {stats.liens.map((l) => (
                     <li
                       key={l.url}
-                      className="flex items-baseline justify-between gap-3 text-[11px]"
+                      className="flex items-baseline justify-between gap-3 text-[13px]"
                     >
                       <span className="min-w-0 truncate text-muted-foreground" title={l.url}>
                         {shortUrl(l.url)}
@@ -158,7 +158,7 @@ export function AutomationStatsDialog({
             )}
 
             {(stats.ignores > 0 || stats.echecs > 0) && (
-              <p className="mt-2 text-[10px] text-muted-foreground">
+              <p className="mt-2 text-[12px] text-muted-foreground">
                 {stats.ignores > 0 && `${stats.ignores} ignoré${stats.ignores > 1 ? "s" : ""}`}
                 {stats.ignores > 0 && stats.echecs > 0 && " · "}
                 {stats.echecs > 0 && `${stats.echecs} échec${stats.echecs > 1 ? "s" : ""}`}
@@ -187,7 +187,7 @@ export function AutomationStatsDialog({
                 };
                 const at = r.sentAt ?? r.scheduledAt ?? r.createdAt;
                 return (
-                  <li key={r.id} className="flex items-start gap-2 text-[11px]">
+                  <li key={r.id} className="flex items-start gap-2 text-[13px]">
                     <span className={`shrink-0 rounded px-1.5 py-0.5 ${label.cls}`}>
                       {label.text}
                     </span>
@@ -230,7 +230,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border border-border px-2 py-1.5">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-[12px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={`text-base font-semibold tabular-nums ${
           dim ? "text-muted-foreground" : "text-foreground"
@@ -238,7 +238,7 @@ function Stat({
       >
         {value}
       </p>
-      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -267,7 +267,7 @@ export function AutomationStatsBadge({
       <button
         onClick={() => setOpen(true)}
         title={`Envoie « ${templateName} » — ${delay}. Cliquer pour voir les résultats.`}
-        className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary transition-colors hover:bg-primary/20"
+        className="rounded bg-primary/10 px-1 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
       >
         auto
       </button>

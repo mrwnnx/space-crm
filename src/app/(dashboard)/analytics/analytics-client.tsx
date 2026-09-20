@@ -73,7 +73,7 @@ export function AnalyticsClient({
               <p className="mt-1 text-lg font-semibold text-foreground font-heading">
                 {stats.openCount} lead{stats.openCount > 1 ? "s" : ""}
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
                 âge moy. {daysLabel(stats.avgAgeOpenLeads)} · {stats.stalledCount} en stagnation (&gt;{STALL_DAYS}j)
               </p>
             </div>
@@ -95,10 +95,10 @@ export function AnalyticsClient({
                         <span className="font-medium text-foreground">
                           {s.name}
                           {s.kind === "converted" && (
-                            <span className="ml-1.5 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-600">converti</span>
+                            <span className="ml-1.5 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[12px] text-emerald-600">converti</span>
                           )}
                           {s.kind === "lost" && (
-                            <span className="ml-1.5 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-600">perdu</span>
+                            <span className="ml-1.5 rounded bg-red-500/10 px-1.5 py-0.5 text-[12px] text-red-600">perdu</span>
                           )}
                         </span>
                         <span className="text-muted-foreground">

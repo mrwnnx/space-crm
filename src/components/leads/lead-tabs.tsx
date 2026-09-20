@@ -92,7 +92,7 @@ export function LeadTabs({
           >
             {label}
             {key === "activity" && timeline.length > 0 && (
-              <span className="ml-1.5 text-[10px] text-muted-foreground">{timeline.length}</span>
+              <span className="ml-1.5 text-[12px] text-muted-foreground">{timeline.length}</span>
             )}
           </button>
         ))}
@@ -103,7 +103,7 @@ export function LeadTabs({
       {tab === "score" && (
         <div className="space-y-4 p-4 lg:flex-1 lg:overflow-y-auto">
           <div className={cn("rounded-xl border p-4", tone.ring)}>
-            <p className={cn("text-[10px] font-semibold uppercase tracking-wide", tone.cls)}>
+            <p className={cn("text-[12px] font-semibold uppercase tracking-wide", tone.cls)}>
               {tone.label}
             </p>
             <p className="mt-1 text-sm font-medium text-foreground">{recommendation.action}</p>
@@ -112,14 +112,14 @@ export function LeadTabs({
                 {recommendation.because.map((b) => (
                   <li
                     key={b}
-                    className="rounded-full bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                    className="rounded-full bg-background/70 px-2 py-0.5 text-[12px] text-muted-foreground"
                   >
                     {b}
                   </li>
                 ))}
               </ul>
             )}
-            <p className="mt-2 text-[10px] text-muted-foreground">
+            <p className="mt-2 text-[12px] text-muted-foreground">
               Déduit de ses actes — ne dépend d&apos;aucune IA.
             </p>
           </div>
@@ -135,12 +135,12 @@ export function LeadTabs({
           {insight ? (
             <div className="rounded-xl border border-border p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Lecture IA
                 </p>
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    "rounded-full px-2 py-0.5 text-[12px] font-semibold",
                     INTENT[insight.intent]?.cls ?? "bg-muted text-muted-foreground"
                   )}
                 >
@@ -155,13 +155,13 @@ export function LeadTabs({
               )}
               {insight.recommendation ? (
                 <div className="mt-3 border-t border-border pt-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Recommandation de l&apos;IA
                   </p>
                   <p className="mt-1 text-sm text-foreground">{insight.recommendation}</p>
                 </div>
               ) : (
-                <p className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
+                <p className="mt-3 border-t border-border pt-3 text-[13px] text-muted-foreground">
                   Cette analyse est antérieure à la recommandation IA. Elle apparaîtra à la
                   prochaine relecture de ce lead.
                 </p>
@@ -197,11 +197,11 @@ export function LeadTabs({
                     <div className="min-w-0 flex-1 pb-4">
                       <p className="text-xs font-medium text-foreground">{e.label}</p>
                       {e.detail && (
-                        <p className="truncate text-[11px] text-muted-foreground" title={e.detail}>
+                        <p className="truncate text-[13px] text-muted-foreground" title={e.detail}>
                           {e.detail}
                         </p>
                       )}
-                      <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
                         {stamp(e.at)}
                         {e.actor ? ` · ${e.actor}` : ""}
                       </p>

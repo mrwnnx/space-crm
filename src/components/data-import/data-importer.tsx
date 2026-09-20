@@ -327,7 +327,7 @@ export function DataImporter({ tags, bootcamps }: { tags: Option[]; bootcamps: O
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[13px] text-muted-foreground">
                   Un email déjà connu ne crée pas de doublon : le tag est posé sur le lead existant.
                 </p>
               </label>
@@ -344,7 +344,7 @@ export function DataImporter({ tags, bootcamps }: { tags: Option[]; bootcamps: O
                 <thead className="bg-muted/30">
                   <tr>
                     {headers.map((h) => (
-                      <th key={h} className="px-3 py-1.5 text-left text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+                      <th key={h} className="px-3 py-1.5 text-left text-[12px] font-medium text-muted-foreground whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -354,7 +354,7 @@ export function DataImporter({ tags, bootcamps }: { tags: Option[]; bootcamps: O
                   {csvData.slice(0, 5).map((row, i) => (
                     <tr key={i} className="border-t border-border">
                       {headers.map((h) => (
-                        <td key={h} className="px-3 py-1.5 text-[10px] text-foreground whitespace-nowrap">
+                        <td key={h} className="px-3 py-1.5 text-[12px] text-foreground whitespace-nowrap">
                           {row[h] || "—"}
                         </td>
                       ))}

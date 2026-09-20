@@ -136,7 +136,7 @@ export function EmailDesignForm({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={v.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
                 ) : (
-                  <span className="text-[10px] text-muted-foreground">Aucun logo</span>
+                  <span className="text-[12px] text-muted-foreground">Aucun logo</span>
                 )}
               </div>
               <div className="min-w-[180px] flex-1 space-y-2">
@@ -224,7 +224,7 @@ export function EmailDesignForm({
               </Hint>
             </SubCard>
 
-            <p className="mt-1 text-[11px] text-muted-foreground/70">
+            <p className="mt-1 text-[13px] text-muted-foreground/70">
               Les couleurs de survol n&apos;existent pas dans un client mail : elles ne sont
               volontairement pas proposées.
             </p>
@@ -260,7 +260,7 @@ export function EmailDesignForm({
               onChange={(e) => set("footerText")(e.target.value)}
               rows={4}
               placeholder={"Space Academy — Tunis\nTu reçois cet email suite à ta demande."}
-              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[12px] leading-relaxed outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[14px] leading-relaxed outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
             />
             <Hint>
               En Markdown : les liens y sont cliquables, contrairement à du texte brut.
@@ -327,7 +327,7 @@ export function EmailDesignForm({
               />
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-[13px] text-muted-foreground">
             Aperçu calculé avec le moteur d&apos;envoi : ce que vous voyez est ce qui partira.
           </p>
         </div>
@@ -371,7 +371,7 @@ function SubCard({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-[13px] text-muted-foreground">{label}</span>
       {children}
     </label>
   );
@@ -461,5 +461,5 @@ function AlignPicker({
 }
 
 function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">{children}</p>;
+  return <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground/70">{children}</p>;
 }

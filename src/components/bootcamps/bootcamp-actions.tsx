@@ -68,7 +68,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
 
       <button
         onClick={() => setShowPricing(!showPricing)}
-        className="rounded-lg border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+        className="rounded-lg border border-border px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted"
       >
         Offre
       </button>
@@ -77,7 +77,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
         <div className="rounded-lg border border-border bg-background p-3">
           <p className="mb-3 text-xs font-semibold text-foreground">Offre &amp; paiement</p>
 
-          <label className="mb-1 block text-[10px] text-muted-foreground">Devise</label>
+          <label className="mb-1 block text-[12px] text-muted-foreground">Devise</label>
           <select
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
@@ -88,7 +88,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
             <option value="USD">USD</option>
           </select>
 
-          <label className="mb-1 block text-[10px] text-muted-foreground">Prix total (comptant)</label>
+          <label className="mb-1 block text-[12px] text-muted-foreground">Prix total (comptant)</label>
           <input
             type="number"
             value={priceTotal}
@@ -96,7 +96,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
             className="mb-2 w-full rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
           />
 
-          <label className="mb-1 block text-[10px] text-muted-foreground">Nb mensualités</label>
+          <label className="mb-1 block text-[12px] text-muted-foreground">Nb mensualités</label>
           <input
             type="number"
             value={monthlyCount}
@@ -104,7 +104,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
             className="mb-2 w-full rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
           />
 
-          <label className="mb-1 block text-[10px] text-muted-foreground">Montant / mois</label>
+          <label className="mb-1 block text-[12px] text-muted-foreground">Montant / mois</label>
           <input
             type="number"
             value={monthlyAmount}
@@ -135,13 +135,13 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
           <button
             onClick={handleDelete}
             disabled={isPending}
-            className="rounded-lg bg-red-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-lg bg-red-600 px-2 py-1 text-[12px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
             {isPending ? "…" : "Confirmer"}
           </button>
           <button
             onClick={() => setShowDelete(false)}
-            className="rounded-lg border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+            className="rounded-lg border border-border px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted"
           >
             Annuler
           </button>
@@ -149,7 +149,7 @@ export function BootcampActions({ bootcamp }: { bootcamp: Bootcamp }) {
       ) : (
         <button
           onClick={() => setShowDelete(true)}
-          className="rounded-lg border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-red-500"
+          className="rounded-lg border border-border px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted hover:text-red-500"
         >
           Supprimer
         </button>

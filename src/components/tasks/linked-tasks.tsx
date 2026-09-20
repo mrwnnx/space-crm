@@ -57,7 +57,7 @@ export function LinkedTasks({
                 )
               }
               className={cn(
-                "flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px]",
+                "flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[12px]",
                 task.status === "done"
                   ? "border-green-500 bg-green-500 text-white"
                   : "border-border bg-background text-transparent hover:border-primary"
@@ -82,7 +82,7 @@ export function LinkedTasks({
               )}
             />
             {task.dueDate && (
-              <span className="shrink-0 text-[10px] text-muted-foreground">
+              <span className="shrink-0 text-[12px] text-muted-foreground">
                 {formatDate(task.dueDate)}
               </span>
             )}
@@ -90,7 +90,7 @@ export function LinkedTasks({
         ))}
 
         {tasks.length === 0 && (
-          <p className="py-2 text-center text-[10px] text-muted-foreground/70">
+          <p className="py-2 text-center text-[12px] text-muted-foreground/70">
             Aucune tâche
           </p>
         )}

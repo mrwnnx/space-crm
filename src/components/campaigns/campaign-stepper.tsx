@@ -123,7 +123,7 @@ function Step({
             : "text-muted-foreground/70"
       }`}
     >
-      <span aria-hidden className="font-mono text-[10px]">
+      <span aria-hidden className="font-mono text-[12px]">
         {done ? "✓" : n}
       </span>
       {label}

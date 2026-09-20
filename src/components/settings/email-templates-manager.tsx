@@ -279,7 +279,7 @@ function TemplateEditor({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <ImageUploadButton onUploaded={(url) => insertAtCursor(`![](${url})`)} />
-              <span className="text-[10px] text-muted-foreground/70">
+              <span className="text-[12px] text-muted-foreground/70">
                 le fichier est hébergé et son lien inséré au curseur
               </span>
             </div>
@@ -293,7 +293,7 @@ function TemplateEditor({
             />
           </div>
           <div className="rounded-lg border border-border bg-white p-4">
-            <p className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <p className="mb-2 text-[12px] uppercase tracking-wide text-muted-foreground">
               Aperçu — variables remplacées par des exemples
             </p>
             <div
@@ -377,7 +377,7 @@ function TemplateEditor({
         )}
 
         <div className="mt-3 border-t border-border pt-3">
-          <p className="mb-1.5 text-[10px] text-muted-foreground/70">
+          <p className="mb-1.5 text-[12px] text-muted-foreground/70">
             Besoin d&apos;un bouton <strong>au milieu</strong> du texte ? Place le
             curseur dans le contenu, puis :
           </p>
@@ -386,7 +386,7 @@ function TemplateEditor({
       </div>
 
       <div className="border-t border-border pt-3">
-        <p className="mb-1.5 text-[10px] text-muted-foreground/70">
+        <p className="mb-1.5 text-[12px] text-muted-foreground/70">
           Le test part avec l&apos;habillage réel et des valeurs d&apos;exemple
           ({`{{firstName}}`} → « Sana ») : tu reçois ce qu&apos;un lead recevrait.
         </p>

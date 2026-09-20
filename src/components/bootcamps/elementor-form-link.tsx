@@ -78,7 +78,7 @@ export function ElementorFormLink({
             linked.map((s) => (
               <span
                 key={s.id}
-                className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
+                className="truncate rounded-full bg-muted px-2 py-0.5 text-[13px] font-medium text-foreground"
                 title={s.elementorFormId ?? undefined}
               >
                 {s.name}
@@ -105,7 +105,7 @@ export function ElementorFormLink({
 
       {result && (
         <p
-          className={`mt-2 rounded-md px-2 py-1.5 text-[11px] ${
+          className={`mt-2 rounded-md px-2 py-1.5 text-[13px] ${
             result.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
           }`}
         >
@@ -232,7 +232,7 @@ function ElementorFormDialog({
             </button>
           </div>
         </div>
-        <p className="mb-4 text-[11px] text-muted-foreground/70">
+        <p className="mb-4 text-[13px] text-muted-foreground/70">
           Les soumissions du formulaire lié deviennent des leads de cette formation.
           Un formulaire ne peut alimenter qu&apos;une seule formation.
         </p>
@@ -363,7 +363,7 @@ function LinkedRow({
       <div className="flex items-center justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">{source.name}</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {source.elementorFormId}
             {source.lastSubmissionId
               ? ` · reprise après la soumission #${source.lastSubmissionId}`
@@ -394,7 +394,7 @@ function LinkedRow({
       {/* Routage : où atterrit le lead, et quels tags il porte */}
       <div className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <label className="mb-1 block text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
             Colonne d&apos;arrivée
           </label>
           <select
@@ -413,11 +413,11 @@ function LinkedRow({
         </div>
 
         <div>
-          <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <label className="mb-1 block text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
             Tags posés sur chaque lead
           </label>
           {tags.length === 0 ? (
-            <p className="py-1.5 text-[11px] text-muted-foreground/70">
+            <p className="py-1.5 text-[13px] text-muted-foreground/70">
               Aucun tag créé pour l&apos;instant.
             </p>
           ) : (
@@ -435,7 +435,7 @@ function LinkedRow({
                         on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id]
                       )
                     }
-                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors disabled:opacity-50 ${
+                    className={`rounded-full border px-2 py-0.5 text-[13px] transition-colors disabled:opacity-50 ${
                       on
                         ? "border-foreground bg-foreground text-background"
                         : "border-border text-muted-foreground hover:border-foreground/40"
@@ -451,7 +451,7 @@ function LinkedRow({
       </div>
 
       {canIdentify && unmapped > 0 && (
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           ⚠️ {unmapped} champ{unmapped > 1 ? "s" : ""} de la dernière soumission
           {unmapped > 1 ? " ne sont mappés" : " n'est mappé"} sur aucune colonne —{" "}
           {unmapped > 1 ? "leurs réponses sont perdues" : "sa réponse est perdue"} à chaque
@@ -460,7 +460,7 @@ function LinkedRow({
       )}
 
       {!canIdentify && (
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           ⚠️ Aucun champ mappé sur <strong>Email</strong> ou <strong>Téléphone</strong> —
           l&apos;import est bloqué (rien n&apos;est consommé). Ouvre « Champs » pour le compléter.
         </p>
@@ -468,15 +468,15 @@ function LinkedRow({
 
       {open && (
         <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className="text-[12px] text-muted-foreground/70">
             Clés réelles de la dernière soumission. Un lead a besoin d&apos;au moins
             un email ou un téléphone, sinon la soumission est ignorée.
           </p>
           {payloadKeys.map((key) => (
             <div key={key} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-[11px] text-foreground">{key}</p>
-                <p className="truncate text-[10px] text-muted-foreground/70">
+                <p className="truncate font-mono text-[13px] text-foreground">{key}</p>
+                <p className="truncate text-[12px] text-muted-foreground/70">
                   {source.lastPayload?.[key] || "(vide)"}
                 </p>
               </div>

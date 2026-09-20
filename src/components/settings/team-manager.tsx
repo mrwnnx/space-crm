@@ -76,7 +76,7 @@ export function TeamManager({
         // Dit CE QU'IL FAUT FAIRE, pas seulement ce qui manque : ces
         // personnes ne peuvent pas « mot de passe oublié », il n'y a rien à
         // réinitialiser. Elles doivent créer leur compte.
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-400">
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[13px] leading-relaxed text-amber-800 dark:text-amber-400">
           {attente === 1 ? "Une adresse invitée n'a" : `${attente} adresses invitées n'ont`}{" "}
           pas encore de compte. Tant qu&apos;{attente === 1 ? "elle ne l'a" : "elles ne l'ont"}{" "}
           pas créé depuis l&apos;écran de connexion, «&nbsp;mot de passe oublié&nbsp;» ne leur
@@ -92,7 +92,7 @@ export function TeamManager({
                 ? "1 compte se connecte sans figurer dans cette liste"
                 : `${outside.length} comptes se connectent sans figurer dans cette liste`}
             </p>
-            <p className="mt-1 text-[11px] leading-relaxed text-sky-800/80 dark:text-sky-300/70">
+            <p className="mt-1 text-[13px] leading-relaxed text-sky-800/80 dark:text-sky-300/70">
               La liste ci-dessus garde la porte de l&apos;<strong>inscription</strong>, pas
               celle de la <strong>connexion</strong>. Un compte créé avant elle, ou dont
               l&apos;adresse en a été retirée depuis, continue d&apos;entrer normalement.
@@ -111,7 +111,7 @@ export function TeamManager({
                   <p className="truncate text-sm font-medium text-foreground">{a.email}</p>
                   <span
                     title="Compte actif, absent de la liste d'équipe"
-                    className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800"
+                    className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800"
                   >
                     Hors liste
                   </span>
@@ -147,7 +147,7 @@ export function TeamManager({
                         ? "Un compte existe pour cette adresse"
                         : "Invitée, mais aucun compte créé à ce jour"
                     }
-                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
                       row.active
                         ? "bg-emerald-100 text-emerald-800"
                         : "bg-amber-100 text-amber-800"

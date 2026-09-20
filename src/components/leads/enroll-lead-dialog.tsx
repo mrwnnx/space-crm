@@ -186,7 +186,7 @@ export function EnrollLeadDialog({
               </p>
               {plan === "total" ? (
                 <label className="block">
-                  <span className="mb-1 block text-[10px] text-muted-foreground">
+                  <span className="mb-1 block text-[12px] text-muted-foreground">
                     Montant total ({bootcamp.currency})
                   </span>
                   <input
@@ -199,7 +199,7 @@ export function EnrollLeadDialog({
               ) : (
                 <div className="flex items-end gap-2">
                   <label className="w-24">
-                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                    <span className="mb-1 block text-[12px] text-muted-foreground">
                       Mensualités
                     </span>
                     <input
@@ -213,7 +213,7 @@ export function EnrollLeadDialog({
                   </label>
                   <span className="pb-2.5 text-sm text-muted-foreground">×</span>
                   <label className="flex-1">
-                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                    <span className="mb-1 block text-[12px] text-muted-foreground">
                       Montant par mois ({bootcamp.currency})
                     </span>
                     <input
@@ -261,14 +261,14 @@ export function EnrollLeadDialog({
               {firstPaymentReceived && (
                 <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                   <div>
-                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                    <span className="mb-1 block text-[12px] text-muted-foreground">
                       Moyen de paiement
                     </span>
                     <PaymentMethodPicker value={method} onChange={pickMethod} />
                   </div>
 
                   <label className="block">
-                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                    <span className="mb-1 block text-[12px] text-muted-foreground">
                       Encaissé par
                     </span>
                     <select
@@ -287,7 +287,7 @@ export function EnrollLeadDialog({
                   </label>
 
                   <div>
-                    <span className="mb-1 block text-[10px] text-muted-foreground">
+                    <span className="mb-1 block text-[12px] text-muted-foreground">
                       Justificatif (facultatif)
                     </span>
                     <button

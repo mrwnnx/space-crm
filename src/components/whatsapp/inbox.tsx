@@ -124,7 +124,7 @@ export function WhatsAppInbox({
       >
         <div className="shrink-0 space-y-2 border-b border-border p-3">
           <Recherche q={q} onChange={(v) => router.replace(url({ q: v, lead: null }))} />
-          <div className="flex items-center gap-2 text-[10.5px]">
+          <div className="flex items-center gap-2 text-[12.5px]">
             <Link
               href={url({ archives: false, lead: null })}
               className={cn("rounded-md px-2 py-0.5", !archives ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
@@ -229,7 +229,7 @@ function ConversationRow({ c, href, active }: { c: Conversation; href: string; a
           <p className={cn("truncate text-sm text-foreground", c.unread > 0 ? "font-semibold" : "font-medium")}>
             {c.fullName}
           </p>
-          <span className="shrink-0 text-[10.5px] text-muted-foreground">{formatRelative(c.lastAt)}</span>
+          <span className="shrink-0 text-[12.5px] text-muted-foreground">{formatRelative(c.lastAt)}</span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <p className={cn("truncate text-xs", c.unread > 0 ? "text-foreground" : "text-muted-foreground")}>
@@ -237,12 +237,12 @@ function ConversationRow({ c, href, active }: { c: Conversation; href: string; a
             {apercu}
           </p>
           {c.unread > 0 && (
-            <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
+            <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[12px] font-semibold leading-none text-primary-foreground">
               {c.unread}
             </span>
           )}
         </div>
-        {c.bootcamp && <p className="mt-0.5 truncate text-[10.5px] text-muted-foreground">{c.bootcamp}</p>}
+        {c.bootcamp && <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">{c.bootcamp}</p>}
       </div>
     </Link>
   );
@@ -298,7 +298,7 @@ function ThreadView({
         </Link>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{lead.fullName}</p>
-          <p className="truncate text-[10.5px] text-muted-foreground">
+          <p className="truncate text-[12.5px] text-muted-foreground">
             {lead.mobileNo ?? "sans numéro"}
             {lead.bootcamp ? ` · ${lead.bootcamp}` : " · aucune formation"}
           </p>
@@ -308,7 +308,7 @@ function ThreadView({
           type="button"
           onClick={nonLu}
           disabled={isPending || !lastInboundAt}
-          className="shrink-0 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+          className="shrink-0 text-[12.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
           title="Revenir plus tard : la conversation reprend sa pastille"
         >
           Non lu
@@ -317,7 +317,7 @@ function ThreadView({
           type="button"
           onClick={() => archiver(!thread.archived)}
           disabled={isPending}
-          className="shrink-0 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+          className="shrink-0 text-[12.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
         >
           {thread.archived ? "Désarchiver" : "Archiver"}
         </button>
@@ -407,7 +407,7 @@ function AttribuerFormation({ leadId, bootcamps }: { leadId: string; bootcamps: 
       >
         {isPending ? "…" : "OK"}
       </button>
-      {erreur && <span className="text-[10.5px] text-red-600">{erreur}</span>}
+      {erreur && <span className="text-[12.5px] text-red-600">{erreur}</span>}
     </div>
   );
 }
@@ -437,7 +437,7 @@ function Bulle({
   return (
     <>
       {nouveauJour && (
-        <p className="my-2 text-center text-[10.5px] uppercase tracking-wider text-muted-foreground">{jour}</p>
+        <p className="my-2 text-center text-[12.5px] uppercase tracking-wider text-muted-foreground">{jour}</p>
       )}
       <div className={cn("group flex items-end gap-1", sortant ? "justify-end" : "justify-start")}>
         {sortant && outils && (
@@ -457,14 +457,14 @@ function Bulle({
                 sortant ? "border-primary-foreground/60" : "border-primary"
               )}
             >
-              <span className="block text-[10px] font-medium">{m.replyTo.direction === "outbound" ? "Vous" : "Le lead"}</span>
+              <span className="block text-[12px] font-medium">{m.replyTo.direction === "outbound" ? "Vous" : "Le lead"}</span>
               <span className="line-clamp-2">{m.replyTo.content}</span>
             </div>
           )}
           {m.media && <PieceJointe media={m.media} sortant={sortant} />}
           {/* Sans légende, le texte n'est que le libellé « 📷 Photo » : le média suffit. */}
           {!(m.media && m.media.kind !== "document" && /^(📷|🎥|🎤|Sticker)/.test(m.content ?? "")) && m.content}
-          <p className={cn("mt-1 text-right text-[10px]", sortant ? "text-primary-foreground/70" : "text-muted-foreground")}>
+          <p className={cn("mt-1 text-right text-[12px]", sortant ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {sortant && m.createdBy ? `${actorName(m.createdBy)} · ` : ""}
             {d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
             {sortant && <Accuse status={m.status} />}
@@ -487,7 +487,7 @@ function Bulle({
         )}
       </div>
       {sortant && m.status === "failed" && (
-        <p className="-mt-0.5 text-right text-[10.5px] text-red-600">{m.error ?? "Échec de l'envoi."}</p>
+        <p className="-mt-0.5 text-right text-[12.5px] text-red-600">{m.error ?? "Échec de l'envoi."}</p>
       )}
     </>
   );
@@ -512,7 +512,7 @@ function OutilsBulle({
       <button
         type="button"
         onClick={onRepondre}
-        className="rounded px-1 text-[10.5px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="rounded px-1 text-[12.5px] text-muted-foreground hover:bg-muted hover:text-foreground"
         title="Répondre à ce message"
       >
         ↩
@@ -520,7 +520,7 @@ function OutilsBulle({
       <button
         type="button"
         onClick={() => setPicker(!picker)}
-        className="rounded px-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="rounded px-1 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground"
         title="Réagir"
       >
         {m.reactionUs ?? "☺"}
@@ -727,7 +727,7 @@ function ReponseLibre({
       {citation && (
         <div className="mb-1.5 flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted px-2.5 py-1.5 text-xs">
           <div className="min-w-0 flex-1">
-            <span className="block text-[10px] font-medium text-muted-foreground">
+            <span className="block text-[12px] font-medium text-muted-foreground">
               En réponse à {citation.direction === "outbound" ? "vous" : "le lead"}
             </span>
             <span className="line-clamp-2 text-foreground">{citation.content}</span>
@@ -753,7 +753,7 @@ function ReponseLibre({
         </div>
       )}
       {filtre !== null && suggestions.length === 0 && quickReplies.length === 0 && (
-        <p className="mb-1.5 text-[10.5px] text-muted-foreground">
+        <p className="mb-1.5 text-[12.5px] text-muted-foreground">
           Aucune réponse rapide — créez-en dans Paramètres → WhatsApp.
         </p>
       )}
@@ -787,7 +787,7 @@ function ReponseLibre({
             <button
               type="button"
               onClick={vocal.arreter}
-              className="flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[10.5px] font-medium text-white"
+              className="flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-[12.5px] font-medium text-white"
             >
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
               {vocal.duree} · Arrêter
@@ -797,7 +797,7 @@ function ReponseLibre({
               type="button"
               onClick={vocal.demarrer}
               disabled={isPending || !!fichier}
-              className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+              className="flex items-center gap-1 text-[12.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
               title="Enregistrer un vocal"
             >
               <HugeiconsIcon icon={Mic01Icon} size={14} />
@@ -808,7 +808,7 @@ function ReponseLibre({
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={vocal.enregistre}
-            className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+            className="flex items-center gap-1 text-[12.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
             title="Photo, vidéo ou PDF — 4 Mo max"
           >
             <HugeiconsIcon icon={Attachment01Icon} size={14} />
@@ -826,12 +826,12 @@ function ReponseLibre({
                 setFichier(null);
                 if (fileRef.current) fileRef.current.value = "";
               }}
-              className="text-[10.5px] text-muted-foreground hover:text-red-600"
+              className="text-[12.5px] text-muted-foreground hover:text-red-600"
             >
               ✕
             </button>
           )}
-          <p className="truncate text-[10.5px] text-muted-foreground">{erreur ?? (fichier ? "" : "⌘↵ pour envoyer")}</p>
+          <p className="truncate text-[12.5px] text-muted-foreground">{erreur ?? (fichier ? "" : "⌘↵ pour envoyer")}</p>
         </div>
         <button
           type="submit"
@@ -917,7 +917,7 @@ function ReponseModele({ leadId, to, templates }: { leadId: string; to: string; 
               />
             ))}
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10.5px] text-red-600">{erreur}</p>
+            <p className="text-[12.5px] text-red-600">{erreur}</p>
             <button
               type="button"
               onClick={envoyer}

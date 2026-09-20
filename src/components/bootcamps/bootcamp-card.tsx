@@ -90,7 +90,7 @@ export function BootcampCard(props: BootcampCardProps) {
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground font-heading">
             {archived && (
-              <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 Archivée
               </span>
             )}
@@ -104,7 +104,7 @@ export function BootcampCard(props: BootcampCardProps) {
         </div>
         <span
           className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+            "shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium",
             statusColor(statusColors[status] || "gray")
           )}
         >

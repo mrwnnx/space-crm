@@ -34,7 +34,7 @@ export function CampaignTestSend({
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-      <p className="mb-2 text-[11px] text-muted-foreground">
+      <p className="mb-2 text-[13px] text-muted-foreground">
         Le test part avec le même rendu qu&apos;un envoi réel, objet préfixé
         <span className="font-mono"> [TEST]</span>. Il ne touche pas aux destinataires.
       </p>
@@ -56,7 +56,7 @@ export function CampaignTestSend({
       </div>
       {result && (
         <p
-          className={`mt-2 text-[11px] ${
+          className={`mt-2 text-[13px] ${
             result.ok ? "text-green-600" : "text-red-600"
           }`}
         >

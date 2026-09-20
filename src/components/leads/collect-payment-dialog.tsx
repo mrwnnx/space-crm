@@ -133,13 +133,13 @@ export function CollectPaymentDialog({
               onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
               className="hidden"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-[13px] text-muted-foreground">
               10 Mo maximum. Le fichier reste privé : il ne s&apos;ouvre que depuis le CRM.
             </p>
           </div>
         </div>
 
-        {error && <p className="mt-3 text-[11px] font-medium text-red-600">{error}</p>}
+        {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
 
         <div className="mt-4 flex gap-2">
           <button

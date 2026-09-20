@@ -73,7 +73,7 @@ export function AssistantPanel() {
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
               <div className="min-w-0">
                 <p className="font-heading text-sm font-semibold text-foreground">Assistant</p>
-                <p className="text-[10.5px] text-muted-foreground">
+                <p className="text-[12.5px] text-muted-foreground">
                   Il lit le CRM. Il ne modifie encore rien.
                 </p>
               </div>

@@ -100,7 +100,7 @@ export function ColumnTagDialog({
 
         {/* Dit ce que la règle ne fait PAS : personne ne doit croire qu'elle
             rattrape les leads déjà dans la colonne. */}
-        <p className="mt-3 text-[11px] text-muted-foreground">
+        <p className="mt-3 text-[13px] text-muted-foreground">
           Les leads déjà présents dans la colonne ne sont pas tagués — la règle
           s&apos;applique aux entrées à venir. Reposer le même tag ne crée pas de doublon.
         </p>

@@ -65,7 +65,7 @@ export function BootcampMenu({
                 <h2 className="truncate text-sm font-semibold text-foreground font-heading">
                   {bootcamp.name}
                 </h2>
-                <p className="text-[11px] text-muted-foreground">Actions de la formation</p>
+                <p className="text-[13px] text-muted-foreground">Actions de la formation</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -115,7 +115,7 @@ export function BootcampMenu({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border p-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
       {children}

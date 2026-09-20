@@ -102,14 +102,14 @@ export function NewBootcampButton() {
                   </div>
                 </div>
                 {facilitéTotal !== null && (
-                  <p className="mt-1 text-[10px] text-muted-foreground">
+                  <p className="mt-1 text-[12px] text-muted-foreground">
                     Total facilité : {facilitéTotal} {currency} (indicatif)
                   </p>
                 )}
               </div>
 
               {showWarning && !hasAtLeastOne && (
-                <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-600 dark:text-amber-400">
+                <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-[13px] text-amber-600 dark:text-amber-400">
                   Configure au moins un mode de paiement, sinon tu ne pourras pas
                   inscrire de lead à cette formation.
                 </p>

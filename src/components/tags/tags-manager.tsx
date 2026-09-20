@@ -100,7 +100,7 @@ export function TagsManager({ tags }: { tags: TagRow[] }) {
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <TagChip name={tag.name} color={tag.color} />
-                  <span className="shrink-0 text-[11px] text-muted-foreground/70">
+                  <span className="shrink-0 text-[13px] text-muted-foreground/70">
                     {tag.leadCount} lead{tag.leadCount > 1 ? "s" : ""}
                   </span>
                 </div>
@@ -231,7 +231,7 @@ export function TagChip({ name, color }: { name: string; color: string }) {
   const sc = statusColor(color);
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${sc.bg} ${sc.text}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[13px] font-medium ${sc.bg} ${sc.text}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
       {name}

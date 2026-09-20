@@ -67,7 +67,7 @@ export default async function ResetPasswordPage({
               autoComplete="new-password"
               className={FIELD}
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">8 caractères minimum.</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">8 caractères minimum.</p>
           </div>
 
           <div>

@@ -50,7 +50,7 @@ export function CallHistory({ logs }: { logs: CallHistoryEntry[] }) {
                 {minutes > 0 && (
                   <span className="text-muted-foreground">· {minutes} min</span>
                 )}
-                <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+                <span className="ml-auto shrink-0 text-[13px] text-muted-foreground">
                   {/* Fuseau explicite : le rendu se fait sur le serveur (UTC en
                       prod) — sans ça une heure du soir bascule la veille. */}
                   {log.createdAt.toLocaleString("fr-FR", {
@@ -63,8 +63,8 @@ export function CallHistory({ logs }: { logs: CallHistoryEntry[] }) {
                 </span>
               </div>
               {isHumanActor(log.callerId) && (
-                <p className="ml-3 mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary/10 text-[7px] font-semibold text-primary">
+                <p className="ml-3 mt-0.5 flex items-center gap-1 text-[12px] text-muted-foreground">
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
                     {actorInitials(log.callerId)}
                   </span>
                   par {actorLabel(log.callerId)}

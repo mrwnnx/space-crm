@@ -92,7 +92,7 @@ export function NotificationBell() {
       >
         <HugeiconsIcon icon={BellIcon} size={18} />
         {unread > 0 && (
-          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[12px] font-bold text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -107,7 +107,7 @@ export function NotificationBell() {
             {unread > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-[10px] text-primary hover:text-primary/80"
+                className="text-[12px] text-primary hover:text-primary/80"
               >
                 Tout marquer lu
               </button>
@@ -140,7 +140,7 @@ export function NotificationBell() {
                     <p className="text-xs font-medium text-foreground">
                       {n.message}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                    <p className="mt-0.5 text-[12px] text-muted-foreground/70">
                       {formatRelative(n.createdAt)}
                     </p>
                   </div>

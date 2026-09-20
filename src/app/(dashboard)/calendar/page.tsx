@@ -88,7 +88,7 @@ export default async function CalendarPage() {
                     {dayTasks.slice(0, 2).map((task) => (
                       <div
                         key={task.id}
-                        className="mt-1 flex items-center gap-1 truncate text-[10px]"
+                        className="mt-1 flex items-center gap-1 truncate text-[12px]"
                       >
                         <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.medium)} />
                         <span className={cn(
@@ -100,7 +100,7 @@ export default async function CalendarPage() {
                       </div>
                     ))}
                     {dayTasks.length > 2 && (
-                      <span className="mt-0.5 text-[10px] text-muted-foreground">
+                      <span className="mt-0.5 text-[12px] text-muted-foreground">
                         +{dayTasks.length - 2} autres
                       </span>
                     )}
@@ -153,7 +153,7 @@ export default async function CalendarPage() {
                             )}>
                               {task.title}
                             </span>
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[12px] text-muted-foreground">
                               {STATUS_LABELS[task.status] ?? task.status}
                             </span>
                           </Link>
