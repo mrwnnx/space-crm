@@ -22,7 +22,11 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const next = searchParams.get("next") ?? "/leads";
+  // `next` vient de l'URL : on n'y accepte qu'un chemin interne. `//evil.tld`
+  // ou `/\evil.tld` seraient lus comme une adresse absolue par le navigateur
+  // et enverraient l'utilisateur ailleurs juste après sa connexion.
+  const nextParam = searchParams.get("next") ?? "";
+  const next = /^\/(?![\/\\])/.test(nextParam) ? nextParam : "/leads";
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
