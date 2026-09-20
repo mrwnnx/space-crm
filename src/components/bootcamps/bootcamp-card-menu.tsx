@@ -176,7 +176,7 @@ export function BootcampCardMenu({
             }}
             disabled={!canDelete}
             title={canDelete ? undefined : "La formation par défaut ne peut pas être supprimée."}
-            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-muted-foreground/50 disabled:hover:bg-transparent"
+            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-muted-foreground/70 disabled:hover:bg-transparent"
           >
             Supprimer
           </button>

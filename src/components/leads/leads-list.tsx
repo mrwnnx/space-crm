@@ -326,7 +326,7 @@ export function LeadsList({
                           Oui
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground/60">Non</span>
+                        <span className="text-xs text-muted-foreground/70">Non</span>
                       )}
                     </td>
                     <td>

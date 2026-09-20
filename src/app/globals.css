@@ -58,7 +58,9 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* 0.45 (≈ #6B6B6B, 5,3:1 sur blanc) : à 0.556 le gris tombait à 3,5:1,
+     sous le seuil AA, sur 591 usages souvent en 10-11 px. */
+  --muted-foreground: oklch(0.45 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0 0 0);
   --destructive: oklch(0.577 0.245 27.325);

@@ -349,7 +349,7 @@ const QUALITE: Record<string, { label: string; cls: string }> = {
   GREEN: { label: "Bonne", cls: "bg-green-50 text-green-700" },
   YELLOW: { label: "Moyenne", cls: "bg-amber-50 text-amber-700" },
   RED: { label: "Mauvaise", cls: "bg-red-50 text-red-700" },
-  UNKNOWN: { label: "Pas encore mesurée", cls: "bg-gray-50 text-gray-500" },
+  UNKNOWN: { label: "Pas encore mesurée", cls: "bg-gray-50 text-muted-foreground" },
 };
 
 function SectionNumero({
@@ -605,7 +605,7 @@ const STATUT: Record<string, { label: string; cls: string }> = {
   IN_APPEAL: { label: "En appel", cls: "bg-amber-50 text-amber-700" },
   REJECTED: { label: "Refusé", cls: "bg-red-50 text-red-700" },
   PAUSED: { label: "En pause", cls: "bg-red-50 text-red-700" },
-  DISABLED: { label: "Désactivé", cls: "bg-gray-50 text-gray-500" },
+  DISABLED: { label: "Désactivé", cls: "bg-gray-50 text-muted-foreground" },
 };
 
 function SectionModeles({
@@ -657,7 +657,7 @@ function LigneModele({
   const [confirme, setConfirme] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const s = STATUT[t.status] ?? { label: t.status, cls: "bg-gray-50 text-gray-500" };
+  const s = STATUT[t.status] ?? { label: t.status, cls: "bg-gray-50 text-muted-foreground" };
 
   function supprimer() {
     startTransition(async () => {

@@ -71,7 +71,7 @@ export function DealsKanban({ statuses }: { statuses: StageWithDeals[] }) {
                 ))}
 
                 {status.deals.length === 0 && (
-                  <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/60">
+                  <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/70">
                     Glisser un deal ici
                   </div>
                 )}
@@ -131,7 +131,7 @@ function KanbanCard({
         </div>
       )}
 
-      <p className="mt-2 text-[10px] text-muted-foreground/60">
+      <p className="mt-2 text-[10px] text-muted-foreground/70">
         {formatRelative(deal.createdAt)}
       </p>
     </Link>

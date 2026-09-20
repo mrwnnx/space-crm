@@ -68,7 +68,7 @@ export function WpConnectionForm({ connection }: { connection: PublicConnection 
           autoComplete="new-password"
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/30"
         />
-        <p className="mt-1 text-[10px] text-muted-foreground/60">
+        <p className="mt-1 text-[10px] text-muted-foreground/70">
           WordPress → Utilisateurs → Profil → Application Passwords. Il n'est jamais
           réaffiché après enregistrement.
         </p>

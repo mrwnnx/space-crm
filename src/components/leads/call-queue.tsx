@@ -15,8 +15,8 @@ const INTENT_LABEL: Record<string, string> = {
 const INTENT_STYLE: Record<string, string> = {
   serieux: "bg-green-100 text-green-800",
   curieux: "bg-amber-100 text-amber-800",
-  hors_cible: "bg-gray-100 text-gray-600",
-  indetermine: "bg-gray-100 text-gray-500",
+  hors_cible: "bg-gray-100 text-muted-foreground",
+  indetermine: "bg-gray-100 text-muted-foreground",
 };
 
 export function CallQueue({ leads }: { leads: QueueLead[] }) {

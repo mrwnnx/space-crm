@@ -191,7 +191,7 @@ export default async function SettingsPage({
                 configured={!!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID}
               />
             </div>
-            <p className="mt-3 text-[10px] text-muted-foreground/60">
+            <p className="mt-3 text-[10px] text-muted-foreground/70">
               Configurez les clés dans .env.local pour activer l'envoi.
             </p>
           </section>
@@ -210,7 +210,7 @@ function ProviderRow({ name, configured }: { name: string; configured: boolean }
         className={
           configured
             ? "rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700"
-            : "rounded-full bg-gray-50 px-2 py-0.5 font-medium text-gray-500"
+            : "rounded-full bg-gray-50 px-2 py-0.5 font-medium text-muted-foreground"
         }
       >
         {configured ? "Configuré" : "Non configuré"}

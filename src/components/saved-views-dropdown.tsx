@@ -97,14 +97,14 @@ export function SavedViewsDropdown({
                 >
                   {view.label}
                   {view.public && (
-                    <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+                    <span className="ml-1.5 text-[10px] text-muted-foreground/70">
                       public
                     </span>
                   )}
                 </Link>
                 <button
                   onClick={() => handleDelete(view.id)}
-                  className="ml-2 text-muted-foreground/40 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                  className="ml-2 text-muted-foreground/70 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
                 >
                   <HugeiconsIcon icon={Delete02Icon} size={12} />
                 </button>

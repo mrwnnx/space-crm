@@ -201,7 +201,7 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className={cn("text-right font-medium", value ? "text-foreground" : "text-muted-foreground/50")}>
+      <dd className={cn("text-right font-medium", value ? "text-foreground" : "text-muted-foreground/70")}>
         {value || "—"}
       </dd>
     </div>

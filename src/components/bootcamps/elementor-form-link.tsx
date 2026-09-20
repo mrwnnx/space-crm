@@ -73,7 +73,7 @@ export function ElementorFormLink({
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           {linked.length === 0 ? (
-            <span className="text-xs text-muted-foreground/60">Aucun formulaire lié</span>
+            <span className="text-xs text-muted-foreground/70">Aucun formulaire lié</span>
           ) : (
             linked.map((s) => (
               <span
@@ -417,7 +417,7 @@ function LinkedRow({
             Tags posés sur chaque lead
           </label>
           {tags.length === 0 ? (
-            <p className="py-1.5 text-[11px] text-muted-foreground/60">
+            <p className="py-1.5 text-[11px] text-muted-foreground/70">
               Aucun tag créé pour l&apos;instant.
             </p>
           ) : (
@@ -476,7 +476,7 @@ function LinkedRow({
             <div key={key} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-[11px] text-foreground">{key}</p>
-                <p className="truncate text-[10px] text-muted-foreground/60">
+                <p className="truncate text-[10px] text-muted-foreground/70">
                   {source.lastPayload?.[key] || "(vide)"}
                 </p>
               </div>

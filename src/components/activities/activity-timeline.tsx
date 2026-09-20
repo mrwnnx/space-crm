@@ -16,8 +16,8 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> =
   sms: { icon: "📱", color: "text-purple-600", bg: "bg-purple-50" },
   note: { icon: "📝", color: "text-amber-600", bg: "bg-amber-50" },
   call: { icon: "📞", color: "text-indigo-600", bg: "bg-indigo-50" },
-  status_change: { icon: "↻", color: "text-gray-600", bg: "bg-gray-50" },
-  comment: { icon: "💬", color: "text-gray-600", bg: "bg-gray-100" },
+  status_change: { icon: "↻", color: "text-muted-foreground", bg: "bg-gray-50" },
+  comment: { icon: "💬", color: "text-muted-foreground", bg: "bg-gray-100" },
   task: { icon: "✓", color: "text-green-600", bg: "bg-green-50" },
   webhook_in: { icon: "⚡", color: "text-orange-600", bg: "bg-orange-50" },
 };

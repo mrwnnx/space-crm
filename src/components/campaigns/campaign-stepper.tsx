@@ -41,7 +41,7 @@ export function CampaignStepper({
     <>
       <div className="flex items-center gap-2 text-xs">
         <Step n={1} label="Rédiger" active={step === "rediger"} done={step === "envoyer"} />
-        <span aria-hidden className="text-muted-foreground/50">›</span>
+        <span aria-hidden className="text-muted-foreground/70">›</span>
         <Step n={2} label="Envoyer" active={step === "envoyer"} done={false} />
 
         <div className="ml-auto">
@@ -120,7 +120,7 @@ function Step({
           ? "bg-foreground text-background"
           : done
             ? "text-foreground"
-            : "text-muted-foreground/60"
+            : "text-muted-foreground/70"
       }`}
     >
       <span aria-hidden className="font-mono text-[10px]">

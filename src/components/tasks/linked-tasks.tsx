@@ -90,7 +90,7 @@ export function LinkedTasks({
         ))}
 
         {tasks.length === 0 && (
-          <p className="py-2 text-center text-[10px] text-muted-foreground/60">
+          <p className="py-2 text-center text-[10px] text-muted-foreground/70">
             Aucune tâche
           </p>
         )}

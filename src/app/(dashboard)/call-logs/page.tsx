@@ -8,8 +8,8 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   completed: { label: "Completed", classes: "bg-green-50 text-green-700" },
   failed: { label: "Failed", classes: "bg-red-50 text-red-700" },
   busy: { label: "Busy", classes: "bg-amber-50 text-amber-700" },
-  no_answer: { label: "No Answer", classes: "bg-gray-50 text-gray-600" },
-  canceled: { label: "Canceled", classes: "bg-gray-50 text-gray-600" },
+  no_answer: { label: "No Answer", classes: "bg-gray-50 text-muted-foreground" },
+  canceled: { label: "Canceled", classes: "bg-gray-50 text-muted-foreground" },
   initiated: { label: "Initiated", classes: "bg-blue-50 text-blue-700" },
 };
 

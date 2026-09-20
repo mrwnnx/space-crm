@@ -15,11 +15,11 @@ type Activity = {
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
   note: { icon: "📝", color: "text-amber-600", bg: "bg-amber-50" },
-  status_change: { icon: "↻", color: "text-gray-600", bg: "bg-gray-50" },
+  status_change: { icon: "↻", color: "text-muted-foreground", bg: "bg-gray-50" },
   email: { icon: "✉", color: "text-blue-600", bg: "bg-blue-50" },
   call: { icon: "📞", color: "text-indigo-600", bg: "bg-indigo-50" },
   whatsapp: { icon: "💬", color: "text-green-600", bg: "bg-green-50" },
-  comment: { icon: "💬", color: "text-gray-600", bg: "bg-gray-50" },
+  comment: { icon: "💬", color: "text-muted-foreground", bg: "bg-gray-50" },
 };
 
 export function DealActivities({

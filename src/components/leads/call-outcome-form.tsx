@@ -12,7 +12,7 @@ export const QUALIFICATIONS = [
   { value: "froid", label: "Froid", style: "bg-sky-100 text-sky-800 border-sky-300" },
   { value: "reporte", label: "Prochaine session", style: "bg-violet-100 text-violet-800 border-violet-300" },
   { value: "pas_serieux", label: "Pas sérieux", style: "bg-gray-100 text-gray-700 border-gray-300" },
-  { value: "hors_cible", label: "Hors cible", style: "bg-gray-100 text-gray-600 border-gray-300" },
+  { value: "hors_cible", label: "Hors cible", style: "bg-gray-100 text-muted-foreground border-gray-300" },
 ] as const;
 
 const FOLLOW_UPS = [

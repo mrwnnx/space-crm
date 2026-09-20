@@ -433,7 +433,7 @@ export function LeadsKanban({
                 ))}
 
                 {status.leads.length === 0 && !q && (
-                  <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/60">
+                  <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/70">
                     Glisser un lead ici
                   </div>
                 )}
@@ -472,8 +472,8 @@ const INTENT_LABEL: Record<string, string> = {
 const INTENT_STYLE: Record<string, string> = {
   serieux: "bg-green-100 text-green-800",
   curieux: "bg-amber-100 text-amber-800",
-  hors_cible: "bg-gray-100 text-gray-600",
-  indetermine: "bg-gray-100 text-gray-500",
+  hors_cible: "bg-gray-100 text-muted-foreground",
+  indetermine: "bg-gray-100 text-muted-foreground",
 };
 
 const KanbanCard = memo(function KanbanCard({
@@ -614,7 +614,7 @@ const KanbanCard = memo(function KanbanCard({
       )}
 
       <div className="mt-2 flex items-center gap-1.5">
-        <p className="text-[10px] text-muted-foreground/60">
+        <p className="text-[10px] text-muted-foreground/70">
           {formatRelative(lead.createdAt)}
         </p>
         {isHumanActor(lead.lastActor) && (

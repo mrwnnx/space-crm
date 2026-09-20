@@ -48,11 +48,11 @@ export default async function NotesPage() {
                       {note.referenceType} →
                     </Link>
                   ) : (
-                    <span className="text-xs text-muted-foreground/50">
+                    <span className="text-xs text-muted-foreground/70">
                       Note libre
                     </span>
                   )}
-                  <span className="text-xs text-muted-foreground/60">
+                  <span className="text-xs text-muted-foreground/70">
                     {formatRelative(note.createdAt)}
                   </span>
                 </div>

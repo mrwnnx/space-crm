@@ -302,7 +302,7 @@ function EditableField({
         <span
           className={cn(
             "text-xs font-medium",
-            value ? "text-foreground" : "text-muted-foreground/50"
+            value ? "text-foreground" : "text-muted-foreground/70"
           )}
         >
           {value || "—"}

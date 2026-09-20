@@ -16,7 +16,7 @@ const STATUS_COLUMNS = [
 const PRIORITY_CONFIG: Record<string, { label: string; classes: string }> = {
   high: { label: "High", classes: "bg-red-50 text-red-700" },
   medium: { label: "Medium", classes: "bg-amber-50 text-amber-700" },
-  low: { label: "Low", classes: "bg-gray-50 text-gray-600" },
+  low: { label: "Low", classes: "bg-gray-50 text-muted-foreground" },
 };
 
 export function TasksBoard({ tasks }: { tasks: Task[] }) {
@@ -78,7 +78,7 @@ export function TasksBoard({ tasks }: { tasks: Task[] }) {
                 ))}
 
                 {colTasks.length === 0 && (
-                  <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/60">
+                  <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground/70">
                     Glisser une tâche ici
                   </div>
                 )}
@@ -122,7 +122,7 @@ function TaskCard({
         <p className="text-sm font-medium text-foreground">{task.title}</p>
         <button
           onClick={() => startTransition(() => deleteTaskAction(task.id))}
-          className="text-xs text-muted-foreground/50 hover:text-red-500"
+          className="text-xs text-muted-foreground/70 hover:text-red-500"
         >
           ×
         </button>

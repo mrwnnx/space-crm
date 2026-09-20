@@ -55,7 +55,7 @@ export function LeadTags({
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity disabled:opacity-60 ${
                   on
                     ? `${sc.bg} ${sc.text}`
-                    : "bg-transparent text-muted-foreground/50 ring-1 ring-inset ring-border hover:text-foreground"
+                    : "bg-transparent text-muted-foreground/70 ring-1 ring-inset ring-border hover:text-foreground"
                 }`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${on ? sc.dot : "bg-muted-foreground/30"}`} />
