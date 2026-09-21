@@ -16,8 +16,40 @@ type Notif = {
   createdAt: string;
 };
 
+/**
+ * Le tiroir-caisse : deux clochettes brillantes très courtes (« ka »), puis
+ * une tenue aiguë qui s'éteint (« ching »). Synthétisé, pas de fichier à
+ * charger ; muet tant que la page n'a pas reçu un clic (règle du navigateur).
+ */
+function kaching() {
+  try {
+    const ctx = new AudioContext();
+    const t0 = ctx.currentTime;
+    const note = (freq: number, at: number, duree: number, gain: number, type: OscillatorType = "triangle") => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(gain, at + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + duree);
+      o.connect(g).connect(ctx.destination);
+      o.start(at);
+      o.stop(at + duree + 0.05);
+    };
+    note(1318, t0, 0.12, 0.25); // « ka »
+    note(1760, t0 + 0.09, 0.12, 0.25);
+    note(2637, t0 + 0.2, 0.9, 0.3, "sine"); // « ching », longue
+    note(3951, t0 + 0.2, 0.6, 0.12, "sine"); // son harmonique, l'éclat
+    setTimeout(() => ctx.close(), 1500);
+  } catch {
+    // pas de son possible : la notification reste
+  }
+}
+
 const TYPE_ICON: Record<string, string> = {
   lead_assigned: "👤",
+  lead_enrolled: "💰",
   lead_status_change: "↻",
   deal_status_change: "↻",
   task_assigned: "✓",
@@ -32,13 +64,22 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
+  // La dernière inscription vue : une plus récente = le tiroir-caisse sonne.
+  // `undefined` = premier passage, on mémorise sans sonner.
+  const derniereInscription = useRef<string | null | undefined>(undefined);
 
   async function fetchNotifs() {
     try {
       const res = await fetch("/api/notifications", { cache: "no-store" });
       const data = await res.json();
-      setNotifs(data.notifications || []);
+      const liste: Notif[] = data.notifications || [];
+      setNotifs(liste);
       setUnread(data.unreadCount || 0);
+      const inscription = liste.find((n) => n.type === "lead_enrolled")?.id ?? null;
+      if (derniereInscription.current !== undefined && inscription && inscription !== derniereInscription.current) {
+        kaching();
+      }
+      derniereInscription.current = inscription;
     } catch {
       // ignore
     } finally {
@@ -48,7 +89,7 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifs();
-    const interval = setInterval(fetchNotifs, 30000);
+    const interval = setInterval(fetchNotifs, 15000); // 15 s : le tiroir-caisse ne doit pas traîner
     return () => clearInterval(interval);
   }, []);
 

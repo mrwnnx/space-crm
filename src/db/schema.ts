@@ -513,6 +513,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "task_due",
   "comment",
   "mention",
+  // Inscription confirmée (migration 0145) : la cloche joue le tiroir-caisse.
+  "lead_enrolled",
 ]);
 
 export const notifications = pgTable("notifications", {

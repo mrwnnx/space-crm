@@ -1027,6 +1027,18 @@ export async function enrollLeadAction(
     }
   });
 
+  // 8.4 La bonne nouvelle pour toute l'équipe : la cloche la fait sonner.
+  {
+    const { createNotification } = await import("@/lib/queries");
+    await createNotification({
+      type: "lead_enrolled",
+      message: `${lead.fullName ?? "Un lead"} inscrit — ${bootcamp.name}`,
+      referenceType: "lead",
+      referenceId: leadId,
+      read: false,
+    });
+  }
+
   // 8.5 Automatisation de la colonne d'arrivée. APRÈS la transaction : avant,
   // le nouveau statut n'est pas encore visible depuis une autre connexion.
   {
