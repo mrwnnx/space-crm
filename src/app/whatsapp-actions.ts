@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { createActivity, getDefaultLeadStatus, getLeadById, moveLeadToStage, updateContact as updateContactQuery, updateLead } from "@/lib/queries";
+import { createActivity, getBootcampById, getDefaultLeadStatus, getLeadById, moveLeadToStage, updateContact as updateContactQuery, updateLead } from "@/lib/queries";
 import { categorieDuModele, whatsAppConsentCheck } from "@/lib/whatsapp-consent";
 import {
   countTemplateVariables,
   createWhatsAppTemplate,
   deleteWhatsAppTemplate,
+  listWhatsAppTemplates,
   sendWhatsApp,
   sendWhatsAppMedia,
   sendWhatsAppReaction,
@@ -300,6 +301,42 @@ export async function createTemplateAction(input: {
   if (!r.ok) return r;
   revalidatePath("/settings");
   return { ok: true as const, status: r.status };
+}
+
+/**
+ * Les modèles approuvés, pour la liste déroulante d'une règle de colonne, et
+ * les valeurs d'exemple qui remplissent l'aperçu : un prénom fictif, mais la
+ * VRAIE formation (nom, date de début, offre) — c'est ce que le lead lira.
+ * Chargés à la demande : l'appel Meta prend ~0,5 s, on ne le paie pas à
+ * chaque ouverture du kanban.
+ */
+export async function listApprovedTemplatesAction(bootcampId: string) {
+  await requireUser();
+  const [modeles, bootcamp] = await Promise.all([listWhatsAppTemplates(), getBootcampById(bootcampId)]);
+  const { buildVariables } = await import("@/lib/automations");
+  const leadExemple = {
+    firstName: "Ahmed",
+    lastName: "Ben Ali",
+    fullName: "Ahmed Ben Ali",
+    email: "ahmed@exemple.tn",
+    // Le plan mensuel quand la formation en a un : c'est l'offre la plus lue.
+    intendedPlan: bootcamp?.monthlyCount && bootcamp?.monthlyAmount ? "monthly" : "total",
+    bootcamp: bootcamp ?? null,
+  };
+  return {
+    modeles: modeles
+      .filter((t) => t.status === "APPROVED")
+      .map((t) => ({
+        name: t.name,
+        language: t.language,
+        category: t.category,
+        variables: t.variables,
+        buttons: t.buttons,
+        body: t.body,
+      })),
+    // La date se lit dans la langue du modèle (« 28 septembre » / « 28 سبتمبر »).
+    exemples: { fr: buildVariables(leadExemple), ar: buildVariables(leadExemple, true) },
+  };
 }
 
 export async function deleteTemplateAction(name: string) {

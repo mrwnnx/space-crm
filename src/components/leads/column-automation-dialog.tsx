@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   saveColumnAutomationAction,
   deleteColumnAutomationAction,
 } from "@/app/actions";
+import { listApprovedTemplatesAction } from "@/app/whatsapp-actions";
 import { AUTOMATION_DELAYS, timingLabel } from "@/lib/automation-delays";
 import { AutomationStatsDialog } from "@/components/leads/automation-stats-dialog";
 
@@ -218,6 +219,30 @@ function RuleForm({
       ? (automation!.whatsappVariables as string[])
       : []
   );
+  // Une valeur fixe en cours de saisie (« lundi 28 septembre, 19h »).
+  const [waFixe, setWaFixe] = useState("");
+  // Les modèles approuvés chez Meta, chargés quand on choisit le canal
+  // WhatsApp. `null` = pas encore chargés ; vide = Meta injoignable, on
+  // retombe sur la saisie du nom.
+  const [waCatalogue, setWaCatalogue] = useState<
+    Awaited<ReturnType<typeof listApprovedTemplatesAction>> | null
+  >(null);
+  useEffect(() => {
+    if (canal !== "whatsapp" || waCatalogue !== null) return;
+    listApprovedTemplatesAction(bootcampId)
+      .then(setWaCatalogue)
+      .catch(() => setWaCatalogue({ modeles: [], exemples: { fr: {}, ar: {} } }));
+  }, [canal, waCatalogue, bootcampId]);
+  const waModeles = waCatalogue?.modeles ?? null;
+  const waModele = waModeles?.find((m) => m.name === waTemplate && m.language === waLangue);
+  // Les valeurs d'exemple dans la langue du modèle : la date change d'écriture.
+  const waExemples = waCatalogue?.exemples[waLangue.startsWith("ar") ? "ar" : "fr"] ?? {};
+  const ajouterFixe = () => {
+    const v = waFixe.trim();
+    if (!v || waVars.includes(v)) return;
+    setWaVars((prev) => [...prev, v]);
+    setWaFixe("");
+  };
   const [delay, setDelay] = useState(automation?.delayMinutes ?? 0);
   const [delayDays, setDelayDays] = useState(automation?.delayDays ?? 0);
   const [atHour, setAtHour] = useState<number | null>(automation?.atHour ?? null);
@@ -264,18 +289,25 @@ function RuleForm({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
+      {/* En-tête et pied restent visibles ; seul le corps défile. Sur un écran
+          large, le corps se coupe en deux colonnes : ce qu'on envoie à gauche,
+          l'aperçu et le moment à droite — un 14 pouces voit tout sans défiler. */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col rounded-xl border border-border bg-card shadow-xl"
       >
-        <h2 className="mb-1 font-heading text-sm font-semibold text-foreground">
-          {automation ? "Modifier le message" : "Nouveau message"} — « {columnName} »
-        </h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Chaque lead qui entre dans cette colonne le reçoit — <strong>une seule fois</strong>,
-          quel que soit le chemin&nbsp;: glisser-déposer, inscription, ou import du site.
-        </p>
+        <div className="px-5 pt-5">
+          <h2 className="mb-1 font-heading text-sm font-semibold text-foreground">
+            {automation ? "Modifier le message" : "Nouveau message"} — « {columnName} »
+          </h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Chaque lead qui entre dans cette colonne le reçoit — <strong>une seule fois</strong>,
+            quel que soit le chemin&nbsp;: glisser-déposer, inscription, ou import du site.
+          </p>
+        </div>
 
+        <div className="grid flex-1 gap-x-6 overflow-y-auto px-5 md:grid-cols-2">
+        <div>
         {/* Le canal se choisit AVANT le modèle : c'est lui qui décide de ce que
             le reste de la fenêtre demande. */}
         <div className="mb-4 grid grid-cols-2 gap-2">
@@ -304,18 +336,51 @@ function RuleForm({
           <div className="mb-4 space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-foreground">
-                Nom du modèle approuvé par Meta
+                Modèle approuvé par Meta
               </label>
-              <input
-                value={waTemplate}
-                onChange={(e) => setWaTemplate(e.target.value.toLowerCase())}
-                placeholder="brochure_programme"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-              />
-              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                Minuscules, chiffres et underscores uniquement. Le modèle doit exister et être
-                approuvé dans le WhatsApp Manager — sinon l&apos;envoi échoue au premier lead.
-              </p>
+              {waModeles === null ? (
+                <p className="text-[13px] text-muted-foreground">Chargement des modèles…</p>
+              ) : waModeles.length > 0 ? (
+                <>
+                  <select
+                    value={waModele ? `${waModele.name}|${waModele.language}` : ""}
+                    onChange={(e) => {
+                      const [name, language] = e.target.value.split("|");
+                      setWaTemplate(name ?? "");
+                      setWaLangue(language ?? "fr");
+                    }}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  >
+                    <option value="">Choisir un modèle…</option>
+                    {waModeles.map((m) => (
+                      <option key={`${m.name}|${m.language}`} value={`${m.name}|${m.language}`}>
+                        {m.name} — {m.language} · {m.category === "MARKETING" ? "marketing" : "utilitaire"}
+                        {m.variables ? ` · ${m.variables} variable${m.variables > 1 ? "s" : ""}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {waModele && (
+                    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                      {waModele.variables
+                        ? `Attend ${waModele.variables} variable${waModele.variables > 1 ? "s" : ""} ({{1}}…{{${waModele.variables}}}) — choisis-les ci-dessous, dans l'ordre.`
+                        : "Aucune variable."}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <input
+                    value={waTemplate}
+                    onChange={(e) => setWaTemplate(e.target.value.toLowerCase())}
+                    placeholder="brochure_programme"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  />
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                    Meta injoignable : tape le nom exact du modèle approuvé (minuscules, chiffres,
+                    underscores).
+                  </p>
+                </>
+              )}
             </div>
 
             <div>
@@ -361,11 +426,49 @@ function RuleForm({
                     </button>
                   );
                 })}
+                {waVars
+                  .filter((v) => !(VARIABLES as readonly string[]).includes(v))
+                  .map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setWaVars((prev) => prev.filter((x) => x !== v))}
+                      title="Retirer"
+                      className="rounded-full border border-primary bg-primary/10 px-2.5 py-1 text-[13px] text-foreground"
+                    >
+                      <span className="mr-1 font-mono font-semibold">{`{{${waVars.indexOf(v) + 1}}}`}</span>
+                      « {v} »
+                    </button>
+                  ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  value={waFixe}
+                  onChange={(e) => setWaFixe(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      ajouterFixe();
+                    }
+                  }}
+                  placeholder="Valeur fixe, ex. lundi 28 septembre, 19h"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                />
+                <button
+                  type="button"
+                  onClick={ajouterFixe}
+                  disabled={!waFixe.trim()}
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  Ajouter
+                </button>
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 Meta ne connaît pas les noms : ses modèles portent{" "}
                 <code>{"{{1}}"}</code>, <code>{"{{2}}"}</code>… C&apos;est l&apos;ordre de
-                sélection qui fait la correspondance. Clique pour ajouter ou retirer.
+                sélection qui fait la correspondance. Clique pour ajouter ou retirer. Une
+                valeur fixe part telle quelle, la même pour tous les leads.
               </p>
             </div>
 
@@ -413,6 +516,16 @@ function RuleForm({
         )}
 
         </>
+        )}
+        </div>
+
+        <div>
+        {canal === "whatsapp" && waModele?.body && (
+          <ApercuModele
+            body={waModele.body}
+            buttons={waModele.buttons}
+            valeurs={waVars.map((v) => waExemples[v] ?? v)}
+          />
         )}
 
         <label className="mb-1 block text-xs font-medium text-foreground">
@@ -487,6 +600,10 @@ function RuleForm({
           </p>
         )}
 
+        </div>
+        </div>
+
+        <div className="px-5 pb-5 pt-3">
         {error && (
           <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400">
             {error}
@@ -517,8 +634,65 @@ function RuleForm({
             Retour
           </button>
         </div>
+        </div>
 
       </div>
+    </div>
+  );
+}
+
+/**
+ * L'aperçu du modèle, tel que le lead le lira : chaque {{n}} prend la valeur
+ * choisie (exemple pour le prénom, vraie formation pour le reste, texte tel
+ * quel pour une valeur fixe) ; un {{n}} encore sans variable reste en évidence.
+ */
+function ApercuModele({
+  body,
+  buttons,
+  valeurs,
+}: {
+  body: string;
+  buttons: string[];
+  valeurs: string[];
+}) {
+  const rtl = /[\u0600-\u06FF]/.test(body);
+  const parts = body.split(/(\{\{\d+\}\})/g);
+  return (
+    <div className="mb-4 rounded-lg bg-muted/60 p-3">
+      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Aperçu
+      </p>
+      <div
+        dir={rtl ? "rtl" : "ltr"}
+        className={`max-w-[420px] rounded-xl border border-border bg-background px-3 py-2 text-[14px] leading-relaxed whitespace-pre-wrap ${rtl ? "rounded-tr-sm" : "rounded-tl-sm"}`}
+      >
+        {parts.map((part, i) => {
+          const m = /^\{\{(\d+)\}\}$/.exec(part);
+          if (!m) return <span key={i}>{part}</span>;
+          const valeur = valeurs[Number(m[1]) - 1];
+          return valeur ? (
+            <span key={i} className="rounded bg-primary/15 px-0.5 font-medium">
+              {valeur}
+            </span>
+          ) : (
+            <span key={i} className="rounded bg-amber-500/20 px-0.5 font-mono text-[12px] text-amber-700 dark:text-amber-500">
+              {part}
+            </span>
+          );
+        })}
+      </div>
+      {buttons.length > 0 && (
+        <div dir={rtl ? "rtl" : "ltr"} className="mt-1.5 flex max-w-[420px] flex-col gap-1">
+          {buttons.map((b) => (
+            <div
+              key={b}
+              className="rounded-lg border border-border bg-background py-1.5 text-center text-[13px] text-primary"
+            >
+              {b}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
