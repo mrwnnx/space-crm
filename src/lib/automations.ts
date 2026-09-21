@@ -277,8 +277,12 @@ async function executeRule(
     if (!lead.mobileNo) return log("skipped", "Aucun numéro de téléphone sur le lead");
 
     // Une séquence s'arrête dès qu'un humain a repris : le lead a répondu
-    // depuis la mise en file, ou il est inscrit.
-    if (lead.converted) return log("cancelled", "Le lead est inscrit : plus de message automatique");
+    // depuis la mise en file, ou il est inscrit. Sauf dans la colonne Inscrit
+    // elle-même : l'inscription pose `converted` AVANT de déclencher la règle
+    // de la colonne, et c'est là que part le message de bienvenue.
+    if (lead.converted && lead.status?.kind !== "converted") {
+      return log("cancelled", "Le lead est inscrit : plus de message automatique");
+    }
     if (programmeLe && (await aEcritDepuis(leadId, programmeLe))) {
       return log("cancelled", "Le lead a écrit entre-temps : un humain reprend");
     }
@@ -309,9 +313,11 @@ async function executeRule(
     // Un modèle en arabe reçoit ses dates en arabe (« 28 سبتمبر »).
     const vars = buildVariables(lead, rule.whatsappLanguage.startsWith("ar"));
     // Meta ne connaît pas les noms : ses modèles portent {{1}}, {{2}}…
-    // C'est l'ORDRE de cette liste qui fait la correspondance.
+    // C'est l'ORDRE de cette liste qui fait la correspondance. Une entrée qui
+    // n'est pas une variable du CRM est une valeur fixe, envoyée telle quelle
+    // (« lundi 28 septembre, 19h ») : Meta refuse un paramètre vide.
     const noms = (rule.whatsappVariables as string[]) ?? [];
-    const valeurs = noms.map((n) => vars[n] ?? "");
+    const valeurs = noms.map((n) => vars[n] ?? n);
 
     const { sendWhatsAppTemplate } = await import("@/lib/messaging/whatsapp");
     const envoi = await sendWhatsAppTemplate({
