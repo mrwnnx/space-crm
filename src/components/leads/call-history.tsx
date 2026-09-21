@@ -1,4 +1,7 @@
-import { actorInitials, actorLabel, isHumanActor } from "@/lib/utils";
+"use client";
+
+import { isHumanActor } from "@/lib/utils";
+import { ActorAvatar, useTeamProfiles } from "@/components/team-profiles";
 
 /** Ce que le résultat de l'appel dit, en clair. `logCallOutcomeAction` écrit
  *  les trois premiers ; les autres valeurs de l'enum viennent de la téléphonie
@@ -24,6 +27,7 @@ export type CallHistoryEntry = {
  *  emails et aux notes, et n'affiche qu'un relatif (« Aujourd'hui ») — inutile
  *  pour distinguer deux rappels le même jour. */
 export function CallHistory({ logs }: { logs: CallHistoryEntry[] }) {
+  const { resolve } = useTeamProfiles();
   if (logs.length === 0) return null;
 
   return (
@@ -64,10 +68,8 @@ export function CallHistory({ logs }: { logs: CallHistoryEntry[] }) {
               </div>
               {isHumanActor(log.callerId) && (
                 <p className="ml-3 mt-0.5 flex items-center gap-1 text-[12px] text-muted-foreground">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                    {actorInitials(log.callerId)}
-                  </span>
-                  par {actorLabel(log.callerId)}
+                  <ActorAvatar email={log.callerId} size={14} />
+                  par {resolve(log.callerId).name}
                 </p>
               )}
             </div>

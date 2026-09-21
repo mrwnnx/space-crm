@@ -6,6 +6,8 @@ import { WpConnectionForm } from "@/components/settings/wp-connection-form";
 import { TeamManager } from "@/components/settings/team-manager";
 import { EmailDesignForm } from "@/components/settings/email-design-form";
 import { SettingsTabs, type SettingsTab } from "@/components/settings/settings-tabs";
+import { ProfileForm } from "@/components/settings/profile-form";
+import { createClient } from "@/lib/supabase/server";
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
 import { getWhatsAppNumber, getWhatsAppProfile, listWhatsAppTemplates, sendMode, allowlist } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
@@ -21,7 +23,7 @@ export default async function SettingsPage({
 }) {
   const { tab } = await searchParams;
   const current: SettingsTab =
-    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding" || tab === "whatsapp"
+    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding" || tab === "whatsapp" || tab === "profile"
       ? tab
       : "site";
 
@@ -38,6 +40,23 @@ export default async function SettingsPage({
   const allowed = current === "team" ? await getAllowedEmails() : [];
   const outsideAccounts = current === "team" ? await getAccountsOutsideAllowlist() : [];
   const branding = current === "branding" ? await getEmailBranding() : null;
+  // Le profil du compte connecté, lu sur la session : chacun ne voit et ne
+  // modifie que le sien.
+  const me =
+    current === "profile"
+      ? await (async () => {
+          const supabase = await createClient();
+          const { data } = await supabase.auth.getUser();
+          const u = data.user;
+          return u
+            ? {
+                email: u.email ?? "",
+                name: (u.user_metadata?.full_name as string | null) ?? null,
+                avatarUrl: (u.user_metadata?.avatar_url as string | null) ?? null,
+              }
+            : null;
+        })()
+      : null;
   // WhatsApp : le numéro et les modèles viennent de Meta, l'interrupteur de la base.
   const [waNumero, waTemplates, waSettings, waQuick, waProfil, waActions, waTags] =
     current === "whatsapp"
@@ -128,6 +147,19 @@ export default async function SettingsPage({
               defaultSender={process.env.EMAIL_FROM ?? "Expéditeur non configuré"}
               testEmail={testEmail}
             />
+          </section>
+          )}
+
+          {current === "profile" && me && (
+          <section>
+            <h2 className="mb-1 text-sm font-semibold text-foreground font-heading">
+              Mon profil
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Le nom et la photo que l&apos;équipe voit à côté de vos actions —
+              historique, encaissements, messages WhatsApp.
+            </p>
+            <ProfileForm me={me} />
           </section>
           )}
 

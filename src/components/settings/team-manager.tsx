@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ActorAvatar, useTeamProfiles } from "@/components/team-profiles";
 import { inviteCollaboratorAction, removeAllowedEmailAction } from "@/app/actions";
 import { formatDate, formatRelative } from "@/lib/utils";
 import type { TeamMember } from "@/lib/queries";
@@ -23,6 +24,7 @@ export function TeamManager({
   const [note, setNote] = useState("");
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { resolve } = useTeamProfiles();
 
   function invite(e: React.FormEvent) {
     e.preventDefault();
@@ -108,7 +110,11 @@ export function TeamManager({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-medium text-foreground">{a.email}</p>
+                  <ActorAvatar email={a.email} size={20} />
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {resolve(a.email).name}{" "}
+                    <span className="font-normal text-muted-foreground">{a.email}</span>
+                  </p>
                   <span
                     title="Compte actif, absent de la liste d'équipe"
                     className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800"
@@ -140,7 +146,17 @@ export function TeamManager({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-medium text-foreground">{row.email}</p>
+                  {row.active && <ActorAvatar email={row.email} size={20} />}
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {row.active ? (
+                      <>
+                        {resolve(row.email).name}{" "}
+                        <span className="font-normal text-muted-foreground">{row.email}</span>
+                      </>
+                    ) : (
+                      row.email
+                    )}
+                  </p>
                   <span
                     title={
                       row.active

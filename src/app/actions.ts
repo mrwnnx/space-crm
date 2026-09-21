@@ -2876,3 +2876,41 @@ export async function separateLeadAction(leadId: string) {
   revalidatePath(`/leads/${leadId}`);
   return r;
 }
+
+// ── Profil du compte connecté ──────────────────────────
+// Chacun ne modifie que le sien : l'action part du compte porté par la session,
+// jamais d'un id passé en paramètre.
+export async function updateProfileAction(fd: FormData) {
+  const user = await requireUser();
+  const { createClient } = await import("@/lib/supabase/server");
+  const { uploadAvatar } = await import("@/lib/profiles");
+
+  const name = String(fd.get("name") ?? "").trim().slice(0, 60);
+
+  let avatarUrl: string | null = user.user_metadata?.avatar_url ?? null;
+  const file = fd.get("avatar");
+  if (file instanceof File && file.size > 0) {
+    const up = await uploadAvatar(user.id, file);
+    if (!up.ok) return { error: up.message };
+    avatarUrl = up.url;
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({
+    data: { full_name: name || null, avatar_url: avatarUrl },
+  });
+  if (error) return { error: error.message };
+
+  // Le nom s'affiche dans la sidebar et dans chaque fil d'activité : tout le
+  // layout est à rafraîchir, pas seulement la page Settings.
+  revalidatePath("/", "layout");
+  return { ok: true as const, name: name || null, avatarUrl };
+}
+
+export async function signOutAction() {
+  const { createClient } = await import("@/lib/supabase/server");
+  const { redirect } = await import("next/navigation");
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}

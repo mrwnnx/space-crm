@@ -8,6 +8,7 @@ export const SETTINGS_TABS = [
   { id: "whatsapp", label: "WhatsApp" },
   { id: "providers", label: "Providers" },
   { id: "team", label: "Équipe" },
+  { id: "profile", label: "Mon profil" },
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];

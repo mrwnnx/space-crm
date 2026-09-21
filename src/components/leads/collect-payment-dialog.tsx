@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { markEcheancePaidAction } from "@/app/actions";
+import { useTeamProfiles } from "@/components/team-profiles";
 import { PaymentMethodPicker } from "@/components/leads/payment-method-picker";
 
 /**
@@ -47,6 +48,7 @@ export function CollectPaymentDialog({
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { resolve } = useTeamProfiles();
 
   function save() {
     setError(null);
@@ -109,7 +111,7 @@ export function CollectPaymentDialog({
               <option value="banque">Compte bancaire (virement)</option>
               {team.map((m) => (
                 <option key={m.email} value={m.email}>
-                  {m.email}
+                  {resolve(m.email).name}
                 </option>
               ))}
             </select>

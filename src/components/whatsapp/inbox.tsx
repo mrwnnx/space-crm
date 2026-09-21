@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon, Attachment01Icon, Mic01Icon, Search01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { cn, formatRelative, initials } from "@/lib/utils";
-import { actorName } from "@/lib/actors";
+import { useTeamProfiles } from "@/components/team-profiles";
 import type { WhatsAppTemplate } from "@/lib/messaging/whatsapp";
 import {
   assignBootcampAction,
@@ -430,6 +430,7 @@ function Bulle({
   const nouveauJour = !precedent || new Date(precedent.createdAt).toDateString() !== d.toDateString();
   const sortant = m.direction === "outbound";
   const [picker, setPicker] = useState(false);
+  const { resolve } = useTeamProfiles();
   // Sans wamid (message d'avant les lots A/D), ni citation ni réaction possibles.
   const outils = actif && !!m.wamid;
   const reactions = [m.reactionLead, m.reactionUs].filter(Boolean) as string[];
@@ -465,7 +466,7 @@ function Bulle({
           {/* Sans légende, le texte n'est que le libellé « 📷 Photo » : le média suffit. */}
           {!(m.media && m.media.kind !== "document" && /^(📷|🎥|🎤|Sticker)/.test(m.content ?? "")) && m.content}
           <p className={cn("mt-1 text-right text-[12px]", sortant ? "text-primary-foreground/70" : "text-muted-foreground")}>
-            {sortant && m.createdBy ? `${actorName(m.createdBy)} · ` : ""}
+            {sortant && m.createdBy ? `${resolve(m.createdBy).name} · ` : ""}
             {d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
             {sortant && <Accuse status={m.status} />}
           </p>

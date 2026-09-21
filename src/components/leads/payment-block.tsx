@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTeamProfiles } from "@/components/team-profiles";
 import { useRouter } from "next/navigation";
 import { markEcheanceUnpaidAction, getProofUrlAction } from "@/app/actions";
 import { OfferDialog } from "@/components/leads/offer-dialog";
@@ -21,10 +22,6 @@ type Echeance = {
   proofName: string | null;
 };
 
-/** « contact.fatmaghorbel@gmail.com » → « contact.fatmaghorbel ». */
-function personne(value: string): string {
-  return value === "banque" ? "compte bancaire" : value.split("@")[0];
-}
 
 type Summary = {
   total: number;
@@ -64,6 +61,10 @@ export function PaymentBlock({
   currency?: string | null;
   team: { email: string }[];
 }) {
+  const { resolve } = useTeamProfiles();
+  // « banque » n'est pas une personne ; un email devient le nom du profil.
+  const personne = (value: string) =>
+    value === "banque" ? "compte bancaire" : resolve(value).name;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   // L'échéance en cours d'encaissement : cocher ouvre une fenêtre, décocher non.

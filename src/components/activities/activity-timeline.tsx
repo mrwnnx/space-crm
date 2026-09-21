@@ -1,4 +1,7 @@
-import { actorInitials, actorLabel, cn, formatRelative, isHumanActor } from "@/lib/utils";
+"use client";
+
+import { actorLabel, cn, formatRelative, isHumanActor } from "@/lib/utils";
+import { ActorAvatar, useTeamProfiles } from "@/components/team-profiles";
 
 type Activity = {
   id: string;
@@ -23,6 +26,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> =
 };
 
 export function ActivityTimeline({ activities }: { activities: Activity[] }) {
+  const { resolve } = useTeamProfiles();
   return (
     <div className="flex-1 overflow-y-auto p-5">
       <div className="space-y-4">
@@ -63,14 +67,11 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
                 </div>
                 {actorLabel(activity.createdBy) && (
                   <div className="mt-1 flex items-center gap-1.5">
-                    {isHumanActor(activity.createdBy) && (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                        {actorInitials(activity.createdBy)}
-                      </span>
-                    )}
+                    <ActorAvatar email={activity.createdBy} size={16} />
                     <span className="text-[13px] text-muted-foreground">
-                      {isHumanActor(activity.createdBy) ? "par " : ""}
-                      {actorLabel(activity.createdBy)}
+                      {isHumanActor(activity.createdBy)
+                        ? `par ${resolve(activity.createdBy).name}`
+                        : actorLabel(activity.createdBy)}
                     </span>
                   </div>
                 )}

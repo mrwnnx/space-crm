@@ -7,6 +7,7 @@ import {
   attachPaymentProofAction,
   getTeamAction,
 } from "@/app/actions";
+import { useTeamProfiles } from "@/components/team-profiles";
 import { PaymentMethodPicker } from "@/components/leads/payment-method-picker";
 import type { Bootcamp, Lead } from "@/db/schema";
 
@@ -24,6 +25,7 @@ export function EnrollLeadDialog({
   onClose: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const { resolve } = useTeamProfiles();
   const [error, setError] = useState<string | null>(null);
 
   const hasTotal = !!bootcamp.priceTotal;
@@ -299,7 +301,7 @@ export function EnrollLeadDialog({
                       <option value="banque">Compte bancaire (virement)</option>
                       {team.map((m) => (
                         <option key={m.email} value={m.email}>
-                          {m.email}
+                          {resolve(m.email).name}
                         </option>
                       ))}
                     </select>

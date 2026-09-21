@@ -22,10 +22,13 @@ import {
   Mail01Icon,
   AiMagicIcon,
   WhatsappIcon,
+  Logout03Icon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { WhatsAppUnreadBadge } from "@/components/whatsapp/unread-badge";
+import { ActorAvatar, useTeamProfiles } from "@/components/team-profiles";
+import { signOutAction } from "@/app/actions";
 
 type NavItem = {
   href: string;
@@ -132,6 +135,7 @@ export function Sidebar() {
         </nav>
 
         <div className="border-t border-border p-3">
+          <CurrentUser active={isActive("/settings")} />
           <div className="flex items-center justify-between">
             <Link
               href="/settings"
@@ -148,6 +152,38 @@ export function Sidebar() {
         </div>
       </aside>
     </>
+  );
+}
+
+// Qui est connecté, et la porte de sortie. Le nom mène à « Mon profil ».
+function CurrentUser({ active }: { active: boolean }) {
+  const { me, resolve } = useTeamProfiles();
+  if (!me) return null;
+  const { name } = resolve(me.email);
+  return (
+    <div className="mb-1 flex items-center gap-1">
+      <Link
+        href="/settings?tab=profile"
+        title={me.email}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          active && "text-foreground"
+        )}
+      >
+        <ActorAvatar email={me.email} size={22} />
+        <span className="truncate">{name}</span>
+      </Link>
+      <form action={signOutAction}>
+        <button
+          type="submit"
+          title="Se déconnecter"
+          aria-label="Se déconnecter"
+          className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <HugeiconsIcon icon={Logout03Icon} size={17} />
+        </button>
+      </form>
+    </div>
   );
 }
 

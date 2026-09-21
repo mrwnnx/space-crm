@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useTransition, memo } from "react";
 import Link from "next/link";
 import { updateLeadStatusAction, reorderStagesAction } from "@/app/actions";
-import { cn, statusColor, initials, formatRelative, actorInitials, actorLabel, isHumanActor } from "@/lib/utils";
+import { cn, statusColor, initials, formatRelative, isHumanActor } from "@/lib/utils";
+import { ActorAvatar, useTeamProfiles } from "@/components/team-profiles";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Copy01Icon, Tick02Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
@@ -534,6 +535,7 @@ const KanbanCard = memo(function KanbanCard({
 }) {
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
   const [dragging, setDragging] = useState(false);
+  const { resolve } = useTeamProfiles();
   return (
     <Link
       // `?from=` dit à la fiche d'où l'on vient : son « retour » ramène ici,
@@ -662,10 +664,8 @@ const KanbanCard = memo(function KanbanCard({
             className="ml-auto flex items-center gap-1 text-[12px] text-muted-foreground/70"
             title={`Dernière intervention : ${lead.lastActor}`}
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-              {actorInitials(lead.lastActor)}
-            </span>
-            {actorLabel(lead.lastActor)}
+            <ActorAvatar email={lead.lastActor} size={16} />
+            {resolve(lead.lastActor).name}
           </span>
         )}
       </div>
