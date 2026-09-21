@@ -24,7 +24,7 @@ const TeamProfilesContext = createContext<Ctx>({
   me: null,
 });
 
-function initialsOf(name: string): string {
+export function initialsOf(name: string): string {
   // `Array.from` et non `[0]` : un emoji en tête casserait l'hydratation.
   return name
     .split(/[.\-_\s]+/)

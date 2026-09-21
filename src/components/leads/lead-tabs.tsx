@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useTeamProfiles } from "@/components/team-profiles";
 import { useRouter } from "next/navigation";
 import { refreshLeadInsightAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
@@ -110,6 +111,7 @@ export function LeadTabs({
   const [tab, setTab] = useState<"overview" | "exchanges" | "score" | "activity">("overview");
   const tone = TONE[recommendation.tone];
   const { enCours, relire } = useInsightRefresh(leadId);
+  const { resolve } = useTeamProfiles();
 
   return (
     <div className="flex flex-col lg:flex-1 lg:overflow-hidden">
@@ -267,7 +269,7 @@ export function LeadTabs({
                       )}
                       <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
                         {stamp(e.at)}
-                        {e.actor ? ` · ${e.actor}` : ""}
+                        {e.actor ? ` · ${resolve(e.actor).name}` : ""}
                       </p>
                     </div>
                   </li>

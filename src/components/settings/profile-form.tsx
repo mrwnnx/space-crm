@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { updateProfileAction } from "@/app/actions";
+import { initialsOf, useTeamProfiles } from "@/components/team-profiles";
 
 type Me = { email: string; name: string | null; avatarUrl: string | null };
 
@@ -31,6 +32,7 @@ export function ProfileForm({ me }: { me: Me }) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { resolve } = useTeamProfiles();
 
   async function pickFile(file: File | undefined) {
     if (!file) return;
@@ -61,7 +63,8 @@ export function ProfileForm({ me }: { me: Me }) {
     });
   }
 
-  const initials = (name.trim() || me.email).slice(0, 1).toUpperCase();
+  // Mêmes initiales que la sidebar : celles du nom saisi, sinon du repli.
+  const initials = name.trim() ? initialsOf(name.trim()) : resolve(me.email).initials;
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-5">
