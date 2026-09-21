@@ -914,7 +914,8 @@ export async function enrollLeadAction(
     // Montants NÉGOCIÉS. Absents → tarif de la formation.
     totalAmount?: string;
     monthlyCount?: number;
-    monthlyAmount?: string;
+    // Un montant par échéance (500 / 400 / 400) : toutes ne se valent pas.
+    monthlyAmounts?: string[];
   }
 ) {
   await requireUser();
@@ -928,8 +929,7 @@ export async function enrollLeadAction(
     return Number.isFinite(n) && n > 0 ? n.toFixed(2) : null;
   };
   const totalAmount = money(input.totalAmount);
-  const monthlyAmount = money(input.monthlyAmount);
-  if (totalAmount === null || monthlyAmount === null) {
+  if (totalAmount === null) {
     return { error: "Montant invalide (nombre strictement positif attendu)." };
   }
   let monthlyCount: number | undefined;
@@ -939,6 +939,18 @@ export async function enrollLeadAction(
       return { error: "Nombre de mensualités invalide (entre 1 et 24)." };
     }
     monthlyCount = c;
+  }
+  let monthlyAmounts: string[] | undefined;
+  if (input.monthlyAmounts !== undefined) {
+    if (monthlyCount !== undefined && input.monthlyAmounts.length !== monthlyCount) {
+      return { error: "Il manque le montant d'une ou plusieurs échéances." };
+    }
+    const parsed = input.monthlyAmounts.map((a) => money(a));
+    const bad = parsed.findIndex((a) => a === null || a === undefined);
+    if (bad !== -1) {
+      return { error: `Montant de l'échéance ${bad + 1} invalide (nombre strictement positif attendu).` };
+    }
+    monthlyAmounts = parsed as string[];
   }
 
   const {
@@ -1001,7 +1013,7 @@ export async function enrollLeadAction(
     await generateScheduleForLead(leadId, input.plan, tx, {
       totalAmount,
       monthlyCount,
-      monthlyAmount,
+      monthlyAmounts,
     });
 
     // 8. 1er paiement encaissé → marque la première échéance

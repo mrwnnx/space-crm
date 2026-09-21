@@ -1663,7 +1663,14 @@ export async function generateScheduleForLead(
   leadId: string,
   plan: "total" | "monthly",
   exec: DbExecutor = db,
-  overrides?: { totalAmount?: string; monthlyCount?: number; monthlyAmount?: string }
+  overrides?: {
+    totalAmount?: string;
+    monthlyCount?: number;
+    monthlyAmount?: string;
+    // Un montant PAR échéance (ex. 500 / 400 / 400) : la longueur fait foi sur
+    // monthlyCount, et l'absence retombe sur le montant uniforme.
+    monthlyAmounts?: string[];
+  }
 ) {
   const lead = await exec.query.leads.findFirst({
     where: eq(leads.id, leadId),
@@ -1683,9 +1690,10 @@ export async function generateScheduleForLead(
       dueDate: today.toISOString().slice(0, 10), // dû le jour J (inscription)
     });
   } else {
-    const count = overrides?.monthlyCount ?? b.monthlyCount;
+    const perEcheance = overrides?.monthlyAmounts;
+    const count = perEcheance?.length || (overrides?.monthlyCount ?? b.monthlyCount);
     const monthly = overrides?.monthlyAmount ?? b.monthlyAmount;
-    if (!count || !monthly) return [];
+    if (!count || (!perEcheance && !monthly)) return [];
     const rows: { leadId: string; plan: "monthly"; amount: string; dueDate: string }[] = [];
     const base = new Date();
     for (let i = 0; i < count; i++) {
@@ -1694,7 +1702,8 @@ export async function generateScheduleForLead(
       const d = i === 0
         ? base
         : new Date(base.getFullYear(), base.getMonth() + i + 1, 1);
-      rows.push({ leadId, plan: "monthly", amount: monthly, dueDate: d.toISOString().slice(0, 10) });
+      const amount = perEcheance?.[i] ?? monthly!;
+      rows.push({ leadId, plan: "monthly", amount, dueDate: d.toISOString().slice(0, 10) });
     }
     await exec.insert(paymentSchedules).values(rows);
   }

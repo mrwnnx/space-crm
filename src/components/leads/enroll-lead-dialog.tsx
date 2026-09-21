@@ -70,16 +70,31 @@ export function EnrollLeadDialog({
   const [totalAmount, setTotalAmount] = useState(
     lead.offerTotal ?? bootcamp.priceTotal ?? ""
   );
-  const [monthlyAmount, setMonthlyAmount] = useState(
-    lead.offerMonthlyAmount ?? bootcamp.monthlyAmount ?? ""
+  const defaultMonthly = lead.offerMonthlyAmount ?? bootcamp.monthlyAmount ?? "";
+  const defaultCount = lead.offerMonthlyCount ?? bootcamp.monthlyCount ?? 3;
+  const [monthlyCount, setMonthlyCount] = useState(String(defaultCount));
+  // Un montant PAR échéance : trois versements, ce n'est pas forcément trois
+  // fois la même somme (500 puis 400 puis 400). Une ligne ajoutée reprend le
+  // dernier montant saisi — c'est presque toujours celui-là qu'on veut.
+  const [monthlyAmounts, setMonthlyAmounts] = useState<string[]>(() =>
+    Array.from({ length: defaultCount }, () => defaultMonthly)
   );
-  const [monthlyCount, setMonthlyCount] = useState(
-    String(lead.offerMonthlyCount ?? bootcamp.monthlyCount ?? 3)
-  );
+  function changeCount(raw: string) {
+    setMonthlyCount(raw);
+    const n = Math.min(24, Math.max(0, Math.trunc(Number(raw)) || 0));
+    setMonthlyAmounts((prev) =>
+      Array.from({ length: n }, (_, i) => prev[i] ?? prev[prev.length - 1] ?? defaultMonthly)
+    );
+  }
+  function changeAmount(i: number, v: string) {
+    setMonthlyAmounts((prev) => prev.map((a, j) => (j === i ? v : a)));
+  }
 
   const num = (v: string) => Number(String(v).replace(",", "."));
   const negotiatedTotal =
-    plan === "total" ? num(totalAmount) : num(monthlyAmount) * Number(monthlyCount);
+    plan === "total"
+      ? num(totalAmount)
+      : monthlyAmounts.reduce((sum, a) => sum + num(a), 0);
   const listPrice =
     plan === "total"
       ? num(bootcamp.priceTotal ?? "0")
@@ -95,7 +110,7 @@ export function EnrollLeadDialog({
         receivedBy: firstPaymentReceived ? receivedBy || undefined : undefined,
         method: firstPaymentReceived ? method || undefined : undefined,
         totalAmount: plan === "total" ? totalAmount : undefined,
-        monthlyAmount: plan === "monthly" ? monthlyAmount : undefined,
+        monthlyAmounts: plan === "monthly" ? monthlyAmounts : undefined,
         monthlyCount: plan === "monthly" ? Number(monthlyCount) : undefined,
       })) as EnrollResult;
       if ("error" in result) {
@@ -197,32 +212,36 @@ export function EnrollLeadDialog({
                   />
                 </label>
               ) : (
-                <div className="flex items-end gap-2">
-                  <label className="w-24">
+                <div className="space-y-2">
+                  <label className="block w-24">
                     <span className="mb-1 block text-[12px] text-muted-foreground">
                       Mensualités
                     </span>
                     <input
                       value={monthlyCount}
-                      onChange={(e) => setMonthlyCount(e.target.value)}
+                      onChange={(e) => changeCount(e.target.value)}
                       type="number"
                       min={1}
                       max={24}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
                     />
                   </label>
-                  <span className="pb-2.5 text-sm text-muted-foreground">×</span>
-                  <label className="flex-1">
-                    <span className="mb-1 block text-[12px] text-muted-foreground">
-                      Montant par mois ({bootcamp.currency})
-                    </span>
-                    <input
-                      value={monthlyAmount}
-                      onChange={(e) => setMonthlyAmount(e.target.value)}
-                      inputMode="decimal"
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-                    />
-                  </label>
+                  <div className="space-y-1.5">
+                    {monthlyAmounts.map((a, i) => (
+                      <label key={i} className="flex items-center gap-2">
+                        <span className="w-24 shrink-0 text-[12px] text-muted-foreground">
+                          Échéance {i + 1}
+                        </span>
+                        <input
+                          value={a}
+                          onChange={(e) => changeAmount(i, e.target.value)}
+                          inputMode="decimal"
+                          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                        />
+                        <span className="text-[12px] text-muted-foreground">{bootcamp.currency}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
 
