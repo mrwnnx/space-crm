@@ -580,8 +580,7 @@ function RuleForm({
         </div>
         <p className="mb-3 text-[13px] text-muted-foreground">
           « J+3 à 18 h » = trois jours après l&apos;entrée, à 18 h. Un modèle WhatsApp
-          marketing attend de toute façon la fenêtre 9 h-20 h et ne part jamais deux fois en
-          24 h vers la même personne.
+          marketing ne part jamais deux fois en 24 h vers la même personne.
         </p>
 
         <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-foreground">

@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { activities, automations, automationRuns, contacts, leads } from "@/db/schema";
 import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
 import { DAILY_LIMIT, sentToday } from "@/lib/messaging/quota";
-import { dansFenetreMarketing, echeanceTunis, prochain9hTunis } from "@/lib/automation-delays";
+import { echeanceTunis } from "@/lib/automation-delays";
 
 type RunStatus = "pending" | "sent" | "skipped" | "failed" | "cancelled";
 
@@ -287,17 +287,14 @@ async function executeRule(
       return log("cancelled", "Le lead a écrit entre-temps : un humain reprend");
     }
 
-    // Un MARKETING attend la fenêtre 9 h-20 h (Tunis) et respecte « 1 par
-    // 24 h » — reporté, pas annulé : le message reste dû.
+    // Un MARKETING respecte « 1 par 24 h » — reporté, pas annulé : le message
+    // reste dû. (La fenêtre 9 h-20 h a été levée le 21/09 : décision Marwen.)
     const { whatsAppConsentCheck, categorieDuModele, MARKETING_CAP_MS } = await import("@/lib/whatsapp-consent");
     const categorie = await categorieDuModele(rule.whatsappTemplate, rule.whatsappLanguage);
     const marketing = categorie !== "UTILITY" && categorie !== "AUTHENTICATION";
-    // Nos règles de confort, pas celles de Meta : un numéro de test les saute.
+    // Notre règle, pas celle de Meta : un numéro de test la saute.
     const { estNumeroDeTest } = await import("@/lib/messaging/whatsapp");
     if (marketing && !estNumeroDeTest(lead.mobileNo)) {
-      if (!dansFenetreMarketing()) {
-        return postpone(rule, leadId, runId, prochain9hTunis(), "Hors fenêtre 9 h-20 h : reporté au prochain 9 h");
-      }
       const dernier = lead.contact?.whatsappMarketingLastAt;
       if (dernier && Date.now() - dernier.getTime() < MARKETING_CAP_MS) {
         const quand = new Date(dernier.getTime() + MARKETING_CAP_MS + 5 * 60_000);
