@@ -68,9 +68,14 @@ export async function runStatusAutomations(
       orderBy: [asc(automations.createdAt)],
     });
     const entree = new Date();
+    // Un numéro de test reçoit à CHAQUE entrée dans la colonne : on glisse la
+    // fiche d'avant en arrière pour vérifier une règle. Un vrai lead, une fois.
+    const { estNumeroDeTest } = await import("@/lib/messaging/whatsapp");
+    const fiche = await db.query.leads.findFirst({ where: eq(leads.id, leadId), columns: { mobileNo: true } });
+    const test = estNumeroDeTest(fiche?.mobileNo);
     for (const rule of rules) {
       try {
-        if (await alreadyHandled(rule.id, leadId)) continue;
+        if (!test && (await alreadyHandled(rule.id, leadId))) continue;
 
         const echeance = echeanceDeRegle(rule, entree);
         if (echeance) {
