@@ -140,7 +140,7 @@ export function Sidebar() {
             <Link
               href="/settings"
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                 isActive("/settings") && "bg-muted text-foreground"
               )}
             >
@@ -166,7 +166,7 @@ function CurrentUser({ active }: { active: boolean }) {
         href="/settings?tab=profile"
         title={me.email}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          "flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
           active && "text-foreground"
         )}
       >
@@ -192,7 +192,7 @@ function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
         active && "bg-primary/10 text-primary"
       )}
     >
