@@ -10,7 +10,7 @@ import {
 import { recommend } from "@/lib/lead-recommendation";
 import { LeadTabs } from "@/components/leads/lead-tabs";
 import { LeadOverview, type OverviewData } from "@/components/leads/lead-overview";
-import { cn, statusColor, initials, formatDate, formatRelative } from "@/lib/utils";
+import { cn, statusColor, initials, formatRelative, formatDateTime } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
 import { LeadTags } from "@/components/leads/lead-tags";
@@ -426,7 +426,7 @@ export default async function LeadDetailPage({
             <div className="flex justify-between py-1">
               <span>Créé le</span>
               <span className="font-medium text-foreground">
-                {formatDate(lead.createdAt)}
+                {formatDateTime(lead.createdAt)}
               </span>
             </div>
             <div className="flex justify-between py-1">

@@ -42,6 +42,23 @@ export function formatDate(date: Date | string | null): string {
   });
 }
 
+/**
+ * « 21 sept. 2026, 19:15 » — l'heure de Tunis, dite explicitement : la page
+ * se rend sur Vercel (UTC), sans ça l'heure serait décalée d'une heure.
+ */
+export function formatDateTime(date: Date | string | null): string {
+  if (!date) return "—";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Tunis",
+  });
+}
+
 export function formatRelative(date: Date | string | null): string {
   if (!date) return "Jamais";
   const d = typeof date === "string" ? new Date(date) : date;
