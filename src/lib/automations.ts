@@ -318,6 +318,10 @@ async function executeRule(
     // (« lundi 28 septembre, 19h ») : Meta refuse un paramètre vide.
     const noms = (rule.whatsappVariables as string[]) ?? [];
     const valeurs = noms.map((n) => vars[n] ?? n);
+    // Meta refuse un paramètre vide (#131008) : dire LAQUELLE des variables
+    // manque à ce lead (« offre » sans formule choisie, prénom absent…).
+    const vide = noms.find((n, i) => !valeurs[i].trim());
+    if (vide) return log("failed", `Variable « ${vide} » vide pour ce lead : Meta refuse un paramètre vide`);
 
     const { sendWhatsAppTemplate } = await import("@/lib/messaging/whatsapp");
     const envoi = await sendWhatsAppTemplate({
