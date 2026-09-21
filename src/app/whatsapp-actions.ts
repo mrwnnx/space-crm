@@ -339,6 +339,53 @@ export async function listApprovedTemplatesAction(bootcampId: string) {
   };
 }
 
+/**
+ * Ce qu'il faut à la fiche d'un lead pour lui écrire sur WhatsApp : la fenêtre
+ * de 24 h, les modèles approuvés, SES valeurs (prénom, formation, date, offre)
+ * pour préremplir les variables, et le mapping d'une règle qui utilise déjà le
+ * modèle — la même logique que l'automatisation, appliquée à la main.
+ */
+export async function whatsAppComposerDataAction(leadId: string) {
+  await requireUser();
+  const lead = await getLeadById(leadId);
+  if (!lead) return { ok: false as const, error: "Lead introuvable" };
+  const { db } = await import("@/db");
+  const { activities, automations } = await import("@/db/schema");
+  const { and, eq, desc, isNotNull } = await import("drizzle-orm");
+  const { buildVariables } = await import("@/lib/automations");
+  const { fenetreOuverte } = await import("@/lib/whatsapp-inbox");
+
+  const [dernier, modeles, regles] = await Promise.all([
+    db.query.activities.findFirst({
+      where: and(eq(activities.referenceId, leadId), eq(activities.type, "whatsapp"), eq(activities.direction, "inbound")),
+      orderBy: [desc(activities.createdAt)],
+      columns: { createdAt: true },
+    }),
+    listWhatsAppTemplates(),
+    db.query.automations.findMany({
+      where: and(eq(automations.channel, "whatsapp"), isNotNull(automations.whatsappTemplate)),
+      columns: { whatsappTemplate: true, whatsappVariables: true, bootcampId: true },
+    }),
+  ]);
+
+  const valeurs = { fr: buildVariables(lead), ar: buildVariables(lead, true) };
+  // Le mapping d'une règle : d'abord celle de la formation du lead, sinon n'importe laquelle.
+  const mappings: Record<string, string[]> = {};
+  for (const r of regles.sort((a, b) => Number(b.bootcampId === lead.bootcampId) - Number(a.bootcampId === lead.bootcampId))) {
+    if (r.whatsappTemplate && !mappings[r.whatsappTemplate]) mappings[r.whatsappTemplate] = (r.whatsappVariables as string[]) ?? [];
+  }
+  return {
+    ok: true as const,
+    ouverte: fenetreOuverte(dernier?.createdAt ?? null),
+    dernierEntrant: dernier?.createdAt?.toISOString() ?? null,
+    modeles: modeles
+      .filter((t) => t.status === "APPROVED")
+      .map((t) => ({ name: t.name, language: t.language, category: t.category, variables: t.variables, buttons: t.buttons, body: t.body })),
+    valeurs,
+    mappings,
+  };
+}
+
 export async function deleteTemplateAction(name: string) {
   await requireUser();
   const r = await deleteWhatsAppTemplate(name);
