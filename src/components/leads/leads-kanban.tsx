@@ -30,6 +30,65 @@ import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/
 // raw_payload n'est pas chargé par getLeadsKanban (perf) → on l'omet du type.
 type KanbanLead = Omit<Lead, "rawPayload">;
 
+// ── Recherche par code promo ────────────────────────────
+// Les codes sont saisis à la main par les leads : « Space20 », « space20 »,
+// « Space 20 », « Dooda15 » / « Douda15 ». On compare donc des formes
+// NORMALISÉES (minuscules, sans espaces, tirets ni accents) et on tolère une
+// faute de frappe — sans quoi une recherche « space20 » raterait un tiers des
+// inscrits au même code.
+function normaliserCode(v: string): string {
+  return v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Distance de Levenshtein, bornée : on s'arrête dès que `max` est dépassé. */
+function distance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const c = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      cur.push(c);
+      if (c < best) best = c;
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Le code du lead correspond-il à ce qui est tapé ? Sous-chaîne, ou à une
+ *  faute près sur les LETTRES (deux à partir de 7 lettres) — les chiffres,
+ *  eux, doivent être identiques : « uxb40 » et « uxb20 » sont deux remises,
+ *  pas une coquille. En dessous de 3 lettres, pas d'approximation : tout
+ *  matcherait. */
+function codeCorrespond(code: string | null | undefined, q: string): boolean {
+  if (!code) return false;
+  const c = normaliserCode(code);
+  const n = normaliserCode(q);
+  if (!n) return false;
+  if (c.includes(n)) return true;
+  const chiffresQ = n.replace(/[^0-9]/g, "");
+  if (chiffresQ && chiffresQ !== c.replace(/[^0-9]/g, "")) return false;
+  const lettresC = c.replace(/[0-9]/g, "");
+  const lettresQ = n.replace(/[0-9]/g, "");
+  if (lettresQ.length < 3) return false;
+  const tolerance = lettresQ.length >= 7 ? 2 : 1;
+  // Le code entier (à un caractère de longueur près : « gospace » n'est pas
+  // « space »), ou son début : « douda » doit retrouver « Dooda15 ».
+  return (
+    (Math.abs(lettresC.length - lettresQ.length) <= 1 &&
+      distance(lettresC, lettresQ, tolerance) <= tolerance) ||
+    (lettresC.length > lettresQ.length &&
+      distance(lettresC.slice(0, lettresQ.length), lettresQ, tolerance) <= tolerance)
+  );
+}
+
 type StageWithLeads = LeadStatus & {
   leads: (KanbanLead & {
     source: LeadSource | null;
@@ -214,12 +273,19 @@ export function LeadsKanban({
         (l) =>
           (!q ||
             l.fullName.toLowerCase().includes(q) ||
-            (l.email ?? "").toLowerCase().includes(q)) &&
+            (l.email ?? "").toLowerCase().includes(q) ||
+            codeCorrespond(l.promoCode, q)) &&
           passe(l, actifs, sourceId)
       )
       .slice()
       .sort(comparer(tri)),
   }));
+  // La vignette dit pourquoi elle est là quand c'est le code qui a matché.
+  const codeTrouve = (l: KanbanLead) =>
+    !!q &&
+    !l.fullName.toLowerCase().includes(q) &&
+    !(l.email ?? "").toLowerCase().includes(q) &&
+    codeCorrespond(l.promoCode, q);
 
   // Les compteurs se lisent sur TOUS les leads, pas sur ceux qui restent :
   // une pastille qui affiche « 0 » parce qu'un autre filtre est actif ne dit
@@ -242,7 +308,7 @@ export function LeadsKanban({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un nom, un email…"
+            placeholder="Rechercher un nom, un email, un code promo…"
             className="w-56 bg-transparent text-sm outline-none placeholder:text-muted-foreground/70"
           />
           {search && (
@@ -470,7 +536,12 @@ export function LeadsKanban({
 
               <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                 {status.leads.map((lead) => (
-                  <KanbanCard key={lead.id} lead={lead} bootcampId={bootcamp?.id} />
+                  <KanbanCard
+                    key={lead.id}
+                    lead={lead}
+                    bootcampId={bootcamp?.id}
+                    codeTrouve={codeTrouve(lead)}
+                  />
                 ))}
 
                 {status.leads.length === 0 && !q && (
@@ -520,8 +591,11 @@ const INTENT_STYLE: Record<string, string> = {
 const KanbanCard = memo(function KanbanCard({
   lead,
   bootcampId,
+  codeTrouve = false,
 }: {
   bootcampId?: string;
+  /** Vrai quand la recherche a retenu cette carte par son code promo. */
+  codeTrouve?: boolean;
   lead: KanbanLead & {
     source: LeadSource | null;
     organization: Organization | null;
@@ -652,6 +726,12 @@ const KanbanCard = memo(function KanbanCard({
       {lead.organization?.name && (
         <p className="mt-2 truncate text-[12px] text-muted-foreground/70">
           {lead.organization.name}
+        </p>
+      )}
+
+      {codeTrouve && lead.promoCode && (
+        <p className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-medium text-amber-800">
+          code « {lead.promoCode} »
         </p>
       )}
 
