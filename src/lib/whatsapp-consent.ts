@@ -1,5 +1,5 @@
 import "server-only";
-import { listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
+import { estNumeroDeTest, listWhatsAppTemplates } from "@/lib/messaging/whatsapp";
 
 // Garde-fou Meta, appliqué à TOUT envoi de modèle (fiche et automatisation) :
 // un STOP arrête tout modèle ; un modèle MARKETING ne part qu'à une personne
@@ -15,6 +15,8 @@ export type ContactConsent = {
   whatsappUnsubscribedAt?: Date | null;
   whatsappMarketingLimitedUntil?: Date | null;
   whatsappMarketingLastAt?: Date | null;
+  /** Pour reconnaître un numéro de test, qui saute le plafond 24 h. */
+  mobileNo?: string | null;
 };
 
 export const MARKETING_CAP_MS = 24 * 60 * 60 * 1000;
@@ -60,7 +62,7 @@ export async function whatsAppConsentCheck(
     };
   }
   const dernier = contact?.whatsappMarketingLastAt;
-  if (dernier && Date.now() - dernier.getTime() < MARKETING_CAP_MS) {
+  if (dernier && Date.now() - dernier.getTime() < MARKETING_CAP_MS && !estNumeroDeTest(contact.mobileNo)) {
     const h = Math.ceil((MARKETING_CAP_MS - (Date.now() - dernier.getTime())) / 3_600_000);
     return {
       ok: false,

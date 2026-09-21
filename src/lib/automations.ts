@@ -292,7 +292,9 @@ async function executeRule(
     const { whatsAppConsentCheck, categorieDuModele, MARKETING_CAP_MS } = await import("@/lib/whatsapp-consent");
     const categorie = await categorieDuModele(rule.whatsappTemplate, rule.whatsappLanguage);
     const marketing = categorie !== "UTILITY" && categorie !== "AUTHENTICATION";
-    if (marketing) {
+    // Nos règles de confort, pas celles de Meta : un numéro de test les saute.
+    const { estNumeroDeTest } = await import("@/lib/messaging/whatsapp");
+    if (marketing && !estNumeroDeTest(lead.mobileNo)) {
       if (!dansFenetreMarketing()) {
         return postpone(rule, leadId, runId, prochain9hTunis(), "Hors fenêtre 9 h-20 h : reporté au prochain 9 h");
       }

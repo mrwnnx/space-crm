@@ -56,6 +56,16 @@ export function allowlist(): string[] {
     .map((n) => (n.length === 8 ? `216${n}` : n));
 }
 
+/**
+ * Un numéro de test (l'équipe) : nos règles de confort — fenêtre 9 h-20 h,
+ * 1 marketing par 24 h — ne s'appliquent pas, pour tester une automatisation
+ * à n'importe quelle heure. Les règles Meta (consentement, STOP) restent.
+ */
+export function estNumeroDeTest(to: string | null | undefined): boolean {
+  const n = String(to ?? "").replace(/\D/g, "");
+  return allowlist().includes(n.length === 8 ? `216${n}` : n);
+}
+
 /** Un identifiant de message qui n'existe pas chez Meta : la bulle le dira. */
 export const DRY_RUN_PREFIX = "dryrun-";
 
