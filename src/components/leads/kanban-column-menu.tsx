@@ -8,6 +8,7 @@ import {
   setStageKindAction,
   createStageAction,
 } from "@/app/actions";
+import { ColumnBlastDialog } from "@/components/leads/column-blast-dialog";
 import {
   ColumnAutomationDialog,
   type ColumnAutomation,
@@ -53,6 +54,7 @@ export function ColumnMenu({
   const [error, setError] = useState<string | null>(null);
   const [automating, setAutomating] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [blasting, setBlasting] = useState(false);
   const [tagging, setTagging] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -147,6 +149,18 @@ export function ColumnMenu({
                   {automations.length
                     ? `Automatisations (${automations.length})`
                     : "Automatiser cette colonne"}
+                </button>
+
+                {/* L'automatisation attend qu'un lead ENTRE ; ceci s'adresse à
+                    ceux qui sont déjà là. */}
+                <button
+                  className={menuItemCls}
+                  onClick={() => {
+                    setOpen(false);
+                    setBlasting(true);
+                  }}
+                >
+                  Envoyer un modèle WhatsApp
                 </button>
 
                 <button
@@ -247,6 +261,15 @@ export function ColumnMenu({
           automations={automations}
           templates={templates ?? []}
           onClose={() => setAutomating(false)}
+        />
+      )}
+
+      {blasting && (
+        <ColumnBlastDialog
+          bootcampId={bootcampId}
+          statusId={statusId}
+          columnName={name}
+          onClose={() => setBlasting(false)}
         />
       )}
     </div>

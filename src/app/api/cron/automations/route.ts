@@ -25,5 +25,8 @@ export async function GET(request: NextRequest) {
   }
 
   const report = await processDueAutomations();
-  return NextResponse.json({ ok: true, ...report });
+  // Les envois en masse partagent ce passage : pas de job externe de plus.
+  const { traiterBlasts } = await import("@/lib/whatsapp-blast");
+  const blasts = await traiterBlasts();
+  return NextResponse.json({ ok: true, ...report, blasts });
 }

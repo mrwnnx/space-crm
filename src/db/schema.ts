@@ -10,6 +10,7 @@ import {
   jsonb,
   numeric,
   primaryKey,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -1258,6 +1259,53 @@ export const whatsappButtonActions = pgTable("whatsapp_button_actions", {
   optOut: boolean("opt_out").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// Un envoi en masse : UN modèle vers tous les leads d'une colonne, à l'instant
+// où on clique (les automatisations, elles, se déclenchent à l'entrée). La file
+// est vidée par le même cron : on n'envoie jamais 200 messages d'un bloc.
+export const whatsappBlasts = pgTable("whatsapp_blasts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bootcampId: uuid("bootcamp_id")
+    .notNull()
+    .references(() => bootcamps.id, { onDelete: "cascade" }),
+  statusId: uuid("status_id")
+    .notNull()
+    .references(() => leadStatuses.id, { onDelete: "cascade" }),
+  template: text("template").notNull(),
+  language: text("language").notNull().default("ar"),
+  variables: jsonb("variables").notNull().default([]),
+  // Que faire de ceux qui ont déjà reçu un marketing il y a moins de 24 h :
+  // 'reporter' (ils l'auront à l'échéance) ou 'exclure' (ils sautent la vague).
+  capPolicy: text("cap_policy").notNull().default("reporter"),
+  // running | paused | done
+  state: text("state").notNull().default("running"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+});
+
+// Une ligne par destinataire : c'est elle qui rend l'envoi repayable et lisible
+// (qui a reçu, qui a été sauté et pourquoi).
+export const whatsappBlastTargets = pgTable(
+  "whatsapp_blast_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    blastId: uuid("blast_id")
+      .notNull()
+      .references(() => whatsappBlasts.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    // pending | sent | skipped | failed
+    status: text("status").notNull().default("pending"),
+    reason: text("reason"),
+    // Posé sur un reporté : l'heure à laquelle son plafond 24 h se libère.
+    scheduledAt: timestamp("scheduled_at"),
+    sentAt: timestamp("sent_at"),
+    whatsappId: text("whatsapp_id"),
+  },
+  (t) => [unique("whatsapp_blast_targets_unique").on(t.blastId, t.leadId)]
+);
 
 export const whatsappQuickReplies = pgTable("whatsapp_quick_replies", {
   id: uuid("id").primaryKey().defaultRandom(),

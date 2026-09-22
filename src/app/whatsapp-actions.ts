@@ -386,6 +386,47 @@ export async function whatsAppComposerDataAction(leadId: string) {
   };
 }
 
+// ── Envoi en masse par colonne ────────────────────────
+
+export async function apercuBlastAction(
+  statusId: string,
+  modele: { template: string; language: string; variables: string[] },
+  capPolicy: "reporter" | "exclure"
+) {
+  await requireUser();
+  const { apercuBlast } = await import("@/lib/whatsapp-blast");
+  const a = await apercuBlast(statusId, modele, capPolicy);
+  return { ...a, premierReport: a.premierReport?.toISOString() ?? null };
+}
+
+export async function lancerBlastAction(input: {
+  bootcampId: string;
+  statusId: string;
+  template: string;
+  language: string;
+  variables: string[];
+  capPolicy: "reporter" | "exclure";
+}) {
+  const user = await requireUser();
+  const { creerBlast } = await import("@/lib/whatsapp-blast");
+  const r = await creerBlast({ ...input, createdBy: user.email ?? null });
+  if (r.ok) revalidatePath(`/bootcamps/${input.bootcampId}`);
+  return r;
+}
+
+export async function etatBlastAction(blastId: string) {
+  await requireUser();
+  const { etatBlast } = await import("@/lib/whatsapp-blast");
+  return etatBlast(blastId);
+}
+
+export async function arreterBlastAction(blastId: string) {
+  await requireUser();
+  const { changerEtatBlast } = await import("@/lib/whatsapp-blast");
+  await changerEtatBlast(blastId, "paused");
+  return { ok: true as const };
+}
+
 export async function deleteTemplateAction(name: string) {
   await requireUser();
   const r = await deleteWhatsAppTemplate(name);
