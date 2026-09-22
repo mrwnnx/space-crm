@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft01Icon, Clock01Icon, Analytics01Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Clock01Icon, Analytics01Icon,
+  Message01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getBootcampById, getLeadsKanban, getLeadSources, getFormSourcesByBootcamp, getTags, getLeadStatuses, countLeadsToAnalyze, getInsightsByBootcamp, getReturningByBootcamp, getMultiFormByBootcamp,
   getEngagedByBootcamp, getCalledByBootcamp, getOpenBootcamps, getCarryCandidates, getAutomationsByBootcamp,
@@ -150,6 +152,15 @@ export default async function BootcampDetailPage({
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <HugeiconsIcon icon={Analytics01Icon} size={16} />
+        </Link>
+
+        <Link
+          href={`/bootcamps/${bootcamp.id}/envois`}
+          title="Envois WhatsApp de cette formation"
+          aria-label="Envois WhatsApp de cette formation"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <HugeiconsIcon icon={Message01Icon} size={16} />
         </Link>
 
         <Link

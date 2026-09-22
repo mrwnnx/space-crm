@@ -125,7 +125,14 @@ export function ColumnBlastDialog({
           </h2>
           <p className="mb-4 text-xs text-muted-foreground">
             Part <strong>maintenant</strong> à tous les leads qui sont dans cette colonne — sans
-            attendre qu&apos;ils y entrent. Chacun reçoit ses propres valeurs.
+            attendre qu&apos;ils y entrent. Chacun reçoit ses propres valeurs.{" "}
+            <a
+              href={`/bootcamps/${bootcampId}/envois`}
+              className="text-primary underline underline-offset-2"
+            >
+              Voir les envois passés
+            </a>
+            .
           </p>
         </div>
 

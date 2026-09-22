@@ -1,7 +1,7 @@
 import "server-only";
-import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, leads, whatsappBlasts, whatsappBlastTargets } from "@/db/schema";
+import { contacts, leads, leadStatuses, whatsappBlasts, whatsappBlastTargets } from "@/db/schema";
 import { buildVariables } from "@/lib/automations";
 import { categorieDuModele, MARKETING_CAP_MS, whatsAppConsentCheck } from "@/lib/whatsapp-consent";
 import { estNumeroDeTest } from "@/lib/messaging/whatsapp";
@@ -267,6 +267,77 @@ async function envoyerCible(
     await db.update(contacts).set({ whatsappMarketingLastAt: new Date() }).where(eq(contacts.id, lead.contactId));
   }
   return clore("sent", null, envoi.id);
+}
+
+/** Les vagues d'une formation, la plus récente d'abord, avec leur bilan. */
+export async function listerBlasts(bootcampId: string) {
+  const vagues = await db.query.whatsappBlasts.findMany({
+    where: eq(whatsappBlasts.bootcampId, bootcampId),
+    orderBy: [desc(whatsappBlasts.createdAt)],
+    limit: 50,
+  });
+  if (vagues.length === 0) return [];
+  const colonnes = await db.query.leadStatuses.findMany({
+    where: inArray(
+      leadStatuses.id,
+      vagues.map((v) => v.statusId)
+    ),
+    columns: { id: true, name: true },
+  });
+  const cibles = await db.query.whatsappBlastTargets.findMany({
+    where: inArray(
+      whatsappBlastTargets.blastId,
+      vagues.map((v) => v.id)
+    ),
+    columns: { blastId: true, status: true },
+  });
+  return vagues.map((v) => {
+    const miennes = cibles.filter((c) => c.blastId === v.id);
+    const par = (s: string) => miennes.filter((c) => c.status === s).length;
+    return {
+      id: v.id,
+      template: v.template,
+      language: v.language,
+      colonne: colonnes.find((c) => c.id === v.statusId)?.name ?? "—",
+      capPolicy: v.capPolicy,
+      state: v.state,
+      createdBy: v.createdBy,
+      createdAt: v.createdAt,
+      finishedAt: v.finishedAt,
+      total: miennes.length,
+      sent: par("sent"),
+      pending: par("pending"),
+      skipped: par("skipped"),
+      failed: par("failed"),
+    };
+  });
+}
+
+/** Le détail d'une vague : qui a reçu, qui non, et pourquoi. */
+export async function detailBlast(blastId: string) {
+  const cibles = await db.query.whatsappBlastTargets.findMany({
+    where: eq(whatsappBlastTargets.blastId, blastId),
+  });
+  if (cibles.length === 0) return [];
+  // Pas de relation Drizzle sur cette table : une requête, pas N.
+  const fiches = await db.query.leads.findMany({
+    where: inArray(
+      leads.id,
+      cibles.map((c) => c.leadId)
+    ),
+    columns: { id: true, fullName: true, mobileNo: true },
+  });
+  return cibles
+    .map((c) => ({
+      leadId: c.leadId,
+      nom: fiches.find((f) => f.id === c.leadId)?.fullName ?? "—",
+      numero: fiches.find((f) => f.id === c.leadId)?.mobileNo ?? null,
+      status: c.status,
+      reason: c.reason,
+      sentAt: c.sentAt,
+      scheduledAt: c.scheduledAt,
+    }))
+    .sort((a, b) => a.status.localeCompare(b.status) || a.nom.localeCompare(b.nom));
 }
 
 /** Mettre en pause ou reprendre une vague (le bouton « Arrêter » de l'écran). */
