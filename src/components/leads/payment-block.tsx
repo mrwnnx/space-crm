@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTeamProfiles } from "@/components/team-profiles";
 import { useRouter } from "next/navigation";
-import { markEcheanceUnpaidAction, getProofUrlAction } from "@/app/actions";
+import { markEcheanceUnpaidAction, getProofUrlAction, updateEcheanceAmountAction } from "@/app/actions";
 import { OfferDialog } from "@/components/leads/offer-dialog";
 import { CollectPaymentDialog } from "@/components/leads/collect-payment-dialog";
 import { METHOD_LABEL } from "@/components/leads/payment-method-picker";
@@ -69,6 +69,21 @@ export function PaymentBlock({
   const [isPending, startTransition] = useTransition();
   // L'échéance en cours d'encaissement : cocher ouvre une fenêtre, décocher non.
   const [collecting, setCollecting] = useState<Echeance | null>(null);
+  // Le montant qu'on est en train de corriger (erreur de saisie, remboursement).
+  const [corrige, setCorrige] = useState<{ id: string; valeur: string } | null>(null);
+
+  function enregistrerMontant() {
+    if (!corrige) return;
+    const v = Number(corrige.valeur.replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) return setCorrige(null);
+    // Le champ reste affiché, figé, jusqu'au rafraîchissement : sinon on
+    // revoit l'ancien montant pendant deux secondes et on croit que ça a raté.
+    startTransition(async () => {
+      await updateEcheanceAmountAction(corrige.id, v);
+      router.refresh();
+      setCorrige(null);
+    });
+  }
 
   function toggle(ech: Echeance) {
     // Décocher est une correction de clic : ça ne demande rien et ça ne détruit
@@ -167,9 +182,34 @@ export function PaymentBlock({
                   <span className={cn("text-xs", overdue && "font-medium text-red-500")}>
                     {ech.dueDate ? formatDate(ech.dueDate) : "—"}
                   </span>
-                  <span className="text-xs font-medium text-foreground">
-                    {ech.amount ? `${Number(ech.amount).toLocaleString("fr-FR")} ${currency ?? "TND"}` : "—"}
-                  </span>
+                  {corrige?.id === ech.id ? (
+                    <span className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        value={corrige.valeur}
+                        onChange={(e) => setCorrige({ id: ech.id, valeur: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") enregistrerMontant();
+                          if (e.key === "Escape") setCorrige(null);
+                        }}
+                        onBlur={enregistrerMontant}
+                        disabled={isPending}
+                        inputMode="decimal"
+                        className="w-20 rounded border border-ring bg-background px-1.5 py-0.5 text-right text-xs outline-none disabled:opacity-60"
+                      />
+                      <span className="text-[12px] text-muted-foreground">{currency ?? "TND"}</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => setCorrige({ id: ech.id, valeur: ech.amount ?? "" })}
+                      title="Corriger le montant"
+                      className="rounded px-1 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                    >
+                      {ech.amount ? `${Number(ech.amount).toLocaleString("fr-FR")} ${currency ?? "TND"}` : "—"}
+                    </button>
+                  )}
                 </div>
                 {ech.paidAt && (
                   <span className="shrink-0 text-[12px] text-emerald-600 dark:text-emerald-400">

@@ -1288,6 +1288,52 @@ export async function getProofUrlAction(echeanceId: string) {
   return { ok: true, url };
 }
 
+/**
+ * Corriger le montant d'une échéance, même déjà encaissée.
+ *
+ * Il y a deux vraies raisons : une erreur de saisie (1 300 au lieu de 975) et
+ * un remboursement partiel. « Modifier l'offre » ne sait pas le faire — il ne
+ * redistribue que le reste à devoir et REFUSE un total inférieur à ce qui est
+ * déjà payé. L'ancien montant part dans le fil d'activité : sur de l'argent,
+ * savoir qui a changé quoi vaut plus que la correction elle-même.
+ */
+export async function updateEcheanceAmountAction(echeanceId: string, amount: number) {
+  await requireUser();
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Le montant doit être supérieur à zéro." };
+  }
+  const { db } = await import("@/db");
+  const { paymentSchedules } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const ligne = await db.query.paymentSchedules.findFirst({ where: eq(paymentSchedules.id, echeanceId) });
+  if (!ligne) return { error: "Échéance introuvable." };
+  const ancien = Number(ligne.amount ?? 0);
+  if (ancien === amount) return { ok: true as const };
+
+  await db
+    .update(paymentSchedules)
+    .set({ amount: String(amount) })
+    .where(eq(paymentSchedules.id, echeanceId));
+
+  const { createActivity } = await import("@/lib/queries");
+  const { currentActor } = await import("@/lib/auth");
+  await createActivity({
+    referenceType: "lead",
+    referenceId: ligne.leadId,
+    type: "note",
+    subject: "Montant d'une échéance corrigé",
+    content:
+      `${ancien.toLocaleString("fr-FR")} → ${amount.toLocaleString("fr-FR")}` +
+      (ligne.isPaid ? " (échéance déjà encaissée)" : "") +
+      (ligne.dueDate ? ` · échéance du ${ligne.dueDate}` : ""),
+    createdBy: await currentActor(),
+  });
+
+  revalidatePath(`/leads/${ligne.leadId}`);
+  return { ok: true as const };
+}
+
 export async function markEcheanceUnpaidAction(echeanceId: string) {
   await requireUser();
   const { markEcheanceUnpaid, getScheduleForLead } = await import("@/lib/queries");
