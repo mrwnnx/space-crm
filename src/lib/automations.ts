@@ -281,25 +281,31 @@ async function executeRule(
     if (!rule.whatsappTemplate) return log("failed", "Aucun modèle WhatsApp sur la règle");
     if (!lead.mobileNo) return log("skipped", "Aucun numéro de téléphone sur le lead");
 
-    // Une séquence s'arrête dès qu'un humain a repris : le lead a répondu
-    // depuis la mise en file, ou il est inscrit. Sauf dans la colonne Inscrit
-    // elle-même : l'inscription pose `converted` AVANT de déclencher la règle
-    // de la colonne, et c'est là que part le message de bienvenue.
-    if (lead.converted && lead.status?.kind !== "converted") {
-      return log("cancelled", "Le lead est inscrit : plus de message automatique");
-    }
-    if (programmeLe && (await aEcritDepuis(leadId, programmeLe))) {
-      return log("cancelled", "Le lead a écrit entre-temps : un humain reprend");
+    const { whatsAppConsentCheck, categorieDuModele, MARKETING_CAP_MS } = await import("@/lib/whatsapp-consent");
+    const categorie = await categorieDuModele(rule.whatsappTemplate, rule.whatsappLanguage);
+    const marketing = categorie !== "UTILITY" && categorie !== "AUTHENTICATION";
+    // Nos garde-fous de confort, pas les règles de Meta : un numéro de test
+    // (l'équipe) les saute tous, sinon on ne peut plus rejouer un scénario.
+    const { estNumeroDeTest } = await import("@/lib/messaging/whatsapp");
+    const test = estNumeroDeTest(lead.mobileNo);
+
+    if (!test) {
+      // Un lead qui a déjà payé ne reçoit plus de message de VENTE, même si
+      // sa fiche traîne dans une colonne de la pipeline (`converted` ne se
+      // remet jamais à faux). Les utilitaires — bienvenue, échéance, rappel
+      // d'appel — passent : ils s'adressent justement aux inscrits.
+      if (lead.converted && marketing) {
+        return log("cancelled", "Le lead est inscrit : plus de message de vente");
+      }
+      // Une séquence s'arrête dès qu'un humain a repris la conversation.
+      if (programmeLe && (await aEcritDepuis(leadId, programmeLe))) {
+        return log("cancelled", "Le lead a écrit entre-temps : un humain reprend");
+      }
     }
 
     // Un MARKETING respecte « 1 par 24 h » — reporté, pas annulé : le message
     // reste dû. (La fenêtre 9 h-20 h a été levée le 21/09 : décision Marwen.)
-    const { whatsAppConsentCheck, categorieDuModele, MARKETING_CAP_MS } = await import("@/lib/whatsapp-consent");
-    const categorie = await categorieDuModele(rule.whatsappTemplate, rule.whatsappLanguage);
-    const marketing = categorie !== "UTILITY" && categorie !== "AUTHENTICATION";
-    // Notre règle, pas celle de Meta : un numéro de test la saute.
-    const { estNumeroDeTest } = await import("@/lib/messaging/whatsapp");
-    if (marketing && !estNumeroDeTest(lead.mobileNo)) {
+    if (marketing && !test) {
       const dernier = lead.contact?.whatsappMarketingLastAt;
       if (dernier && Date.now() - dernier.getTime() < MARKETING_CAP_MS) {
         const quand = new Date(dernier.getTime() + MARKETING_CAP_MS + 5 * 60_000);
