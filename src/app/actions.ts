@@ -2475,14 +2475,16 @@ export async function markNotificationReadAction(id: string) {
   await requireUser();
   const { markNotificationRead } = await import("@/lib/queries");
   await markNotificationRead(id);
-  revalidatePath("/");
+  // Pas de revalidatePath("/") : la cloche met déjà son état à jour elle-même, et
+  // revalider re-rendait toute la page courante (sur /leads : 3,7 Mo) pour rien.
 }
 
 export async function markAllNotificationsReadAction() {
   await requireUser();
   const { markAllNotificationsRead } = await import("@/lib/queries");
   await markAllNotificationsRead();
-  revalidatePath("/");
+  // Pas de revalidatePath("/") : la cloche met déjà son état à jour elle-même, et
+  // revalider re-rendait toute la page courante (sur /leads : 3,7 Mo) pour rien.
 }
 
 // ── Saved View actions ─────────────────────────────────
