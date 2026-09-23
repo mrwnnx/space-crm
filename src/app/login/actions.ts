@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { db } from "@/db";
 import { allowedEmails } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -33,12 +34,65 @@ export async function signup(formData: FormData) {
     redirect("/login?error=unauthorized");
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({ email: rawEmail, password });
-  if (error) {
-    redirect("/login?error=1");
+  if (password.length < 8) redirect("/login?error=court");
+
+  // ── Le compte est créé par le serveur, plus par la porte publique ──
+  //
+  // Audit du 22/09 : `supabase.auth.signUp` passait par l'inscription publique
+  // de Supabase, que n'importe qui pouvait appeler directement avec la clé
+  // anon — l'allowlist ci-dessus ne protégeait que ce formulaire. Cette porte
+  // est désormais FERMÉE (Auth → « Allow new users to sign up » décoché) ;
+  // l'API admin, elle, reste ouverte au serveur seul.
+  //
+  // La confirmation par email est gardée : le lien prouve que la personne
+  // possède la boîte. Sans lui, qui connaît l'adresse d'un invité pourrait
+  // créer le compte à sa place.
+  const admin = adminAuth();
+  if (!admin) redirect("/login?error=1");
+
+  const [existing] = await db.execute<{ id: string; confirmed: boolean }>(
+    sql`select id, email_confirmed_at is not null as confirmed from auth.users where lower(email) = ${normalized} limit 1`
+  );
+  if (existing?.confirmed) redirect("/login?error=deja_compte");
+
+  let tokenHash: string | undefined;
+  let type: "signup" | "magiclink";
+  if (existing) {
+    // Compte créé mais jamais confirmé (lien expiré) : on repose le mot de
+    // passe choisi et on renvoie un lien — un lien magique confirme aussi l'email.
+    await admin.updateUserById(existing.id, { password });
+    const { data, error } = await admin.generateLink({ type: "magiclink", email: normalized });
+    if (error) redirect("/login?error=1");
+    tokenHash = data.properties?.hashed_token;
+    type = "magiclink";
+  } else {
+    const { data, error } = await admin.generateLink({ type: "signup", email: normalized, password });
+    if (error) redirect("/login?error=1");
+    tokenHash = data.properties?.hashed_token;
+    type = "signup";
   }
-  redirect("/leads");
+  if (!tokenHash) redirect("/login?error=1");
+
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3001";
+  const { sendSignupConfirmEmail } = await import("@/lib/messaging/invite");
+  const sent = await sendSignupConfirmEmail(
+    normalized,
+    `${base}/auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=${type}&next=/leads`
+  );
+  if (!sent.ok) redirect("/login?error=1");
+
+  redirect("/login?sent=inscription");
+}
+
+/** Client Supabase avec la clé service : réservé au serveur, jamais importé côté client. */
+function adminAuth() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createAdminClient(url, key, { auth: { persistSession: false } }).auth.admin;
 }
 
 /**

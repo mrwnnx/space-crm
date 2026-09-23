@@ -41,3 +41,29 @@ export async function sendInviteEmail(email: string) {
     html,
   });
 }
+
+/**
+ * Lien de confirmation après « Créer un compte » : le compte existe déjà côté
+ * Supabase (créé par l'API admin), il ne s'active qu'au clic.
+ */
+export async function sendSignupConfirmEmail(email: string, confirmUrl: string) {
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a;max-width:520px">
+      <p>Bonjour,</p>
+      <p>Pour activer ton compte <strong>Academy CRM</strong> (${email}), clique ici :</p>
+      <p>
+        <a href="${confirmUrl}" style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:500">Activer mon compte</a>
+      </p>
+      <p style="color:#6b7280;font-size:12px">
+        Le lien ne sert qu'une fois et expire vite. S'il ne marche plus, refais
+        « Créer un compte » sur ${baseUrl()}/login avec la même adresse.
+      </p>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject: "Active ton compte Academy CRM",
+    html,
+  });
+}

@@ -35,6 +35,10 @@ function LoginContent({
         ? "Cette adresse n'est pas invitée. Demande à l'administrateur de l'ajouter."
         : error === "pas_de_compte"
           ? "Cette adresse est bien invitée, mais aucun compte n'a encore été créé avec elle. Utilise « Créer un compte » ci-dessous plutôt que la réinitialisation."
+          : error === "deja_compte"
+            ? "Un compte existe déjà avec cette adresse. Connecte-toi, ou utilise « Oublié ? » pour choisir un nouveau mot de passe."
+          : error === "court"
+            ? "Le mot de passe doit faire au moins 8 caractères."
           : error === "email_manquant"
             ? "Saisis ton adresse email."
             : error === "1"
@@ -60,6 +64,13 @@ function LoginContent({
           {errorMessage && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-600 dark:text-red-400">
               {errorMessage}
+            </div>
+          )}
+
+          {sent === "inscription" && (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+              Regarde ta boîte mail : un lien pour activer ton compte vient d&apos;y être
+              envoyé (pense aux spams). Une fois activé, tu es connecté directement.
             </div>
           )}
 
