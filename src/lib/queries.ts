@@ -1400,6 +1400,39 @@ export async function getLeadStatusId(leadId: string): Promise<string | null> {
   return lead?.statusId ?? null;
 }
 
+// Le type d'une colonne (normal | converted | lost…), pour les gardes des actions.
+export async function getLeadStatusKind(statusId: string): Promise<string | null> {
+  const status = await db.query.leadStatuses.findFirst({
+    where: eq(leadStatuses.id, statusId),
+    columns: { kind: true },
+  });
+  return status?.kind ?? null;
+}
+
+/**
+ * Position du lead dans SA colonne du kanban, et ses voisins — pour passer au
+ * lead précédent / suivant depuis la fiche mobile. Même ordre que le kanban
+ * (plus récent d'abord, cf. getLeadsKanban).
+ */
+export async function getColumnNeighbors(
+  leadId: string,
+  bootcampId: string,
+  statusId: string
+): Promise<{ index: number; total: number; prevId: string | null; nextId: string | null }> {
+  const rows = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.bootcampId, bootcampId), eq(leads.statusId, statusId)))
+    .orderBy(desc(leads.createdAt));
+  const i = rows.findIndex((r) => r.id === leadId);
+  return {
+    index: i,
+    total: rows.length,
+    prevId: i > 0 ? rows[i - 1].id : null,
+    nextId: i >= 0 && i < rows.length - 1 ? rows[i + 1].id : null,
+  };
+}
+
 // Renvoie le stage kind='converted' d'un bootcamp (unique par construction P1).
 // Utilisé par enrollLeadAction pour savoir où poser un lead inscrit.
 export async function getConvertedStageForBootcamp(bootcampId: string) {

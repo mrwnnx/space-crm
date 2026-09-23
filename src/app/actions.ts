@@ -2342,6 +2342,76 @@ export async function logCallOutcomeAction(
   return { ok: true, message: "Appel enregistré." };
 }
 
+/**
+ * Décale la prochaine relance sans passer par un appel (« Demain », « +3 j »
+ * de la fiche mobile). Même effet qu'un appel noté avec un délai : le champ
+ * qui fait remonter le lead dans « Aujourd'hui », et la tâche « Rappeler X ».
+ */
+export async function setLeadFollowUpAction(
+  leadId: string,
+  days: number
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+  if (!Number.isFinite(days) || days < 0 || days > 365) {
+    return { ok: false, message: "Délai invalide." };
+  }
+
+  const { getLeadById, updateLead, scheduleFollowUpTask } = await import("@/lib/queries");
+  const lead = await getLeadById(leadId);
+  if (!lead) return { ok: false, message: "Lead introuvable." };
+
+  const nextFollowUpAt = new Date(Date.now() + days * 86400_000);
+  await updateLead(leadId, { nextFollowUpAt });
+
+  const { currentActor } = await import("@/lib/auth");
+  const actor = await currentActor();
+  if (actor) {
+    await scheduleFollowUpTask({
+      leadId,
+      leadName: lead.fullName,
+      assignedTo: actor,
+      dueDate: nextFollowUpAt,
+    });
+    revalidatePath("/tasks");
+  }
+
+  revalidatePath("/aujourdhui");
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true, message: `Relance le ${nextFollowUpAt.toLocaleDateString("fr-FR")}` };
+}
+
+/**
+ * Passe un lead dans une colonne « perdu » en gardant POURQUOI. La raison vit
+ * dans le fil du lead (sujet « Raison de perte ») — pas de colonne en base
+ * pour l'instant ; les statistiques pourront la relire par ce sujet.
+ */
+export async function markLeadLostAction(
+  leadId: string,
+  statusId: string,
+  reason: string,
+  note?: string | null
+): Promise<{ ok: boolean; message: string }> {
+  await requireUser();
+  const motif = reason.trim();
+  if (!motif) return { ok: false, message: "Choisis une raison." };
+
+  const { getLeadStatusKind } = await import("@/lib/queries");
+  if ((await getLeadStatusKind(statusId)) !== "lost") {
+    return { ok: false, message: "Cette colonne n'est pas une colonne « perdu »." };
+  }
+
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "note",
+    direction: "outbound",
+    subject: "Raison de perte",
+    content: [motif, note?.trim() || null].filter(Boolean).join("\n"),
+  });
+  await updateLeadStatusAction(leadId, statusId);
+  return { ok: true, message: `Perdu — ${motif}` };
+}
+
 // ── Report vers la formation suivante ──────────────────
 
 export async function carryLeadsOverAction(

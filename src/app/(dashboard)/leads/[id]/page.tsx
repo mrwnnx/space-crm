@@ -23,6 +23,8 @@ import { CallHistory } from "@/components/leads/call-history";
 import { ActivityPanel } from "@/components/activities/activity-panel";
 import { LeadCampaignHistory } from "@/components/campaigns/lead-campaign-history";
 import { getCampaignsForContact } from "@/lib/campaigns/analytics";
+import { LeadMobileView, type LeadMobileData } from "@/components/leads/lead-mobile-view";
+import { getColumnNeighbors } from "@/lib/queries";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -217,10 +219,79 @@ export default async function LeadDetailPage({
     })),
   };
 
+  // ── La fiche téléphone : tout vient de ce qui est déjà chargé, plus la
+  // position du lead dans sa colonne (précédent / suivant).
+  const neighbors =
+    lead.bootcampId && lead.statusId
+      ? await getColumnNeighbors(lead.id, lead.bootcampId, lead.statusId)
+      : null;
+  const navHref = (leadId: string | null) =>
+    leadId ? `/leads/${leadId}${from ? `?from=${from}` : ""}` : null;
+  const mobile: LeadMobileData = {
+    id: lead.id,
+    fullName: lead.fullName,
+    origin: [
+      `Arrivé le ${new Date(lead.createdAt).toLocaleDateString("fr-FR")}`,
+      lead.source?.name ?? null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    mobile: lead.mobileNo,
+    whatsapp: lead.contact?.whatsapp ?? null,
+    email: lead.email,
+    statusId: lead.statusId,
+    statusName: lead.status?.name ?? null,
+    statuses: statuses.map((s) => ({ id: s.id, name: s.name, kind: s.kind })),
+    qualification: lead.qualification,
+    followUp: lead.nextFollowUpAt
+      ? {
+          at: new Date(lead.nextFollowUpAt).toISOString(),
+          isDue: new Date(lead.nextFollowUpAt).getTime() <= Date.now(),
+          lateDays: Math.floor((Date.now() - new Date(lead.nextFollowUpAt).getTime()) / 86400000),
+        }
+      : null,
+    insight: insight ? { summary: insight.summary, objection: insight.objection } : null,
+    offer: {
+      formation: lead.bootcamp?.name ?? null,
+      plan:
+        lead.intendedPlan === "total"
+          ? `Comptant — ${lead.offerTotal ?? lead.bootcamp?.priceTotal ?? "?"} ${lead.bootcamp?.currency ?? "TND"}`
+          : lead.intendedPlan === "monthly"
+            ? `${lead.offerMonthlyCount ?? lead.bootcamp?.monthlyCount ?? "?"} × ${lead.offerMonthlyAmount ?? lead.bootcamp?.monthlyAmount ?? "?"} ${lead.bootcamp?.currency ?? "TND"}`
+            : null,
+      promo: lead.promoCode,
+      payments: schedule ? `${schedule.summary.paidCount} / ${schedule.summary.count} payées` : null,
+    },
+    recent: lead.activities.slice(0, 3).map((a) => ({
+      id: a.id,
+      at: a.createdAt.toISOString(),
+      label: [a.subject, readable(a)?.replace(/\s+/g, " ").slice(0, 90)].filter(Boolean).join(" — "),
+    })),
+    back,
+    nav: neighbors
+      ? {
+          index: neighbors.index,
+          total: neighbors.total,
+          prevHref: navHref(neighbors.prevId),
+          nextHref: navHref(neighbors.nextId),
+        }
+      : null,
+  };
+
   return (
     <>
       <MarkLeadSeen leadId={lead.id} />
 
+      <LeadMobileView
+        className="lg:hidden"
+        data={mobile}
+        lead={lead}
+        bootcamp={lead.bootcamp ?? null}
+        templates={templates}
+      />
+
+      {/* Bureau : la fiche à onglets, inchangée. */}
+      <div className="hidden min-h-0 flex-1 flex-col lg:flex">
       <LeadDetailHeader
         leadId={lead.id}
         backHref={back.href}
@@ -437,6 +508,7 @@ export default async function LeadDetailPage({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </>
   );
