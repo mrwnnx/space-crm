@@ -1172,10 +1172,11 @@ export async function createCallLog(data: typeof callLogs.$inferInsert) {
 
 // ── Notifications ──────────────────────────────────────
 
-export async function getNotifications(userId?: string) {
+export async function getNotifications(userId?: string, limit?: number) {
   return db.query.notifications.findMany({
     where: userId ? eq(notifications.userId, userId) : undefined,
     orderBy: [desc(notifications.createdAt)],
+    limit,
   });
 }
 
