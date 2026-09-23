@@ -12,11 +12,11 @@ export default async function DashboardPage() {
     getLeadStats(),
     getDealStats(),
     getTaskStats(),
-    getLeads(),
+    getLeads({ limit: 5 }),
     getTasks(),
   ]);
 
-  const recent5Leads = recentLeads.slice(0, 5);
+  const recent5Leads = recentLeads;
   const overdueTasks = recentTasks
     .filter((t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "done")
     .slice(0, 5);

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
-import type { LeadWithRelations } from "@/lib/queries";
+import type { LeadListItem } from "@/lib/queries";
 import { LeadsBulkBar, type BulkStatus, type BulkTag, type BulkBootcamp } from "./leads-bulk-bar";
 
 export function LeadsList({
@@ -18,7 +18,7 @@ export function LeadsList({
   statuses,
   tags,
 }: {
-  leads: LeadWithRelations[];
+  leads: LeadListItem[];
   filterBootcampId: string | null;
   filterStatusId: string | null;
   filterTemperature: string | null;

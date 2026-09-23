@@ -256,7 +256,8 @@ export async function getLeads(opts?: {
   converted?: boolean;
   tagIds?: string[];
   tagMode?: "any" | "all"; // any = au moins un des tags ; all = tous
-}): Promise<LeadWithRelations[]> {
+  limit?: number;
+}) {
   const filters: ReturnType<typeof and>[] = [];
 
   if (opts?.search) {
@@ -283,18 +284,34 @@ export async function getLeads(opts?: {
     );
   }
 
+  // Seulement ce que la liste et le dashboard affichent. Audit du 22/09 : la
+  // version « toutes colonnes + 5 relations complètes » pesait 12,2 Mo pour
+  // 10 831 leads (raw_payload compris), à chaque ouverture de /leads — l'essentiel
+  // du quota d'egress Supabase (5,93 Go / 5 Go). Ainsi : 3,7 Mo.
   return db.query.leads.findMany({
     where: filters.length > 0 ? and(...filters) : undefined,
+    columns: {
+      id: true,
+      fullName: true,
+      email: true,
+      mobileNo: true,
+      jobTitle: true,
+      bootcampId: true,
+      converted: true,
+      temperature: true,
+      lastContactedAt: true,
+    },
     with: {
-      status: true,
-      source: true,
-      industry: true,
-      organization: true,
-      bootcamp: true,
+      status: { columns: { name: true, color: true } },
+      source: { columns: { name: true } },
+      bootcamp: { columns: { name: true } },
     },
     orderBy: [desc(leads.createdAt)],
+    limit: opts?.limit,
   });
 }
+
+export type LeadListItem = Awaited<ReturnType<typeof getLeads>>[number];
 
 export async function getLeadsByStatus(statusId: string) {
   return db.query.leads.findMany({
