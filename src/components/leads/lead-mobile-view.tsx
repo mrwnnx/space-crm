@@ -53,7 +53,6 @@ export type LeadMobileData = {
   /** Calculé côté serveur : l'heure « maintenant » ne se lit pas pendant le rendu. */
   followUp: { at: string; isDue: boolean; lateDays: number } | null;
   insight: { summary: string | null; objection: string | null } | null;
-  offer: { formation: string | null; plan: string | null; promo: string | null; payments: string | null };
   recent: Recent[];
   back: { href: string; label: string };
   nav: { index: number; total: number; prevHref: string | null; nextHref: string | null } | null;
@@ -72,14 +71,27 @@ const QUICK_NOTES = ["Veut le programme", "Paiement en plusieurs fois", "Rappele
 
 const DAY = 86400_000;
 
+/** Les blocs de la fiche bureau, rendus par la page et repris tels quels. */
+export type LeadMobileBlocks = {
+  banners: ReactNode;
+  tags: ReactNode;
+  details: ReactNode;
+  payment: ReactNode;
+  history: ReactNode;
+  timeline: ReactNode;
+  dates: ReactNode;
+};
+
 export function LeadMobileView({
   data,
+  blocks,
   lead,
   bootcamp,
   templates,
   className,
 }: {
   data: LeadMobileData;
+  blocks: LeadMobileBlocks;
   lead: Omit<Lead, "rawPayload">;
   bootcamp: Bootcamp | null;
   templates: EmailTemplate[];
@@ -89,6 +101,7 @@ export function LeadMobileView({
   const [lostStatusId, setLostStatusId] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [allHistory, setAllHistory] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -208,6 +221,13 @@ export function LeadMobileView({
           </div>
         </section>
 
+        {/* Doublon, reporté d'une autre formation, ancien inscrit */}
+        {blocks.banners && (
+          <div className="overflow-hidden rounded-2xl border border-border empty:hidden [&>*:last-child]:border-b-0">
+            {blocks.banners}
+          </div>
+        )}
+
         {/* Coordonnées, chacune actionnable */}
         <section className="overflow-hidden rounded-2xl border border-border bg-card">
           <h2 className="px-3.5 pb-1 pt-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -302,14 +322,22 @@ export function LeadMobileView({
           </section>
         )}
 
-        {/* Formation et offre */}
-        <section className="space-y-2 rounded-2xl border border-border bg-card p-3.5 text-[14px]">
-          <h2 className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Formation et offre</h2>
-          <Line label="Formation" value={data.offer.formation} />
-          <Line label="Offre" value={data.offer.plan} />
-          <Line label="Code promo" value={data.offer.promo} />
-          {data.offer.payments && <Line label="Paiements" value={data.offer.payments} />}
+        {/* Échéancier : paiements, justificatifs, encaisser */}
+        {blocks.payment && (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card [&>div]:border-t-0">
+            {blocks.payment}
+          </div>
+        )}
+
+        {/* Offre, qualification, coordonnées modifiables, source, consentements */}
+        <section className="overflow-hidden rounded-2xl border border-border bg-card">
+          <h2 className="px-3.5 pt-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+            Offre et informations
+          </h2>
+          {blocks.details}
         </section>
+
+        <section className="rounded-2xl border border-border bg-card p-3.5">{blocks.tags}</section>
 
         {/* Derniers échanges */}
         <section className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5">
@@ -317,6 +345,7 @@ export function LeadMobileView({
           {data.recent.length === 0 ? (
             <p className="text-[13.5px] text-muted-foreground">Rien encore.</p>
           ) : (
+            !allHistory &&
             data.recent.map((r) => (
               <div key={r.id} className="flex gap-2.5 text-[13.5px]">
                 <span className="w-14 shrink-0 text-muted-foreground">{shortDate(r.at)}</span>
@@ -324,7 +353,23 @@ export function LeadMobileView({
               </div>
             ))
           )}
+          <button
+            type="button"
+            onClick={() => setAllHistory((v) => !v)}
+            className="h-11 w-full rounded-lg border border-border text-[13.5px] font-medium"
+          >
+            {allHistory ? "Réduire" : "Tout l'historique"}
+          </button>
         </section>
+
+        {allHistory && (
+          <>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card [&>div]:p-3.5">{blocks.timeline}</div>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">{blocks.history}</div>
+          </>
+        )}
+
+        <div className="px-1 text-[12.5px] text-muted-foreground">{blocks.dates}</div>
       </div>
 
       {toast && (
@@ -538,15 +583,6 @@ function ContactRow({
           <HugeiconsIcon icon={Copy01Icon} size={17} />
         </button>
       )}
-    </div>
-  );
-}
-
-function Line({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value ?? "—"}</span>
     </div>
   );
 }

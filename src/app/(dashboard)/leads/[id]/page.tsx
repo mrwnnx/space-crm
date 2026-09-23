@@ -21,6 +21,7 @@ import { getReturningForLead, getCarriedOrigin, getAllowedEmails, getPendingAuto
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { CallHistory } from "@/components/leads/call-history";
 import { ActivityPanel } from "@/components/activities/activity-panel";
+import { ActivityTimeline } from "@/components/activities/activity-timeline";
 import { LeadCampaignHistory } from "@/components/campaigns/lead-campaign-history";
 import { getCampaignsForContact } from "@/lib/campaigns/analytics";
 import { LeadMobileView, type LeadMobileData } from "@/components/leads/lead-mobile-view";
@@ -251,17 +252,6 @@ export default async function LeadDetailPage({
         }
       : null,
     insight: insight ? { summary: insight.summary, objection: insight.objection } : null,
-    offer: {
-      formation: lead.bootcamp?.name ?? null,
-      plan:
-        lead.intendedPlan === "total"
-          ? `Comptant — ${lead.offerTotal ?? lead.bootcamp?.priceTotal ?? "?"} ${lead.bootcamp?.currency ?? "TND"}`
-          : lead.intendedPlan === "monthly"
-            ? `${lead.offerMonthlyCount ?? lead.bootcamp?.monthlyCount ?? "?"} × ${lead.offerMonthlyAmount ?? lead.bootcamp?.monthlyAmount ?? "?"} ${lead.bootcamp?.currency ?? "TND"}`
-            : null,
-      promo: lead.promoCode,
-      payments: schedule ? `${schedule.summary.paidCount} / ${schedule.summary.count} payées` : null,
-    },
     recent: lead.activities.slice(0, 3).map((a) => ({
       id: a.id,
       at: a.createdAt.toISOString(),
@@ -278,6 +268,155 @@ export default async function LeadDetailPage({
       : null,
   };
 
+  // ── Les blocs d'infos, partagés entre la fiche bureau et la fiche téléphone
+  // (mêmes composants, mêmes données : rien à tenir en double).
+  const bannersEl = (
+    <>
+      {duplicateInfo && (
+        <DuplicateBanner leadId={lead.id} info={duplicateInfo} />
+      )}
+
+      {carriedFrom && (
+        // Le message que Marwen voulait : « ces gens-là, tu les as déjà
+        // contactés, mais rien n'a été conclu ».
+        <div className="border-b border-border bg-amber-50 px-4 py-2.5">
+          <p className="text-xs font-medium text-amber-900">
+            ↪ Reporté de « {carriedFrom.bootcamp_name} » — déjà contacté, jamais conclu
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            {carriedFrom.qualification
+              ? `Dernière qualification : ${carriedFrom.qualification} · `
+              : ""}
+            <a href={`/leads/${carriedFrom.origin_id}`} className="underline">
+              voir la fiche d&apos;origine
+            </a>
+          </p>
+        </div>
+      )}
+
+      {returning && (
+        // Déjà inscrit ailleurs = ancien élève. Déjà passé sans s'inscrire =
+        // intérêt répété. Les deux changent la façon d'aborder l'appel.
+        <div
+          className={
+            returning.alumni
+              ? "border-b border-border bg-violet-50 px-4 py-2.5"
+              : "border-b border-border bg-sky-50 px-4 py-2.5"
+          }
+        >
+          <p
+            className={
+              returning.alumni
+                ? "text-xs font-medium text-violet-900"
+                : "text-xs font-medium text-sky-900"
+            }
+          >
+            {returning.alumni
+              ? "★ Ancien inscrit — cette personne s'est déjà inscrite chez vous"
+              : "↺ Déjà venu — cette personne a déjà été un lead sur une autre formation"}
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            {returning.formations.join(" · ")}
+          </p>
+        </div>
+      )}
+    </>
+  );
+  const tagsEl = <LeadTags leadId={lead.id} allTags={allTags} tagIds={leadTagIds} />;
+  const sidePanelEl = (
+    <LeadSidePanel
+      leadId={lead.id}
+      // L'échéancier remonte jusqu'ici : c'est dans le panneau « Offre »
+      // qu'on vient renégocier, pas dans le bloc Paiement — lequel
+      // n'existe que pour les 2 leads inscrits sur 283.
+      schedule={
+        schedule
+          ? {
+              total: schedule.items.reduce((n, e) => n + Number(e.amount ?? 0), 0),
+              paid: schedule.items
+                .filter((e) => e.isPaid)
+                .reduce((n, e) => n + Number(e.amount ?? 0), 0),
+            }
+          : null
+      }
+      lead={{
+        email: lead.email,
+        mobileNo: lead.mobileNo,
+        sourceId: lead.sourceId,
+        intendedPlan: lead.intendedPlan,
+        offerTotal: lead.offerTotal,
+        offerMonthlyCount: lead.offerMonthlyCount,
+        offerMonthlyAmount: lead.offerMonthlyAmount,
+        promoCode: lead.promoCode,
+        motivation: lead.motivation,
+        wantsCall: lead.wantsCall,
+        qualification: lead.qualification,
+        nextFollowUpAt: lead.nextFollowUpAt,
+      }}
+      contactId={lead.contactId}
+      contact={{
+        whatsapp: lead.contact?.whatsapp ?? null,
+        age: lead.contact?.age ?? null,
+        whatsappConsentAt: lead.contact?.whatsappConsentAt ?? null,
+        whatsappConsentSource: lead.contact?.whatsappConsentSource ?? null,
+        whatsappUnsubscribedAt: lead.contact?.whatsappUnsubscribedAt ?? null,
+        unsubscribedAt: lead.contact?.unsubscribedAt ?? null,
+        bouncedAt: lead.contact?.bouncedAt ?? null,
+        bounceReason: lead.contact?.bounceReason ?? null,
+      }}
+      sources={sources}
+      bootcamp={lead.bootcamp}
+    />
+  );
+  const paymentEl = schedule ? (
+    <PaymentBlock
+      leadId={lead.id}
+      items={schedule.items.map((e) => ({
+        id: e.id,
+        dueDate: e.dueDate,
+        amount: e.amount,
+        isPaid: e.isPaid,
+        paidAt: e.paidAt,
+        receivedBy: e.receivedBy,
+        method: e.method,
+        proofName: e.proofName,
+      }))}
+      summary={schedule.summary}
+      currency={lead.bootcamp?.currency}
+      team={team}
+    />
+  ) : null;
+  const historyEl = (
+    <>
+      <CallHistory
+        logs={callLogs.map((c) => ({
+          id: c.id,
+          status: c.status,
+          duration: c.duration,
+          callerId: c.callerId,
+          createdAt: c.createdAt,
+        }))}
+      />
+      <LeadCampaignHistory rows={campaignHistory} />
+    </>
+  );
+  const datesEl = (
+    <>
+    <div className="flex justify-between py-1">
+      <span>Créé le</span>
+      <span className="font-medium text-foreground">
+        {formatDateTime(lead.createdAt)}
+      </span>
+    </div>
+    <div className="flex justify-between py-1">
+      <span>Dernier contact</span>
+      <span className="font-medium text-foreground">
+        {formatRelative(lead.lastContactedAt)}
+      </span>
+    </div>
+    </>
+  );
+
   return (
     <>
       <MarkLeadSeen leadId={lead.id} />
@@ -285,6 +424,30 @@ export default async function LeadDetailPage({
       <LeadMobileView
         className="lg:hidden"
         data={mobile}
+        blocks={{
+          banners: duplicateInfo || carriedFrom || returning ? bannersEl : null,
+          tags: tagsEl,
+          details: sidePanelEl,
+          payment: paymentEl,
+          history: historyEl,
+          timeline: (
+            <ActivityTimeline
+              activities={[
+                ...lead.activities.map((a) => ({ ...a, content: readable(a), createdAt: a.createdAt.toISOString() })),
+                ...lead.comments.map((c) => ({
+                  id: c.id,
+                  type: "comment",
+                  direction: "outbound",
+                  subject: "Commentaire",
+                  content: c.content,
+                  createdAt: c.createdAt.toISOString(),
+                  createdBy: c.createdBy,
+                })),
+              ].sort((x, y) => y.createdAt.localeCompare(x.createdAt))}
+            />
+          ),
+          dates: datesEl,
+        }}
         lead={lead}
         bootcamp={lead.bootcamp ?? null}
         templates={templates}
@@ -320,20 +483,7 @@ export default async function LeadDetailPage({
           overview={
             <LeadOverview data={overview} recommendation={reco} leadId={lead.id} tasks={lead.tasks} />
           }
-          history={
-            <>
-              <CallHistory
-                logs={callLogs.map((c) => ({
-                  id: c.id,
-                  status: c.status,
-                  duration: c.duration,
-                  callerId: c.callerId,
-                  createdAt: c.createdAt,
-                }))}
-              />
-              <LeadCampaignHistory rows={campaignHistory} />
-            </>
-          }
+          history={historyEl}
           exchanges={
           <ActivityPanel
             referenceType="lead"
@@ -377,135 +527,18 @@ export default async function LeadDetailPage({
             </div>
           </div>
 
-          {duplicateInfo && (
-            <DuplicateBanner leadId={lead.id} info={duplicateInfo} />
-          )}
-
-          {carriedFrom && (
-            // Le message que Marwen voulait : « ces gens-là, tu les as déjà
-            // contactés, mais rien n'a été conclu ».
-            <div className="border-b border-border bg-amber-50 px-4 py-2.5">
-              <p className="text-xs font-medium text-amber-900">
-                ↪ Reporté de « {carriedFrom.bootcamp_name} » — déjà contacté, jamais conclu
-              </p>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
-                {carriedFrom.qualification
-                  ? `Dernière qualification : ${carriedFrom.qualification} · `
-                  : ""}
-                <a href={`/leads/${carriedFrom.origin_id}`} className="underline">
-                  voir la fiche d&apos;origine
-                </a>
-              </p>
-            </div>
-          )}
-
-          {returning && (
-            // Déjà inscrit ailleurs = ancien élève. Déjà passé sans s'inscrire =
-            // intérêt répété. Les deux changent la façon d'aborder l'appel.
-            <div
-              className={
-                returning.alumni
-                  ? "border-b border-border bg-violet-50 px-4 py-2.5"
-                  : "border-b border-border bg-sky-50 px-4 py-2.5"
-              }
-            >
-              <p
-                className={
-                  returning.alumni
-                    ? "text-xs font-medium text-violet-900"
-                    : "text-xs font-medium text-sky-900"
-                }
-              >
-                {returning.alumni
-                  ? "★ Ancien inscrit — cette personne s'est déjà inscrite chez vous"
-                  : "↺ Déjà venu — cette personne a déjà été un lead sur une autre formation"}
-              </p>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
-                {returning.formations.join(" · ")}
-              </p>
-            </div>
-          )}
+          {bannersEl}
 
           <div className="border-b border-border p-4">
-            <LeadTags leadId={lead.id} allTags={allTags} tagIds={leadTagIds} />
+            {tagsEl}
           </div>
 
-          <LeadSidePanel
-            leadId={lead.id}
-            // L'échéancier remonte jusqu'ici : c'est dans le panneau « Offre »
-            // qu'on vient renégocier, pas dans le bloc Paiement — lequel
-            // n'existe que pour les 2 leads inscrits sur 283.
-            schedule={
-              schedule
-                ? {
-                    total: schedule.items.reduce((n, e) => n + Number(e.amount ?? 0), 0),
-                    paid: schedule.items
-                      .filter((e) => e.isPaid)
-                      .reduce((n, e) => n + Number(e.amount ?? 0), 0),
-                  }
-                : null
-            }
-            lead={{
-              email: lead.email,
-              mobileNo: lead.mobileNo,
-              sourceId: lead.sourceId,
-              intendedPlan: lead.intendedPlan,
-              offerTotal: lead.offerTotal,
-              offerMonthlyCount: lead.offerMonthlyCount,
-              offerMonthlyAmount: lead.offerMonthlyAmount,
-              promoCode: lead.promoCode,
-              motivation: lead.motivation,
-              wantsCall: lead.wantsCall,
-              qualification: lead.qualification,
-              nextFollowUpAt: lead.nextFollowUpAt,
-            }}
-            contactId={lead.contactId}
-            contact={{
-              whatsapp: lead.contact?.whatsapp ?? null,
-              age: lead.contact?.age ?? null,
-              whatsappConsentAt: lead.contact?.whatsappConsentAt ?? null,
-              whatsappConsentSource: lead.contact?.whatsappConsentSource ?? null,
-              whatsappUnsubscribedAt: lead.contact?.whatsappUnsubscribedAt ?? null,
-              unsubscribedAt: lead.contact?.unsubscribedAt ?? null,
-              bouncedAt: lead.contact?.bouncedAt ?? null,
-              bounceReason: lead.contact?.bounceReason ?? null,
-            }}
-            sources={sources}
-            bootcamp={lead.bootcamp}
-          />
+          {sidePanelEl}
 
-          {schedule && (
-            <PaymentBlock
-              leadId={lead.id}
-              items={schedule.items.map((e) => ({
-                id: e.id,
-                dueDate: e.dueDate,
-                amount: e.amount,
-                isPaid: e.isPaid,
-                paidAt: e.paidAt,
-                receivedBy: e.receivedBy,
-                method: e.method,
-                proofName: e.proofName,
-              }))}
-              summary={schedule.summary}
-              currency={lead.bootcamp?.currency}
-              team={team}
-            />
-          )}
+          {paymentEl}
 
           <div className="mt-auto border-t border-border p-4 text-xs text-muted-foreground">
-            <div className="flex justify-between py-1">
-              <span>Créé le</span>
-              <span className="font-medium text-foreground">
-                {formatDateTime(lead.createdAt)}
-              </span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span>Dernier contact</span>
-              <span className="font-medium text-foreground">
-                {formatRelative(lead.lastContactedAt)}
-              </span>
-            </div>
+            {datesEl}
           </div>
         </div>
       </div>
