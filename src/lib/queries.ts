@@ -347,6 +347,9 @@ export async function getLeadsKanban(bootcampId?: string) {
     orderBy: [asc(leadStatuses.position)],
     with: {
       leads: {
+        // Un lead reporté vers une autre formation n'a plus rien à faire dans
+        // ces colonnes : sa suite se joue sur sa nouvelle fiche.
+        where: (l) => sql`not exists (select 1 from leads c where c.carried_from_lead_id = ${l.id})`,
         // N'embarque PAS raw_payload (jsonb, inutile pour le board) — robustesse perf.
         columns: { rawPayload: false },
         orderBy: [desc(leads.createdAt)],
@@ -3239,18 +3242,22 @@ export async function getCarryCandidates(
 export async function carryLeadsOver(
   leadIds: string[],
   toBootcampId: string,
-  actor: string | null
-): Promise<number> {
-  if (leadIds.length === 0) return 0;
+  actor: string | null,
+  // Colonne d'arrivée choisie (envoi depuis la fiche) ; sinon la 1ʳᵉ colonne.
+  toStatusId?: string
+): Promise<string[]> {
+  if (leadIds.length === 0) return [];
 
   const stages = await db.query.leadStatuses.findMany({
     where: and(eq(leadStatuses.bootcampId, toBootcampId), eq(leadStatuses.kind, "normal")),
     orderBy: [asc(leadStatuses.position)],
   });
-  const targetStatusId = stages[0]?.id ?? null;
-  if (!targetStatusId) return 0;
+  const targetStatusId = toStatusId
+    ? stages.find((s) => s.id === toStatusId)?.id ?? null
+    : stages[0]?.id ?? null;
+  if (!targetStatusId) return [];
 
-  let created = 0;
+  const created: string[] = [];
   for (const leadId of leadIds) {
     const src = await db.query.leads.findFirst({
       where: eq(leads.id, leadId),
@@ -3319,7 +3326,18 @@ export async function carryLeadsOver(
       createdBy: actor,
     });
 
-    created++;
+    // La fiche d'origine sort du jeu : plus d'envoi programmé depuis ses
+    // anciennes colonnes (sa colonne, elle, ne change pas : ni perdue, ni inscrite).
+    const vers = await db.query.bootcamps.findFirst({
+      where: eq(bootcamps.id, toBootcampId),
+      columns: { name: true },
+    });
+    await db
+      .update(automationRuns)
+      .set({ status: "cancelled", reason: `Reporté vers « ${vers?.name ?? "une autre formation"} »` })
+      .where(and(eq(automationRuns.leadId, src.id), eq(automationRuns.status, "pending")));
+
+    created.push(copy.id);
   }
   return created;
 }
@@ -3331,6 +3349,143 @@ export async function getOpenBootcamps(excludeId?: string) {
     orderBy: [desc(bootcamps.createdAt)],
   });
   return rows.filter((b) => b.id !== excludeId);
+}
+
+/** Fiche créée par le report de ce lead, pour le badge « Reporté → … ». */
+export async function getCarriedTo(leadId: string) {
+  const rows = await db.execute<{ lead_id: string; bootcamp_name: string }>(sql`
+    select c.id as lead_id, cb.name as bootcamp_name
+    from leads c
+    join bootcamps cb on cb.id = c.bootcamp_id
+    where c.carried_from_lead_id = ${leadId}
+    order by c.created_at desc
+    limit 1
+  `);
+  return rows[0] ?? null;
+}
+
+/** Les colonnes où l'on peut envoyer un lead, par formation ouverte. */
+export async function getCarryTargets(excludeBootcampId: string) {
+  const ouvertes = await getOpenBootcamps(excludeBootcampId);
+  if (ouvertes.length === 0) return [];
+  const colonnes = await db.query.leadStatuses.findMany({
+    where: and(
+      inArray(leadStatuses.bootcampId, ouvertes.map((b) => b.id)),
+      eq(leadStatuses.kind, "normal")
+    ),
+    orderBy: [asc(leadStatuses.position)],
+    columns: { id: true, name: true, bootcampId: true },
+  });
+  return ouvertes.map((b) => ({
+    id: b.id,
+    name: b.name,
+    columns: colonnes.filter((c) => c.bootcampId === b.id).map((c) => ({ id: c.id, name: c.name })),
+  }));
+}
+
+/**
+ * Duplique une formation pour la session suivante.
+ *
+ * Copié : l'offre, les colonnes (ordre, couleurs, types), les automatisations
+ * et les tags de colonne, rebranchés sur les NOUVELLES colonnes. Déplacés : les
+ * formulaires actifs (un formulaire n'alimente qu'une formation) — leur jeton
+ * ne change pas, rien à toucher sur le site. Aucun lead ne bouge.
+ */
+export async function duplicateBootcamp(
+  sourceId: string,
+  data: { name: string; slug: string; startDate: string | null; endDate: string | null },
+  actor: string | null
+) {
+  return db.transaction(async (tx) => {
+    const src = await tx.query.bootcamps.findFirst({ where: eq(bootcamps.id, sourceId) });
+    if (!src) throw new Error("Formation introuvable.");
+
+    const [copie] = await tx
+      .insert(bootcamps)
+      .values({
+        name: data.name,
+        slug: data.slug,
+        description: src.description,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: "open",
+        capacity: src.capacity,
+        priceTotal: src.priceTotal,
+        currency: src.currency,
+        monthlyCount: src.monthlyCount,
+        monthlyAmount: src.monthlyAmount,
+      })
+      .returning();
+
+    // Colonnes : ancienne id → nouvelle id, pour tout rebrancher.
+    const colonnes = await tx.query.leadStatuses.findMany({
+      where: eq(leadStatuses.bootcampId, sourceId),
+      orderBy: [asc(leadStatuses.position)],
+    });
+    const nouvelle = new Map<string, string>();
+    for (const c of colonnes) {
+      const [n] = await tx
+        .insert(leadStatuses)
+        .values({
+          name: c.name,
+          color: c.color,
+          position: c.position,
+          isDefault: c.isDefault,
+          bootcampId: copie.id,
+          isSystem: c.isSystem,
+          kind: c.kind,
+        })
+        .returning({ id: leadStatuses.id });
+      nouvelle.set(c.id, n.id);
+    }
+
+    const regles = await tx.query.automations.findMany({ where: eq(automations.bootcampId, sourceId) });
+    for (const r of regles) {
+      const statusId = nouvelle.get(r.statusId);
+      if (!statusId) continue;
+      await tx.insert(automations).values({
+        bootcampId: copie.id,
+        statusId,
+        channel: r.channel,
+        emailTemplateId: r.emailTemplateId,
+        whatsappTemplate: r.whatsappTemplate,
+        whatsappLanguage: r.whatsappLanguage,
+        whatsappVariables: r.whatsappVariables,
+        delayMinutes: r.delayMinutes,
+        delayDays: r.delayDays,
+        atHour: r.atHour,
+        active: r.active,
+        pausedReason: r.pausedReason,
+        createdBy: actor,
+      });
+    }
+
+    const tagsDeColonne = await tx
+      .select()
+      .from(stageTags)
+      .where(inArray(stageTags.statusId, colonnes.map((c) => c.id)));
+    for (const t of tagsDeColonne) {
+      const statusId = nouvelle.get(t.statusId);
+      if (!statusId) continue;
+      await tx.insert(stageTags).values({ statusId, tagId: t.tagId, active: t.active, createdBy: actor });
+    }
+
+    // Les formulaires suivent la nouvelle session, chacun vers la même colonne.
+    const formulaires = await tx.query.formSources.findMany({
+      where: and(eq(formSources.bootcampId, sourceId), eq(formSources.active, true)),
+    });
+    for (const f of formulaires) {
+      await tx
+        .update(formSources)
+        .set({
+          bootcampId: copie.id,
+          targetStatusId: f.targetStatusId ? nouvelle.get(f.targetStatusId) ?? null : null,
+        })
+        .where(eq(formSources.id, f.id));
+    }
+
+    return { bootcamp: copie, colonnes: colonnes.length, automatisations: regles.length, formulaires: formulaires.length };
+  });
 }
 
 /** Fiche d'origine d'un lead reporté, pour l'afficher et y renvoyer. */

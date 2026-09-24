@@ -8,6 +8,7 @@ import {
   updateBootcampFieldAction,
   deleteBootcampAction,
   setBootcampArchivedAction,
+  duplicateBootcampAction,
 } from "@/app/actions";
 
 // Contrôle d'une formation SANS ouvrir sa page : statut, réglages, suppression.
@@ -49,6 +50,8 @@ export function BootcampCardMenu({
   const [open, setOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showDuplicate, setShowDuplicate] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -83,6 +86,16 @@ export function BootcampCardMenu({
       await deleteBootcampAction(bootcamp.id);
       setShowDelete(false);
       router.refresh();
+    });
+  }
+
+  function duplicate(formData: FormData) {
+    setDuplicateError(null);
+    startTransition(async () => {
+      const r = await duplicateBootcampAction(bootcamp.id, formData);
+      if (!r.ok || !r.id) return setDuplicateError(r.message);
+      setShowDuplicate(false);
+      router.push(`/bootcamps/${r.id}`);
     });
   }
 
@@ -154,6 +167,17 @@ export function BootcampCardMenu({
             className="w-full rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-muted"
           >
             Paramétrer…
+          </button>
+
+          <button
+            onClick={() => {
+              setOpen(false);
+              setShowDuplicate(true);
+            }}
+            title="Nouvelle session avec les mêmes colonnes, automatisations et formulaires"
+            className="w-full rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-muted"
+          >
+            Dupliquer pour la session suivante…
           </button>
 
           <button
@@ -252,6 +276,43 @@ export function BootcampCardMenu({
               <button
                 type="button"
                 onClick={() => setShowSettings(false)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground"
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showDuplicate && (
+        <Modal title={`Dupliquer — ${bootcamp.name}`} onClose={() => setShowDuplicate(false)}>
+          <form action={duplicate} className="space-y-3">
+            <Field label="Nom de la nouvelle formation" name="name" defaultValue="" required />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Date de début" name="startDate" type="date" defaultValue="" />
+              <Field label="Date de fin" name="endDate" type="date" defaultValue="" />
+            </div>
+            <ul className="space-y-1 rounded-lg bg-muted/50 p-3 text-[12.5px] text-muted-foreground">
+              <li>✓ Copiés : prix, colonnes, automatisations, tags de colonne.</li>
+              <li>
+                ➜ Les formulaires du site <strong className="text-foreground">passent sur la nouvelle</strong> :
+                les prochains inscrits y arrivent directement.
+              </li>
+              <li>• Aucun lead ne bouge : ils restent dans « {bootcamp.name} ».</li>
+            </ul>
+            {duplicateError && <p className="text-xs text-red-600">{duplicateError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {isPending ? "Création…" : "Créer la nouvelle formation"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDuplicate(false)}
                 className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground"
               >
                 Annuler

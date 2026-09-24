@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts, leads, leadStatuses, whatsappBlasts, whatsappBlastTargets } from "@/db/schema";
 import { buildVariables } from "@/lib/automations";
@@ -41,7 +41,12 @@ type LeadDeVague = Awaited<ReturnType<typeof leadsDeLaColonne>>[number];
 
 async function leadsDeLaColonne(statusId: string) {
   return db.query.leads.findMany({
-    where: eq(leads.statusId, statusId),
+    where: (l) =>
+      and(
+        eq(l.statusId, statusId),
+        // Reporté vers une autre formation : il n'est plus dans cette colonne pour de vrai.
+        sql`not exists (select 1 from leads c where c.carried_from_lead_id = ${l.id})`
+      ),
     with: { contact: true, bootcamp: true },
   });
 }

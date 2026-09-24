@@ -2430,7 +2430,7 @@ export async function carryLeadsOverAction(
 
   const { carryLeadsOver } = await import("@/lib/queries");
   const { currentActor } = await import("@/lib/auth");
-  const created = await carryLeadsOver(leadIds, toBootcampId, await currentActor());
+  const created = (await carryLeadsOver(leadIds, toBootcampId, await currentActor())).length;
 
   revalidatePath(`/bootcamps/${fromBootcampId}`);
   revalidatePath(`/bootcamps/${toBootcampId}`);
@@ -2445,6 +2445,78 @@ export async function carryLeadsOverAction(
         ? "Aucun report : ces personnes sont déjà dans la formation cible."
         : `${created} lead(s) reporté(s)${skipped > 0 ? ` · ${skipped} déjà présent(s)` : ""}.`,
   };
+}
+
+/**
+ * Depuis la fiche : envoyer CE lead vers une autre formation, dans la colonne
+ * choisie. Une nouvelle fiche naît (même personne), celle-ci reste pour
+ * l'historique ; l'entrée dans la colonne déclenche ses tags et envois,
+ * comme n'importe quelle autre arrivée.
+ */
+export async function carryLeadToAction(
+  leadId: string,
+  toBootcampId: string,
+  toStatusId: string
+): Promise<{ ok: boolean; message: string; leadId?: string }> {
+  await requireUser();
+  const { carryLeadsOver, getLeadById } = await import("@/lib/queries");
+  const src = await getLeadById(leadId);
+  if (!src) return { ok: false, message: "Lead introuvable." };
+  if (!toBootcampId || !toStatusId || src.bootcampId === toBootcampId) {
+    return { ok: false, message: "Choisis une autre formation et une colonne." };
+  }
+
+  const { currentActor } = await import("@/lib/auth");
+  const [nouveau] = await carryLeadsOver([leadId], toBootcampId, await currentActor(), toStatusId);
+  if (!nouveau) {
+    return { ok: false, message: "Pas d'envoi : cette personne est déjà dans cette formation." };
+  }
+  const { runStatusAutomations } = await import("@/lib/automations");
+  await runStatusAutomations(nouveau, toStatusId);
+
+  revalidatePath(`/leads/${leadId}`);
+  if (src.bootcampId) revalidatePath(`/bootcamps/${src.bootcampId}`);
+  revalidatePath(`/bootcamps/${toBootcampId}`);
+  return { ok: true, message: "Lead envoyé.", leadId: nouveau };
+}
+
+// ── Dupliquer une formation ────────────────────────────
+
+export async function duplicateBootcampAction(
+  sourceId: string,
+  formData: FormData
+): Promise<{ ok: boolean; message: string; id?: string }> {
+  await requireUser();
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return { ok: false, message: "Donne un nom à la nouvelle formation." };
+  const slug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+  const { duplicateBootcamp } = await import("@/lib/queries");
+  const { currentActor } = await import("@/lib/auth");
+  try {
+    const r = await duplicateBootcamp(
+      sourceId,
+      {
+        name,
+        slug,
+        startDate: String(formData.get("startDate") || "") || null,
+        endDate: String(formData.get("endDate") || "") || null,
+      },
+      await currentActor()
+    );
+    revalidatePath("/bootcamps");
+    return {
+      ok: true,
+      id: r.bootcamp.id,
+      message: `« ${name} » créée : ${r.colonnes} colonnes, ${r.automatisations} automatisation(s), ${r.formulaires} formulaire(s) basculé(s).`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("slug") || msg.includes("duplicate key")) {
+      return { ok: false, message: "Une formation porte déjà ce nom. Choisis-en un autre." };
+    }
+    return { ok: false, message: `Échec : ${msg}` };
+  }
 }
 
 // ── Lecture IA des leads ───────────────────────────────

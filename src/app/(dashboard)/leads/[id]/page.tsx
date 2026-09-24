@@ -17,7 +17,8 @@ import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { DuplicateBanner } from "@/components/leads/duplicate-banner";
 import { getDuplicateInfo } from "@/lib/duplicates";
-import { getReturningForLead, getCarriedOrigin, getAllowedEmails, getPendingAutomationsForLead } from "@/lib/queries";
+import { getReturningForLead, getCarriedOrigin, getCarriedTo, getCarryTargets, getAllowedEmails, getPendingAutomationsForLead } from "@/lib/queries";
+import { SendToBootcamp } from "@/components/leads/send-to-bootcamp";
 import { PaymentBlock } from "@/components/leads/payment-block";
 import { CallHistory } from "@/components/leads/call-history";
 import { ActivityPanel } from "@/components/activities/activity-panel";
@@ -84,6 +85,8 @@ export default async function LeadDetailPage({
   const duplicateInfo = await getDuplicateInfo(lead.id);
   const returning = await getReturningForLead(lead.id);
   const carriedFrom = await getCarriedOrigin(lead.id);
+  const carriedTo = await getCarriedTo(lead.id);
+  const carryTargets = lead.bootcampId && !carriedTo ? await getCarryTargets(lead.bootcampId) : [];
   const callLogs = await getCallLogsByReference("lead", lead.id);
   const campaignHistory = lead.contactId
     ? await getCampaignsForContact(lead.contactId)
@@ -272,6 +275,8 @@ export default async function LeadDetailPage({
   // (mêmes composants, mêmes données : rien à tenir en double).
   const bannersEl = (
     <>
+      <SendToBootcamp leadId={lead.id} targets={carryTargets} carriedTo={carriedTo} />
+
       {duplicateInfo && (
         <DuplicateBanner leadId={lead.id} info={duplicateInfo} />
       )}
@@ -425,7 +430,7 @@ export default async function LeadDetailPage({
         className="lg:hidden"
         data={mobile}
         blocks={{
-          banners: duplicateInfo || carriedFrom || returning ? bannersEl : null,
+          banners: duplicateInfo || carriedFrom || returning || carriedTo || carryTargets.length > 0 ? bannersEl : null,
           tags: tagsEl,
           details: sidePanelEl,
           payment: paymentEl,
