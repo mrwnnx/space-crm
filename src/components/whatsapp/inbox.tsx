@@ -22,7 +22,7 @@ import {
 /*
  * La boîte WhatsApp : conversations à gauche, le fil à droite.
  *
- * Pas de temps réel : la page se rafraîchit toutes les 10 s, ce qui suffit à
+ * Pas de temps réel : la page se rafraîchit toutes les 10 s (onglet visible), ce qui suffit à
  * une équipe de deux personnes et n'exige aucun serveur de plus. Les données
  * viennent du serveur à chaque rafraîchissement ; ce composant ne garde en
  * mémoire que ce qui est en train d'être tapé.
@@ -94,9 +94,20 @@ export function WhatsAppInbox({
 }) {
   const router = useRouter();
 
+  // Onglet caché = personne ne lit : on ne recharge rien (le transfert Supabase
+  // est compté), et on rattrape d'un coup dès que l'onglet revient.
   useEffect(() => {
-    const t = setInterval(() => router.refresh(), RAFRAICHISSEMENT_MS);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, RAFRAICHISSEMENT_MS);
+    function auRetour() {
+      if (document.visibilityState === "visible") router.refresh();
+    }
+    document.addEventListener("visibilitychange", auRetour);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", auRetour);
+    };
   }, [router]);
 
   const visibles = conversations.filter((c) => c.archived === archives);

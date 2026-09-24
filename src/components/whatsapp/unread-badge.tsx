@@ -19,10 +19,18 @@ export function WhatsAppUnreadBadge() {
       }
     }
     lire();
-    const t = setInterval(lire, 30000);
+    // Onglet caché : la pastille ne se voit pas, inutile de la relire.
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") lire();
+    }, 30000);
+    function auRetour() {
+      if (document.visibilityState === "visible") lire();
+    }
+    document.addEventListener("visibilitychange", auRetour);
     return () => {
       actif = false;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", auRetour);
     };
   }, []);
 
