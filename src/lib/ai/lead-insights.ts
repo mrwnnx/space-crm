@@ -5,7 +5,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { createHash } from "node:crypto";
 import { db } from "@/db";
 import { activities, comments, leadInsights, leadTags, tags, tasks } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getLeadTimeline } from "@/lib/queries";
 
 const MODEL = "claude-opus-5";
@@ -148,6 +148,25 @@ export function hashInput(input: string) {
 
 export type AnalyzeOutcome = "analysé" | "inchangé" | "erreur";
 
+// Marque les lectures écrites SANS appeler l'IA.
+const SANS_IA = "sans-ia";
+
+/**
+ * La personne a-t-elle dit ou fait quelque chose de lisible ? Un message reçu,
+ * une note, un commentaire ou un appel. Le formulaire d'arrivée et nos envois
+ * automatiques ne comptent pas : mesuré le 25/09, sur 324 fiches sans rien de
+ * tout ça, l'IA a répondu « indéterminé » 316 fois — on payait pour rien.
+ */
+async function aUnSignal(leadId: string, motivation: string | null) {
+  if (motivation?.trim()) return true;
+  const [r] = await db.execute<{ oui: boolean }>(sql`
+    select exists (select 1 from activities a where a.reference_type = 'lead' and a.reference_id = ${leadId}
+                     and ((a.direction = 'inbound' and a.type <> 'webhook_in') or a.type in ('note', 'call', 'comment')))
+        or exists (select 1 from comments c where c.reference_type = 'lead' and c.reference_id = ${leadId})
+        or exists (select 1 from call_logs cl where cl.reference_type = 'lead' and cl.reference_id = ${leadId}) as oui`);
+  return !!r?.oui;
+}
+
 /**
  * Lit un lead et écrit son insight. Ne jette jamais : une erreur sur un lead
  * ne doit pas arrêter le lot.
@@ -174,6 +193,28 @@ export async function analyzeLead(lead: Parameters<typeof buildInput>[0] & { id:
     existing.recommendation !== null
   ) {
     return { outcome: "inchangé" };
+  }
+
+  // Rien à lire : on écrit la réponse que l'IA aurait donnée, sans la payer.
+  // Elle compte comme lue (le bouton « Analyser » ne tourne pas en boucle) ;
+  // le premier message, note ou appel changera le hash et la fera relire.
+  if (!(await aUnSignal(lead.id, lead.motivation))) {
+    if (existing?.model === SANS_IA && existing.sourceHash === sourceHash) return { outcome: "inchangé" };
+    const values = {
+      leadId: lead.id,
+      summary: "Rien à lire pour l'instant : aucun message, note ou appel, et pas de motivation écrite.",
+      intent: "indetermine" as const,
+      objection: null,
+      recommendation: "Premier contact à faire : appeler ou écrire pour ouvrir l'échange.",
+      sourceHash,
+      model: SANS_IA,
+      createdAt: new Date(),
+    };
+    await db
+      .insert(leadInsights)
+      .values(values)
+      .onConflictDoUpdate({ target: leadInsights.leadId, set: values });
+    return { outcome: "analysé" };
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
