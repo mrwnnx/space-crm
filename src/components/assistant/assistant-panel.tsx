@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AssistantConversation } from "@/components/assistant/assistant-conversation";
 
 /**
@@ -16,9 +16,66 @@ import { AssistantConversation } from "@/components/assistant/assistant-conversa
  *
  * ⚠️ Lot 1 : LECTURE SEULE. Les outils qui écrivent viendront avec leur aperçu.
  */
+// Le bouton se déplace à la main (il cachait parfois ce qu'on lisait). Sa
+// place est comptée depuis le coin bas-droit et gardée dans ce navigateur.
+const CLE_POSITION = "assistant-bouton-position";
+const TAILLE = 44; // h-11 / w-11
+const MARGE = 8;
+const DEFAUT = { right: 20, bottom: 20 };
+
+function dansLEcran(p: { right: number; bottom: number }) {
+  return {
+    right: Math.min(Math.max(p.right, MARGE), window.innerWidth - TAILLE - MARGE),
+    bottom: Math.min(Math.max(p.bottom, MARGE), window.innerHeight - TAILLE - MARGE),
+  };
+}
+
 export function AssistantPanel() {
   const [open, setOpen] = useState(false);
   const [monte, setMonte] = useState(false);
+  const [pos, setPos] = useState(DEFAUT);
+  // Où le doigt s'est posé : au-delà de 5 px c'est un déplacement, pas un clic.
+  const glisse = useRef<{ x: number; y: number; depart: typeof DEFAUT; bouge: boolean } | null>(null);
+
+  useEffect(() => {
+    try {
+      const lu = JSON.parse(localStorage.getItem(CLE_POSITION) || "null");
+      if (typeof lu?.right === "number" && typeof lu?.bottom === "number") setPos(dansLEcran(lu));
+    } catch {
+      // stockage indisponible : place par défaut
+    }
+    // Fenêtre rétrécie : le bouton ne doit jamais sortir de l'écran.
+    const onResize = () => setPos((p) => dansLEcran(p));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  function poser(e: React.PointerEvent<HTMLButtonElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    glisse.current = { x: e.clientX, y: e.clientY, depart: pos, bouge: false };
+  }
+
+  function deplacer(e: React.PointerEvent<HTMLButtonElement>) {
+    const g = glisse.current;
+    if (!g) return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (!g.bouge && Math.hypot(dx, dy) < 5) return;
+    g.bouge = true;
+    setPos(dansLEcran({ right: g.depart.right - dx, bottom: g.depart.bottom - dy }));
+  }
+
+  function lacher() {
+    const g = glisse.current;
+    glisse.current = null;
+    if (!g) return;
+    if (!g.bouge) return ouvrir();
+    try {
+      localStorage.setItem(CLE_POSITION, JSON.stringify(pos));
+    } catch {
+      // tant pis : la place tient jusqu'au prochain chargement
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -50,10 +107,21 @@ export function AssistantPanel() {
   return (
     <>
       <button
-        onClick={ouvrir}
-        title="Assistant (⌘J)"
+        onPointerDown={poser}
+        onPointerMove={deplacer}
+        onPointerUp={lacher}
+        onPointerCancel={() => (glisse.current = null)}
+        // Clavier (Entrée / Espace) : pas de pointeur, on ouvre directement.
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            ouvrir();
+          }
+        }}
+        title="Assistant (⌘J) — glisser pour déplacer"
         aria-label="Ouvrir l'assistant"
-        className={`fixed bottom-5 right-5 z-40 grid h-11 w-11 place-items-center rounded-full bg-primary text-base text-primary-foreground shadow-lg transition-transform hover:scale-105 ${
+        style={{ right: pos.right, bottom: pos.bottom }}
+        className={`fixed z-40 grid h-11 w-11 cursor-grab touch-none select-none place-items-center rounded-full bg-primary text-base text-primary-foreground shadow-lg transition-transform hover:scale-105 active:cursor-grabbing ${
           open ? "hidden" : ""
         }`}
       >
