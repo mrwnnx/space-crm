@@ -2467,6 +2467,8 @@ export async function getAccountsOutsideAllowlist(): Promise<
     from auth.users u
     left join allowed_emails a on lower(a.email) = lower(u.email)
     where a.id is null and u.email is not null
+      -- Un compte bloqué (retiré de l'équipe) n'a plus accès : ne pas le compter.
+      and (u.banned_until is null or u.banned_until < now())
     order by u.created_at
   `);
   return rows.map((r) => ({
@@ -2488,7 +2490,12 @@ export async function createAllowedEmail(data: typeof allowedEmails.$inferInsert
 }
 
 export async function deleteAllowedEmail(id: string) {
-  await db.delete(allowedEmails).where(eq(allowedEmails.id, id));
+  const [row] = await db.delete(allowedEmails).where(eq(allowedEmails.id, id)).returning();
+  return row ?? null;
+}
+
+export async function getAllowedEmailById(id: string) {
+  return db.query.allowedEmails.findFirst({ where: eq(allowedEmails.id, id) });
 }
 
 // ── Habillage des emails ───────────────────────────────

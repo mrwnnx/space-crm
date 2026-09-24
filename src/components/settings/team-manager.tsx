@@ -179,7 +179,7 @@ export function TeamManager({
                 </p>
               </div>
               <button
-                onClick={() => startTransition(() => removeAllowedEmailAction(row.id))}
+                onClick={() => startTransition(async () => setResult(await removeAllowedEmailAction(row.id)))}
                 className="ml-3 shrink-0 rounded-md px-2 py-1 text-xs text-red-500 hover:bg-red-50"
               >
                 Retirer

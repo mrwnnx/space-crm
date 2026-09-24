@@ -1913,6 +1913,9 @@ export async function inviteCollaboratorAction(
   }
 
   await createAllowedEmail({ email, note });
+  // Une personne retirée puis réinvitée retrouve son compte (et son historique).
+  const { setAccountBlocked } = await import("@/lib/account-access");
+  await setAccountBlocked(email, false);
   revalidatePath("/settings");
 
   const { sendInviteEmail } = await import("@/lib/messaging/invite");
@@ -2044,11 +2047,23 @@ export async function getTeamAction() {
   return members.filter((m) => m.active).map((m) => ({ email: m.email }));
 }
 
-export async function removeAllowedEmailAction(id: string) {
-  await requireUser();
-  const { deleteAllowedEmail } = await import("@/lib/queries");
+export async function removeAllowedEmailAction(id: string): Promise<{ ok: boolean; message: string }> {
+  const user = await requireUser();
+  const { deleteAllowedEmail, getAllowedEmailById } = await import("@/lib/queries");
+  const row = await getAllowedEmailById(id);
+  if (!row) return { ok: false, message: "Cette adresse n'est déjà plus dans l'équipe." };
+  // Se retirer soi-même bloquerait son propre compte, sans personne pour le rouvrir.
+  if (row.email.toLowerCase() === (user.email ?? "").toLowerCase()) {
+    return { ok: false, message: "Vous ne pouvez pas vous retirer vous-même." };
+  }
+  // Bloquer AVANT d'effacer l'invitation : si le blocage échoue, la personne
+  // reste visible dans la liste au lieu d'avoir accès sans y figurer.
+  const { setAccountBlocked } = await import("@/lib/account-access");
+  const echec = await setAccountBlocked(row.email, true);
+  if (echec) return { ok: false, message: `${row.email} n'a pas pu être bloqué (${echec}). Rien n'a été retiré.` };
   await deleteAllowedEmail(id);
   revalidatePath("/settings");
+  return { ok: true, message: `${row.email} est retiré de l'équipe : son compte est bloqué.` };
 }
 
 // ── Test d'un modèle d'email ───────────────────────────
