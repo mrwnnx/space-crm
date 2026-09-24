@@ -248,7 +248,7 @@ export type LeadWithRelations = typeof leads.$inferSelect & {
   bootcamp: typeof bootcamps.$inferSelect | null;
 };
 
-export async function getLeads(opts?: {
+type LeadFilters = {
   search?: string;
   bootcampId?: string;
   statusId?: string;
@@ -256,8 +256,10 @@ export async function getLeads(opts?: {
   converted?: boolean;
   tagIds?: string[];
   tagMode?: "any" | "all"; // any = au moins un des tags ; all = tous
-  limit?: number;
-}) {
+};
+
+// Les mêmes filtres pour la page de leads et pour leur total (la pagination).
+function leadFilters(opts?: LeadFilters) {
   const filters: ReturnType<typeof and>[] = [];
 
   if (opts?.search) {
@@ -283,13 +285,16 @@ export async function getLeads(opts?: {
         : sql`exists (select 1 from lead_tags lt where lt.lead_id = ${leads.id} and lt.tag_id in ${opts.tagIds})`
     );
   }
+  return filters.length > 0 ? and(...filters) : undefined;
+}
 
+export async function getLeads(opts?: LeadFilters & { limit?: number; offset?: number }) {
   // Seulement ce que la liste et le dashboard affichent. Audit du 22/09 : la
   // version « toutes colonnes + 5 relations complètes » pesait 12,2 Mo pour
   // 10 831 leads (raw_payload compris), à chaque ouverture de /leads — l'essentiel
   // du quota d'egress Supabase (5,93 Go / 5 Go). Ainsi : 3,7 Mo.
   return db.query.leads.findMany({
-    where: filters.length > 0 ? and(...filters) : undefined,
+    where: leadFilters(opts),
     columns: {
       id: true,
       fullName: true,
@@ -306,9 +311,17 @@ export async function getLeads(opts?: {
       source: { columns: { name: true } },
       bootcamp: { columns: { name: true } },
     },
-    orderBy: [desc(leads.createdAt)],
+    // L'id départage les leads créés au même instant (imports) : sans lui, un
+    // lead pourrait sauter d'une page à l'autre.
+    orderBy: [desc(leads.createdAt), desc(leads.id)],
     limit: opts?.limit,
+    offset: opts?.offset,
   });
+}
+
+export async function countLeads(opts?: LeadFilters) {
+  const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(leads).where(leadFilters(opts));
+  return r?.n ?? 0;
 }
 
 export type LeadListItem = Awaited<ReturnType<typeof getLeads>>[number];

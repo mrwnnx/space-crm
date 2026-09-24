@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { cn, statusColor, initials, formatRelative } from "@/lib/utils";
 import type { LeadListItem } from "@/lib/queries";
 import { LeadsBulkBar, type BulkStatus, type BulkTag, type BulkBootcamp } from "./leads-bulk-bar";
 
 export function LeadsList({
   leads,
+  total,
+  page,
+  perPage,
   filterBootcampId,
   filterStatusId,
   filterTemperature,
@@ -19,6 +23,9 @@ export function LeadsList({
   tags,
 }: {
   leads: LeadListItem[];
+  total: number;
+  page: number;
+  perPage: number;
   filterBootcampId: string | null;
   filterStatusId: string | null;
   filterTemperature: string | null;
@@ -68,6 +75,8 @@ export function LeadsList({
     if (params.converted) sp.set("converted", params.converted);
     if (params.tag) sp.set("tag", params.tag);
     if (params.tag && params.tagMode === "all") sp.set("tagMode", "all");
+    // Un filtre change la liste : on repart de la page 1, mais on garde la taille choisie.
+    if (perPage !== 50) sp.set("perPage", String(perPage));
     const qs = sp.toString();
     return `/leads${qs ? `?${qs}` : ""}`;
   }
@@ -349,6 +358,61 @@ export function LeadsList({
               })}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {total > 0 && <Pagination total={total} page={page} perPage={perPage} />}
+    </div>
+  );
+}
+
+// Le bas de la liste : où on en est, page précédente / suivante, et combien par page.
+function Pagination({ total, page, perPage }: { total: number; page: number; perPage: number }) {
+  const searchParams = useSearchParams();
+  const derniere = Math.max(1, Math.ceil(total / perPage));
+
+  function href(changes: { page?: number; perPage?: number }) {
+    const sp = new URLSearchParams(searchParams.toString());
+    const p = changes.page ?? page;
+    const pp = changes.perPage ?? perPage;
+    if (p > 1) sp.set("page", String(p));
+    else sp.delete("page");
+    if (pp !== 50) sp.set("perPage", String(pp));
+    else sp.delete("perPage");
+    const qs = sp.toString();
+    return `/leads${qs ? `?${qs}` : ""}`;
+  }
+
+  const bouton = "rounded-lg border border-border px-2.5 py-1.5 text-xs";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2 text-xs text-muted-foreground">
+      <span>
+        {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} sur {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5">
+          Par page
+          <select
+            value={perPage}
+            // Changer la taille renvoie en page 1 : l'ancienne page n'a plus de sens.
+            onChange={(e) => (window.location.href = href({ page: 1, perPage: Number(e.target.value) }))}
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring"
+          >
+            {[30, 50, 100].map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        </label>
+        {page > 1 ? (
+          <Link href={href({ page: page - 1 })} className={cn(bouton, "hover:bg-muted")}>Précédent</Link>
+        ) : (
+          <span className={cn(bouton, "opacity-40")}>Précédent</span>
+        )}
+        <span>Page {page} / {derniere}</span>
+        {page < derniere ? (
+          <Link href={href({ page: page + 1 })} className={cn(bouton, "hover:bg-muted")}>Suivant</Link>
+        ) : (
+          <span className={cn(bouton, "opacity-40")}>Suivant</span>
         )}
       </div>
     </div>

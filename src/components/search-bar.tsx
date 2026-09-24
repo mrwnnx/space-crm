@@ -16,8 +16,12 @@ export function SearchBar({ param = "q" }: { param?: string }) {
   }, [searchParams]);
 
   useEffect(() => {
+    // Au montage, value = l'URL : rien à faire (et surtout ne pas perdre ?page=).
+    if (value === (searchParams.get(param) || "")) return;
     const timer = setTimeout(() => {
       const params = new URLSearchParams(searchParams.toString());
+      // Une nouvelle recherche change la liste : on repart de la page 1.
+      params.delete("page");
       if (value) {
         params.set(param, value);
       } else {
