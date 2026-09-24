@@ -2681,6 +2681,8 @@ export async function deleteViewAction(id: string, routeName: string) {
 
 // ── Connexion WordPress (thespace.academy) ─────────────
 
+const WP_HOTES_AUTORISES = ["thespace.academy", "www.thespace.academy"];
+
 export async function saveWpConnectionAction(formData: FormData) {
   await requireUser();
   const { normalizeSiteUrl } = await import("@/lib/wordpress");
@@ -2694,10 +2696,28 @@ export async function saveWpConnectionAction(formData: FormData) {
     return { ok: false, message: "URL du site et nom d'utilisateur obligatoires." };
   }
 
+  // Le serveur envoie le mot de passe WordPress à cette adresse : seule celle
+  // de l'école est acceptée (audit du 24/09 — sinon un compte connecté pouvait
+  // se faire envoyer le mot de passe enregistré en changeant l'adresse).
+  let hote = "";
+  try {
+    const u = new URL(siteUrl);
+    hote = u.protocol === "https:" ? u.hostname.toLowerCase() : "";
+  } catch {
+    // adresse illisible : refusée ci-dessous
+  }
+  if (!WP_HOTES_AUTORISES.includes(hote)) {
+    return { ok: false, message: "Seule l'adresse https://thespace.academy est acceptée." };
+  }
+
   const { saveWpConnection, getWpConnection } = await import("@/lib/queries");
   const existing = await getWpConnection();
   if (!appPassword && !existing) {
     return { ok: false, message: "App Password obligatoire à la première configuration." };
+  }
+  // Garder l'ancien mot de passe n'a de sens que pour la même adresse.
+  if (!appPassword && existing && existing.siteUrl !== siteUrl) {
+    return { ok: false, message: "Nouvelle adresse : retape l'App Password." };
   }
 
   try {
