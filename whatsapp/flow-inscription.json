@@ -33,17 +33,22 @@
               },
               "title": {
                 "type": "string"
+              },
+              "description": {
+                "type": "string"
               }
             }
           },
           "__example__": [
             {
               "id": "total",
-              "title": "مرة وحدة — 1300 DT"
+              "title": "مرة وحدة — 1040 DT",
+              "description": "بدل 1300 DT (‎-20%)"
             },
             {
               "id": "monthly",
-              "title": "على 3 أقساط — 3 × 500 DT"
+              "title": "على 3 أقساط — 3 × 400 DT",
+              "description": "بدل 3 × 500 DT (‎-20%)"
             }
           ]
         }
