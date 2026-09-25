@@ -144,7 +144,9 @@ export function LeadTabs({
 
       {tab === "overview" && overview}
 
-      {tab === "exchanges" && exchanges}
+      {/* Même zone qui défile que les autres onglets : l'envoi d'un modèle
+          (aperçu + variables) dépasse la hauteur de l'écran. */}
+      {tab === "exchanges" && <div className="lg:flex-1 lg:overflow-y-auto">{exchanges}</div>}
 
       {tab === "score" && (
         <div className="space-y-4 p-4 lg:flex-1 lg:overflow-y-auto">
