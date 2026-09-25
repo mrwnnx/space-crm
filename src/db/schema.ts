@@ -1233,6 +1233,25 @@ export const whatsappSettings = pgTable("whatsapp_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Chaque message traité par l'assistant WhatsApp (0152) : réponse proposée,
+// note sur 100, décision (pret | escalade | ignore), ce qui est parti.
+export const aiReplies = pgTable("ai_replies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leadId: uuid("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  inboundActivityId: uuid("inbound_activity_id").references(() => activities.id, { onDelete: "set null" }),
+  question: text("question").notNull(),
+  draft: text("draft").notNull().default(""),
+  score: integer("score").notNull().default(0),
+  decision: text("decision").notNull(),
+  raisons: text("raisons").notNull().default(""),
+  sentText: text("sent_text"),
+  sentWamid: text("sent_wamid"),
+  humanReply: text("human_reply"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Ce qu'on donne à l'assistant WhatsApp (0151) : texte, fichier (texte extrait),
 // lien (texte de la page), souvenir (réponse humaine validée).
 export const aiKnowledge = pgTable("ai_knowledge", {

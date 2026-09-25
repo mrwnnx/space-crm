@@ -488,9 +488,24 @@ export async function ingestInboundWhatsApp(input: {
   // Les réponses automatiques à texte fixe (bienvenue, absence) — après que le
   // message est rangé, jamais avant : un raté ne perd pas le message. Import
   // dynamique : ce module-là nous importe aussi.
-  // ← Lot 3 : l'IA se branchera au même endroit, derrière `aiReplyEnabled`.
   const { repondreAutomatiquement } = await import("@/lib/whatsapp-auto-reply");
   await repondreAutomatiquement(lead.id, premierMessage);
+
+  // L'assistant WhatsApp (lot 3) : rédaction + note prennent 10 à 20 s, Meta
+  // veut sa réponse en quelques secondes → exécuté APRÈS la réponse du
+  // webhook (`after`). Hors requête (script, test), on attend sur place.
+  if (!input.isButton && !input.media) {
+    const traiter = async () => {
+      const { traiterMessageAssistant } = await import("@/lib/ai/whatsapp-assistant");
+      await traiterMessageAssistant({ leadId: lead.id, activityId: activite.id, question: input.text, numero: input.from });
+    };
+    try {
+      const { after } = await import("next/server");
+      after(traiter);
+    } catch {
+      await traiter();
+    }
+  }
 
   return { leadId: lead.id, leadCreated };
 }
