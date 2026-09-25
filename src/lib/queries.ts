@@ -48,6 +48,8 @@ export const DEFAULT_BOOTCAMP_ID = "00000000-0000-0000-0000-000000000001";
 
 export type BootcampWithLeadCount = typeof bootcamps.$inferSelect & {
   leadCount: number;
+  /** Leads posés dans la colonne « Inscrit » (stage kind = 'converted') — ce que montre le kanban. */
+  enrolledCount: number;
 };
 
 export async function getBootcamps(
@@ -58,20 +60,24 @@ export async function getBootcamps(
     orderBy: [desc(bootcamps.createdAt)],
   });
 
-  // Count leads per bootcamp
+  // Count leads per bootcamp — et les inscrits dans le même passage : un seul
+  // agrégat, aucune ligne de lead ne remonte (le transfert Supabase est compté).
   const counts = await db
     .select({
       bootcampId: leads.bootcampId,
       count: sql<number>`count(*)::int`,
+      enrolled: sql<number>`count(*) filter (where ${leadStatuses.kind} = 'converted')::int`,
     })
     .from(leads)
+    .leftJoin(leadStatuses, eq(leadStatuses.id, leads.statusId))
     .groupBy(leads.bootcampId);
 
-  const countMap = new Map(counts.map((c) => [c.bootcampId, c.count]));
+  const countMap = new Map(counts.map((c) => [c.bootcampId, c]));
 
   return all.map((b) => ({
     ...b,
-    leadCount: countMap.get(b.id) ?? 0,
+    leadCount: countMap.get(b.id)?.count ?? 0,
+    enrolledCount: countMap.get(b.id)?.enrolled ?? 0,
   }));
 }
 
