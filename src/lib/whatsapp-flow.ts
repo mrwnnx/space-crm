@@ -66,15 +66,14 @@ async function formulesAvecPrix(formationId: string | null) {
   return [
     b?.price_total
       ? { id: "total", title: `مرة وحدة — ${remise(b.price_total)} ${devise}`, description: `بدل ${normal(b.price_total)} ${devise} (‎-20%)` }
-      : { id: "total", title: "مرة وحدة", description: " " },
+      : { id: "total", title: "مرة وحدة" },
     // La remise ne vaut que pour le paiement en une fois (décision du 25/09).
     b?.monthly_count && b.monthly_amount
       ? {
           id: "monthly",
           title: `على ${b.monthly_count} أقساط — ${b.monthly_count} × ${normal(b.monthly_amount)} ${devise}`,
-          description: "بلا تخفيض",
         }
-      : { id: "monthly", title: "على أقساط (كل شهر)", description: " " },
+      : { id: "monthly", title: "على أقساط (كل شهر)" },
   ];
 }
 
