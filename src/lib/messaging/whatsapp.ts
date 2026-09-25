@@ -34,11 +34,17 @@ function config() {
 export function numeroJoignable(brut: string | null | undefined): boolean {
   if (!brut) return false;
   const n = normaliser(brut);
+  // Un mobile tunisien (5…) avec des chiffres en trop se lirait comme un
+  // numéro d'Amérique latine (57 = Colombie) : douteux, à faire corriger.
+  if (n.startsWith("5") && n.length <= 11) return false;
   return n.length >= 10 && n.length <= 15 && !n.startsWith("0");
 }
 
 function normaliser(brut: string): string {
-  const chiffres = brut.replace(/\D/g, "");
+  // Chiffres arabes (٠١٢…) ou persans (۰۱۲…) saisis au téléphone : ce sont
+  // des chiffres comme les autres (« ٥٧٩٩٩٣٣٣٧٨٩ » vu le 25/09).
+  const latins = brut.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (c) => String((c.charCodeAt(0) & 0xf) % 10));
+  const chiffres = latins.replace(/\D/g, "");
   // Un numéro tunisien saisi sans indicatif — cas courant dans le CRM, où les
   // leads arrivent en « 25 726 708 ». Sans le 216, Meta ne livre rien.
   if (chiffres.length === 8) return `216${chiffres}`;

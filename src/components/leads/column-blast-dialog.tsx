@@ -11,6 +11,7 @@ import {
   listApprovedTemplatesAction,
 } from "@/app/whatsapp-actions";
 import { ApercuModele } from "@/components/whatsapp/template-preview";
+import { CorrectionNumeros } from "@/components/whatsapp/correction-numeros";
 
 type Catalogue = Awaited<ReturnType<typeof listApprovedTemplatesAction>>;
 type Apercu = Awaited<ReturnType<typeof apercuBlastAction>>;
@@ -51,6 +52,9 @@ export function ColumnBlastDialog({
   const [etat, setEtat] = useState<Etat>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // « Corriger » : la liste des numéros mal écrits ; chaque correction refait le décompte.
+  const [corriger, setCorriger] = useState(false);
+  const [version, setVersion] = useState(0);
 
   // Ce qui a déjà été envoyé à CETTE colonne : pour ne pas relancer deux fois le même modèle.
   const [historique, setHistorique] = useState<Historique | null>(null);
@@ -85,7 +89,7 @@ export function ColumnBlastDialog({
     return () => {
       vivant = false;
     };
-  }, [statusId, modele, valeurs, capPolicy, complet]);
+  }, [statusId, modele, valeurs, capPolicy, complet, version]);
 
   // Vague en cours : on suit l'avancement, le cron travaille en fond.
   useEffect(() => {
@@ -305,7 +309,14 @@ export function ColumnBlastDialog({
               )}
 
               {calcul && <p className="text-[13px] text-muted-foreground">Calcul du décompte…</p>}
-              {apercu && !calcul && <Decompte a={apercu} />}
+              {apercu && !calcul && <Decompte a={apercu} onCorriger={() => setCorriger(true)} />}
+              {corriger && apercu && (
+                <CorrectionNumeros
+                  liste={apercu.aCorriger}
+                  onClose={() => setCorriger(false)}
+                  onCorrige={() => setVersion((v) => v + 1)}
+                />
+              )}
             </div>
           </div>
         )}
@@ -344,7 +355,7 @@ export function ColumnBlastDialog({
 }
 
 /** Le décompte : ce qui va se passer si on clique. */
-function Decompte({ a }: { a: Apercu }) {
+function Decompte({ a, onCorriger }: { a: Apercu; onCorriger: () => void }) {
   const report = a.premierReport
     ? new Date(a.premierReport).toLocaleString("fr-FR", {
         weekday: "short",
@@ -377,6 +388,15 @@ function Decompte({ a }: { a: Apercu }) {
             {a.motifs.map((m) => (
               <li key={m.raison}>
                 {m.n} — {m.raison}
+                {m.raison.startsWith("Numéro incomplet") && a.aCorriger.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={onCorriger}
+                    className="ml-2 rounded-md border border-border px-2 py-0.5 text-[12px] font-medium text-foreground hover:bg-muted"
+                  >
+                    Corriger
+                  </button>
+                )}
               </li>
             ))}
           </ul>

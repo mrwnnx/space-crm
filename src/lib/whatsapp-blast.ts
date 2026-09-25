@@ -35,7 +35,11 @@ export type ApercuBlast = {
   motifs: { raison: string; n: number }[];
   /** La plus proche des échéances des reportés, pour l'annoncer. */
   premierReport: Date | null;
+  /** Ceux écartés pour un numéro mal écrit : la fenêtre « Corriger » les liste. */
+  aCorriger: { leadId: string; nom: string; numero: string | null; email: string | null }[];
 };
+
+export const RAISON_NUMERO = "Numéro incomplet ou mal écrit : à corriger sur la fiche";
 
 type LeadDeVague = Awaited<ReturnType<typeof leadsDeLaColonne>>[number];
 
@@ -64,7 +68,7 @@ async function verdict(
   const id = lead.id;
   if (!lead.mobileNo) return { sort: "sauter", leadId: id, raison: "Aucun numéro de téléphone" };
   if (!estNumeroDeTest(lead.mobileNo) && !numeroJoignable(lead.mobileNo)) {
-    return { sort: "sauter", leadId: id, raison: "Numéro incomplet ou mal écrit : à corriger sur la fiche" };
+    return { sort: "sauter", leadId: id, raison: RAISON_NUMERO };
   }
 
   const test = estNumeroDeTest(lead.mobileNo);
@@ -116,7 +120,15 @@ export async function apercuBlast(
   const reportes = v.filter((x) => x.sort === "reporter") as Extract<Verdict, { sort: "reporter" }>[];
   const parMotif = new Map<string, number>();
   for (const s of sautes) parMotif.set(s.raison, (parMotif.get(s.raison) ?? 0) + 1);
+  const idsNumero = sautes.filter((x) => x.raison === RAISON_NUMERO).map((x) => x.leadId);
+  const fiches = idsNumero.length
+    ? await db.query.leads.findMany({
+        where: inArray(leads.id, idsNumero),
+        columns: { id: true, fullName: true, mobileNo: true, email: true },
+      })
+    : [];
   return {
+    aCorriger: fiches.map((f) => ({ leadId: f.id, nom: f.fullName, numero: f.mobileNo, email: f.email })),
     total: v.length,
     envoyer: v.filter((x) => x.sort === "envoyer").length,
     reporter: reportes.length,

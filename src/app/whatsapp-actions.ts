@@ -441,6 +441,20 @@ export async function lancerBlastAction(input: {
   return r;
 }
 
+/** La remarque de l'assistant sur un numéro écarté de l'envoi (« Corriger »). */
+export async function remarqueNumeroAction(leadId: string) {
+  await requireUser();
+  const lead = await getLeadById(leadId);
+  if (!lead) return { ok: false as const, error: "Lead introuvable" };
+  const { reviewPhone } = await import("@/lib/ai/phone-review");
+  return reviewPhone({
+    nom: lead.fullName,
+    numero: lead.mobileNo,
+    email: lead.email,
+    whatsapp: lead.contact?.whatsapp ?? null,
+  });
+}
+
 /** Remet en file ceux qui n'ont rien reçu d'une vague (voir relancerEchecs). */
 export async function relancerEchecsAction(blastId: string, bootcampId: string) {
   await requireUser();
