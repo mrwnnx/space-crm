@@ -3491,7 +3491,18 @@ export async function duplicateBootcamp(
         .where(eq(formSources.id, f.id));
     }
 
-    return { bootcamp: copie, colonnes: colonnes.length, automatisations: regles.length, formulaires: formulaires.length };
+    return {
+      bootcamp: copie,
+      colonnes: colonnes.length,
+      automatisations: regles.length,
+      formulaires: formulaires.length,
+      // Pour signaler les valeurs écrites à la main, recopiées telles quelles.
+      regles: regles.map((r) => ({
+        colonne: colonnes.find((c) => c.id === r.statusId)?.name ?? "?",
+        modele: r.whatsappTemplate,
+        variables: Array.isArray(r.whatsappVariables) ? (r.whatsappVariables as string[]) : [],
+      })),
+    };
   });
 }
 

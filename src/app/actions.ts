@@ -2500,7 +2500,7 @@ export async function carryLeadToAction(
 export async function duplicateBootcampAction(
   sourceId: string,
   formData: FormData
-): Promise<{ ok: boolean; message: string; id?: string }> {
+): Promise<{ ok: boolean; message: string; id?: string; aVerifier?: string[] }> {
   await requireUser();
   const name = String(formData.get("name") || "").trim();
   if (!name) return { ok: false, message: "Donne un nom à la nouvelle formation." };
@@ -2520,8 +2520,18 @@ export async function duplicateBootcampAction(
       await currentActor()
     );
     revalidatePath("/bootcamps");
+    // Une valeur tapée à la main (date, lien…) part telle quelle dans la copie :
+    // le 25/09, « 28 سبتمبر 2026 » s'est retrouvée dans le bienvenue d'octobre.
+    const { AUTOMATION_VARIABLES } = await import("@/lib/automations");
+    const connues = new Set<string>(AUTOMATION_VARIABLES);
+    const aVerifier = r.regles.flatMap((g) =>
+      g.variables
+        .filter((v) => v && !connues.has(v))
+        .map((v) => `Colonne « ${g.colonne} »${g.modele ? `, ${g.modele}` : ""} : « ${v} »`)
+    );
     return {
       ok: true,
+      aVerifier,
       id: r.bootcamp.id,
       message: `« ${name} » créée : ${r.colonnes} colonnes, ${r.automatisations} automatisation(s), ${r.formulaires} formulaire(s) basculé(s).`,
     };

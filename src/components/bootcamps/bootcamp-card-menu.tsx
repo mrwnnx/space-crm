@@ -52,6 +52,8 @@ export function BootcampCardMenu({
   const [showDelete, setShowDelete] = useState(false);
   const [showDuplicate, setShowDuplicate] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  // Valeurs écrites à la main recopiées dans la nouvelle formation : à relire.
+  const [aVerifier, setAVerifier] = useState<{ id: string; lignes: string[] } | null>(null);
   const [isPending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -94,6 +96,7 @@ export function BootcampCardMenu({
     startTransition(async () => {
       const r = await duplicateBootcampAction(bootcamp.id, formData);
       if (!r.ok || !r.id) return setDuplicateError(r.message);
+      if (r.aVerifier?.length) return setAVerifier({ id: r.id, lignes: r.aVerifier });
       setShowDuplicate(false);
       router.push(`/bootcamps/${r.id}`);
     });
@@ -287,6 +290,31 @@ export function BootcampCardMenu({
 
       {showDuplicate && (
         <Modal title={`Dupliquer — ${bootcamp.name}`} onClose={() => setShowDuplicate(false)}>
+          {aVerifier ? (
+            <div className="space-y-3">
+              <p className="text-xs text-foreground">✓ Formation créée.</p>
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12.5px] text-amber-900">
+                <p className="font-medium">
+                  ⚠️ Valeurs écrites à la main, recopiées telles quelles : à vérifier dans les automatisations de
+                  la nouvelle formation.
+                </p>
+                <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
+                  {aVerifier.lignes.map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDuplicate(false);
+                  router.push(`/bootcamps/${aVerifier.id}`);
+                }}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+              >
+                Ouvrir la nouvelle formation
+              </button>
+            </div>
+          ) : (
           <form action={duplicate} className="space-y-3">
             <Field label="Nom de la nouvelle formation" name="name" defaultValue="" required />
             <div className="grid grid-cols-2 gap-3">
@@ -319,6 +347,7 @@ export function BootcampCardMenu({
               </button>
             </div>
           </form>
+          )}
         </Modal>
       )}
 
