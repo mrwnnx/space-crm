@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { WhatsAppNumber, WhatsAppProfile, WhatsAppTemplate } from "@/lib/messaging/whatsapp";
 import { WHATSAPP_VERTICALS } from "@/lib/messaging/whatsapp-verticals";
+import { AssistantWhatsApp, type SavoirItem } from "@/components/settings/assistant-whatsapp";
 import {
   createQuickReplyAction,
   createTemplateAction,
@@ -14,7 +15,6 @@ import {
   reviewTemplateAction,
   saveAutoRepliesAction,
   saveButtonActionAction,
-  setAiReplyAction,
   updateProfileAction,
 } from "@/app/whatsapp-actions";
 
@@ -50,7 +50,7 @@ export function WhatsAppSettings({
   numero,
   profil,
   templates,
-  aiReplyEnabled,
+  assistant,
   quickReplies,
   autoReplies,
   envoi,
@@ -60,7 +60,8 @@ export function WhatsAppSettings({
   numero: { ok: true; numero: WhatsAppNumber } | { ok: false; error: string };
   profil: { ok: true; profil: WhatsAppProfile } | { ok: false; error: string };
   templates: WhatsAppTemplate[];
-  aiReplyEnabled: boolean;
+  /** L'assistant WhatsApp : réglages et savoir. */
+  assistant: { mode: string; threshold: number; instructions: string; savoir: SavoirItem[] };
   quickReplies: QuickReply[];
   autoReplies: AutoReplies;
   /** Mode d'envoi (variable d'environnement) et numéros de test. */
@@ -74,7 +75,7 @@ export function WhatsAppSettings({
       <SectionNumero numero={numero} envoi={envoi} />
       <SectionProfil profil={profil} nomAffiche={numero.ok ? numero.numero.nom : null} />
       <SectionAuto initial={autoReplies} />
-      <SectionIA enabled={aiReplyEnabled} />
+      <AssistantWhatsApp {...assistant} />
       <SectionReponsesRapides items={quickReplies} />
       <SectionModeles templates={templates} buttonActions={buttonActions} tags={tags} />
     </div>
@@ -559,45 +560,6 @@ function SectionProfil({
   );
 }
 
-// ── L'IA ──────────────────────────────────────────────
-
-function SectionIA({ enabled }: { enabled: boolean }) {
-  const router = useRouter();
-  const [on, setOn] = useState(enabled);
-  const [isPending, startTransition] = useTransition();
-
-  function basculer(v: boolean) {
-    setOn(v);
-    startTransition(async () => {
-      await setAiReplyAction(v);
-      router.refresh();
-    });
-  }
-
-  return (
-    <Section title="Réponse automatique par IA">
-      <label className="flex cursor-pointer items-start gap-3">
-        <input
-          type="checkbox"
-          checked={on}
-          disabled={isPending}
-          onChange={(e) => basculer(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-border"
-        />
-        <span>
-          <span className="block text-sm font-medium text-foreground">
-            {on ? "Activée" : "Désactivée"}
-          </span>
-          <span className="block text-xs text-muted-foreground">
-            Quand elle sera livrée, l&apos;IA répondra aux messages reçus à partir des formations du CRM et des
-            réponses que vous aurez rédigées. Ce réglage est lu par elle — pour l&apos;instant, personne ne répond à
-            votre place.
-          </span>
-        </span>
-      </label>
-    </Section>
-  );
-}
 
 // ── Les modèles ───────────────────────────────────────
 

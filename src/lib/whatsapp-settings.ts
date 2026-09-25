@@ -5,9 +5,7 @@ import { whatsappSettings } from "@/db/schema";
 /**
  * Les réglages du service WhatsApp — une ligne, créée à la première lecture.
  *
- * `aiReplyEnabled` n'a pas encore d'effet : la réponse automatique (lot 3)
- * le lira. Il existe d'abord pour que ce jour-là il n'y ait rien à ajouter à
- * l'écran, et pour que l'éteindre soit un clic.
+ * `aiReplyEnabled` est inerte : l'assistant WhatsApp lit `aiMode` (0151).
  */
 export async function getWhatsAppSettings() {
   const row = await db.query.whatsappSettings.findFirst();
@@ -16,9 +14,12 @@ export async function getWhatsAppSettings() {
   return created ?? { id: true, aiReplyEnabled: false, updatedAt: new Date() };
 }
 
-export async function setAiReplyEnabled(enabled: boolean) {
+/** L'assistant WhatsApp : mode (éteint / répétition / automatique), seuil, consignes. */
+export async function saveAssistantReglages(input: { mode: "off" | "repetition" | "auto"; threshold: number; instructions: string }) {
   await getWhatsAppSettings(); // garantit la ligne
-  await db.update(whatsappSettings).set({ aiReplyEnabled: enabled, updatedAt: new Date() });
+  await db
+    .update(whatsappSettings)
+    .set({ aiMode: input.mode, aiThreshold: input.threshold, aiInstructions: input.instructions, updatedAt: new Date() });
 }
 
 export type AutoRepliesInput = {

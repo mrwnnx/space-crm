@@ -1225,6 +1225,25 @@ export const whatsappSettings = pgTable("whatsapp_settings", {
   awayStart: integer("away_start").notNull().default(9),
   awayEnd: integer("away_end").notNull().default(18),
   awayDays: text("away_days").notNull().default("1,2,3,4,5"),
+  // Assistant WhatsApp (0151) : 'off' | 'repetition' (rédige et se note, n'envoie
+  // rien) | 'auto' (envoie au-dessus du seuil). Remplace aiReplyEnabled, resté inerte.
+  aiMode: text("ai_mode").notNull().default("off"),
+  aiThreshold: integer("ai_threshold").notNull().default(90),
+  aiInstructions: text("ai_instructions").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Ce qu'on donne à l'assistant WhatsApp (0151) : texte, fichier (texte extrait),
+// lien (texte de la page), souvenir (réponse humaine validée).
+export const aiKnowledge = pgTable("ai_knowledge", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  kind: text("kind").notNull(), // texte | fichier | lien | souvenir
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  source: text("source"), // nom du fichier ou adresse du lien
+  status: text("status").notNull().default("actif"), // actif | a_valider | archive
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

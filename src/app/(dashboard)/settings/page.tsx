@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings";
 import { getWhatsAppNumber, getWhatsAppProfile, listWhatsAppTemplates, sendMode, allowlist } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
+import { listerSavoir } from "@/lib/ai/knowledge";
 import { listButtonActions } from "@/lib/whatsapp-button-actions";
 import { getQuickReplies } from "@/lib/whatsapp-inbox";
 
@@ -58,7 +59,7 @@ export default async function SettingsPage({
         })()
       : null;
   // WhatsApp : le numéro et les modèles viennent de Meta, l'interrupteur de la base.
-  const [waNumero, waTemplates, waSettings, waQuick, waProfil, waActions, waTags] =
+  const [waNumero, waTemplates, waSettings, waQuick, waProfil, waActions, waTags, waSavoir] =
     current === "whatsapp"
       ? await Promise.all([
           getWhatsAppNumber(),
@@ -68,8 +69,9 @@ export default async function SettingsPage({
           getWhatsAppProfile(),
           listButtonActions(),
           getTags(),
+          listerSavoir(),
         ])
-      : [null, [], null, [], null, [], []];
+      : [null, [], null, [], null, [], [], []];
 
   return (
     <>
@@ -193,7 +195,20 @@ export default async function SettingsPage({
                 optOut: a.optOut,
               }))}
               tags={waTags.map((t) => ({ id: t.id, name: t.name }))}
-              aiReplyEnabled={waSettings.aiReplyEnabled}
+              assistant={{
+                mode: waSettings.aiMode,
+                threshold: waSettings.aiThreshold,
+                instructions: waSettings.aiInstructions,
+                savoir: waSavoir.map((k) => ({
+                  id: k.id,
+                  kind: k.kind,
+                  title: k.title,
+                  content: k.content,
+                  source: k.source,
+                  status: k.status,
+                  createdAt: k.createdAt.toISOString(),
+                })),
+              }}
               quickReplies={waQuick.map((q) => ({ id: q.id, shortcut: q.shortcut, text: q.text }))}
               autoReplies={{
                 welcomeEnabled: waSettings.welcomeEnabled,

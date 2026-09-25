@@ -29,7 +29,7 @@ import {
   recordWhatsAppSent,
   setWhatsAppArchived,
 } from "@/lib/whatsapp-inbox";
-import { saveAutoReplies, setAiReplyEnabled, type AutoRepliesInput } from "@/lib/whatsapp-settings";
+import { saveAssistantReglages, saveAutoReplies, type AutoRepliesInput } from "@/lib/whatsapp-settings";
 
 /**
  * Les actions de la page « WhatsApp ». Module à part de `actions.ts` — un
@@ -237,9 +237,58 @@ export async function deleteQuickReplyAction(id: string) {
 
 // ── Paramètres → WhatsApp ─────────────────────────────
 
-export async function setAiReplyAction(enabled: boolean) {
+// ── Assistant WhatsApp : réglages et savoir ───────────
+
+export async function saveAssistantAction(input: { mode: "off" | "repetition" | "auto"; threshold: number; instructions: string }) {
   await requireUser();
-  await setAiReplyEnabled(enabled);
+  // L'envoi automatique arrive à l'étape 3 : d'ici là, pas d'« auto » possible.
+  if (input.mode === "auto") return { ok: false as const, error: "L'envoi automatique n'est pas encore disponible : commencez par le mode répétition." };
+  const threshold = Math.min(100, Math.max(50, Math.round(input.threshold)));
+  await saveAssistantReglages({ mode: input.mode, threshold, instructions: input.instructions.trim().slice(0, 8000) });
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+export async function ajouterSavoirTexteAction(titre: string, contenu: string) {
+  const user = await requireUser();
+  const { ajouterTexte } = await import("@/lib/ai/knowledge");
+  const r = await ajouterTexte(titre, contenu, user.email ?? null);
+  revalidatePath("/settings");
+  return r;
+}
+
+export async function ajouterSavoirFichierAction(formData: FormData) {
+  const user = await requireUser();
+  const fichier = formData.get("fichier");
+  if (!(fichier instanceof File) || fichier.size === 0) return { ok: false as const, error: "Choisissez un fichier." };
+  // Vercel refuse un envoi de plus de 4,5 Mo : on le dit avant qu'il échoue.
+  if (fichier.size > 4 * 1024 * 1024) return { ok: false as const, error: "Fichier trop lourd (4 Mo maximum)." };
+  const { ajouterFichier } = await import("@/lib/ai/knowledge");
+  const r = await ajouterFichier(fichier, user.email ?? null);
+  revalidatePath("/settings");
+  return r;
+}
+
+export async function ajouterSavoirLienAction(adresse: string) {
+  const user = await requireUser();
+  const { ajouterLien } = await import("@/lib/ai/knowledge");
+  const r = await ajouterLien(adresse, user.email ?? null);
+  revalidatePath("/settings");
+  return r;
+}
+
+export async function statutSavoirAction(id: string, status: "actif" | "archive") {
+  await requireUser();
+  const { changerStatutSavoir } = await import("@/lib/ai/knowledge");
+  await changerStatutSavoir(id, status);
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+export async function supprimerSavoirAction(id: string) {
+  await requireUser();
+  const { supprimerSavoir } = await import("@/lib/ai/knowledge");
+  await supprimerSavoir(id);
   revalidatePath("/settings");
   return { ok: true as const };
 }
