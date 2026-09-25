@@ -7,15 +7,54 @@
       "terminal": true,
       "success": true,
       "data": {
-        "intro": { "type": "string", "__example__": "كمل هالمعلومات باش نسجلوك في الدورة الجاية 👇" },
-        "need_age": { "type": "boolean", "__example__": true },
-        "need_situation": { "type": "boolean", "__example__": true },
-        "need_plan": { "type": "boolean", "__example__": true }
+        "intro": {
+          "type": "string",
+          "__example__": "كمل هالمعلومات باش نسجلوك في الدورة الجاية 👇"
+        },
+        "need_age": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "need_situation": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "need_plan": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "formules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "total",
+              "title": "مرة وحدة — 1300 DT"
+            },
+            {
+              "id": "monthly",
+              "title": "على 3 أقساط — 3 × 500 DT"
+            }
+          ]
+        }
       },
       "layout": {
         "type": "SingleColumnLayout",
         "children": [
-          { "type": "TextBody", "text": "${data.intro}" },
+          {
+            "type": "TextBody",
+            "text": "${data.intro}"
+          },
           {
             "type": "TextInput",
             "name": "age",
@@ -31,11 +70,26 @@
             "visible": "${data.need_situation}",
             "required": "${data.need_situation}",
             "data-source": [
-              { "id": "نخدم", "title": "نخدم" },
-              { "id": "نقرا", "title": "نقرا" },
-              { "id": "مانيش نخدم", "title": "مانيش نخدم" },
-              { "id": "فريلانس", "title": "فريلانس" },
-              { "id": "حاجة أخرى", "title": "حاجة أخرى" }
+              {
+                "id": "نخدم",
+                "title": "نخدم"
+              },
+              {
+                "id": "نقرا",
+                "title": "نقرا"
+              },
+              {
+                "id": "مانيش نخدم",
+                "title": "مانيش نخدم"
+              },
+              {
+                "id": "فريلانس",
+                "title": "فريلانس"
+              },
+              {
+                "id": "حاجة أخرى",
+                "title": "حاجة أخرى"
+              }
             ]
           },
           {
@@ -44,10 +98,7 @@
             "label": "كيفاش تحب تخلص؟",
             "visible": "${data.need_plan}",
             "required": "${data.need_plan}",
-            "data-source": [
-              { "id": "total", "title": "مرة وحدة" },
-              { "id": "monthly", "title": "على أقساط (كل شهر)" }
-            ]
+            "data-source": "${data.formules}"
           },
           {
             "type": "Footer",

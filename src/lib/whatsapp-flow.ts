@@ -28,6 +28,7 @@ export async function donneesFlowInscription(leadId: string | null | undefined) 
   const need_situation = !lead?.jobTitle?.trim();
   const need_plan = !lead?.intendedPlan;
   const rien = !need_age && !need_situation && !need_plan;
+  const formules = await formulesAvecPrix();
   return {
     token: lead ? `${PREFIXE}${lead.id}` : "unused",
     data: {
@@ -37,8 +38,33 @@ export async function donneesFlowInscription(leadId: string | null | undefined) 
       need_age,
       need_situation,
       need_plan,
+      formules,
     },
   };
+}
+
+/**
+ * Les deux formules avec le prix de la session où la personne va s'inscrire
+ * (la formation active) : le prix se lit au moment de choisir, pas après.
+ */
+async function formulesAvecPrix() {
+  const f = await formationActive();
+  const [b] = f
+    ? await db.execute<{ price_total: string | null; monthly_count: number | null; monthly_amount: string | null; currency: string }>(sql`
+        select price_total::text, monthly_count, monthly_amount::text, currency from bootcamps where id = ${f.id}`)
+    : [];
+  const devise = !b?.currency || b.currency === "TND" ? "DT" : b.currency;
+  const montant = (v: string | null) => (v ? String(Number(v)) : "");
+  return [
+    { id: "total", title: b?.price_total ? `مرة وحدة — ${montant(b.price_total)} ${devise}` : "مرة وحدة" },
+    {
+      id: "monthly",
+      title:
+        b?.monthly_count && b.monthly_amount
+          ? `على ${b.monthly_count} أقساط — ${b.monthly_count} × ${montant(b.monthly_amount)} ${devise}`
+          : "على أقساط (كل شهر)",
+    },
+  ];
 }
 
 /**
