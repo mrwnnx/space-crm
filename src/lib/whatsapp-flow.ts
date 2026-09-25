@@ -60,12 +60,12 @@ async function formulesAvecPrix(formationId: string | null) {
     ? await db.execute<{ price_total: string | null; monthly_count: number | null; monthly_amount: string | null; currency: string }>(sql`
         select price_total::text, monthly_count, monthly_amount::text, currency from bootcamps where id = ${formationId}`)
     : [];
-  const devise = !b?.currency || b.currency === "TND" ? "DT" : b.currency;
+  const devise = !b?.currency || b.currency === "TND" ? "دينار" : b.currency;
   const remise = (v: string) => Math.round(Number(v) * (1 - REMISE));
   const normal = (v: string) => String(Number(v));
   return [
     b?.price_total
-      ? { id: "total", title: `مرة وحدة — ${remise(b.price_total)} ${devise}`, description: `بدل ${normal(b.price_total)} ${devise} (‎-20%)` }
+      ? { id: "total", title: `مرة وحدة — ${remise(b.price_total)} ${devise}`, description: `عوض ${normal(b.price_total)} ${devise}، تخفيض 20%` }
       : { id: "total", title: "مرة وحدة" },
     // La remise ne vaut que pour le paiement en une fois (décision du 25/09).
     b?.monthly_count && b.monthly_amount
