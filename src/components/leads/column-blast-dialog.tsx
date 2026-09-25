@@ -6,6 +6,7 @@ import {
   apercuBlastAction,
   arreterBlastAction,
   etatBlastAction,
+  historiqueColonneAction,
   lancerBlastAction,
   listApprovedTemplatesAction,
 } from "@/app/whatsapp-actions";
@@ -14,6 +15,7 @@ import { ApercuModele } from "@/components/whatsapp/template-preview";
 type Catalogue = Awaited<ReturnType<typeof listApprovedTemplatesAction>>;
 type Apercu = Awaited<ReturnType<typeof apercuBlastAction>>;
 type Etat = Awaited<ReturnType<typeof etatBlastAction>>;
+type Historique = Awaited<ReturnType<typeof historiqueColonneAction>>;
 
 const VARIABLES = ["firstName", "lastName", "fullName", "formation", "dateDebut", "offre", "email"] as const;
 
@@ -49,6 +51,12 @@ export function ColumnBlastDialog({
   const [etat, setEtat] = useState<Etat>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Ce qui a déjà été envoyé à CETTE colonne : pour ne pas relancer deux fois le même modèle.
+  const [historique, setHistorique] = useState<Historique | null>(null);
+  useEffect(() => {
+    historiqueColonneAction(bootcampId, statusId).then(setHistorique).catch(() => setHistorique([]));
+  }, [bootcampId, statusId]);
 
   useEffect(() => {
     listApprovedTemplatesAction(bootcampId)
@@ -141,6 +149,25 @@ export function ColumnBlastDialog({
             </a>
             .
           </p>
+          {historique && historique.length > 0 && !blastId && (
+            <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
+              <p className="mb-1.5 text-xs font-medium text-foreground">Déjà envoyé à cette colonne</p>
+              <ul className="space-y-1 text-[12.5px]">
+                {historique.map((h) => (
+                  <li key={h.id} className="flex flex-wrap gap-x-2 text-muted-foreground">
+                    <span className="text-foreground">{h.template}</span>
+                    <span>{new Date(h.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    <span>
+                      · {h.sent} envoyés, {h.recus} reçus
+                      {h.formulaires > 0 ? `, ${h.formulaires} formulaires` : ""}
+                      {h.reponses > 0 ? `, ${h.reponses} réponses` : ""}
+                      {h.pending > 0 ? ` · ${h.pending} en attente` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {blastId ? (

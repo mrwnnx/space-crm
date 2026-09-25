@@ -441,6 +441,23 @@ export async function lancerBlastAction(input: {
   return r;
 }
 
+/** Remet en file ceux qui n'ont rien reçu d'une vague (voir relancerEchecs). */
+export async function relancerEchecsAction(blastId: string, bootcampId: string) {
+  await requireUser();
+  const { relancerEchecs } = await import("@/lib/whatsapp-blast");
+  const n = await relancerEchecs(blastId);
+  revalidatePath(`/bootcamps/${bootcampId}/envois`);
+  return { ok: true as const, n };
+}
+
+/** L'historique des envois d'une colonne, montré dans la fenêtre d'envoi. */
+export async function historiqueColonneAction(bootcampId: string, statusId: string) {
+  await requireUser();
+  const { listerBlasts } = await import("@/lib/whatsapp-blast");
+  const vagues = await listerBlasts(bootcampId, statusId);
+  return vagues.slice(0, 5).map((v) => ({ ...v, createdAt: v.createdAt.toISOString(), finishedAt: v.finishedAt?.toISOString() ?? null }));
+}
+
 export async function etatBlastAction(blastId: string) {
   await requireUser();
   const { etatBlast } = await import("@/lib/whatsapp-blast");

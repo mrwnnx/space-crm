@@ -5,6 +5,7 @@ import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { getBootcampById } from "@/lib/queries";
 import { detailBlast, listerBlasts } from "@/lib/whatsapp-blast";
 import { formatDateTime } from "@/lib/utils";
+import { RelancerEchecs } from "@/components/whatsapp/relancer-echecs";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,13 @@ export default async function EnvoisPage({
 
                     <div className="flex items-center gap-3 text-xs tabular-nums">
                       <Chiffre n={v.sent} label="envoyés" ton="text-green-700 dark:text-green-400" />
+                      {v.sent > 0 && (
+                        <Chiffre n={v.recus} label="reçus" ton="text-green-700 dark:text-green-400" />
+                      )}
+                      {v.lus > 0 && <Chiffre n={v.lus} label="lus" ton="text-green-700 dark:text-green-400" />}
+                      {v.nonLivres > 0 && (
+                        <Chiffre n={v.nonLivres} label="non livrés" ton="text-red-600 dark:text-red-400" />
+                      )}
                       {v.pending > 0 && (
                         <Chiffre n={v.pending} label="en attente" ton="text-amber-700 dark:text-amber-500" />
                       )}
@@ -103,8 +111,26 @@ export default async function EnvoisPage({
                     </div>
                   </div>
 
+                  {(v.reponses > 0 || v.formulaires > 0 || v.pasInteresses > 0 || v.failed + v.nonLivres > 0) && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-4 py-2 text-xs">
+                      <span className="text-muted-foreground">Résultats :</span>
+                      {v.formulaires > 0 && (
+                        <Chiffre n={v.formulaires} label="formulaires remplis" ton="text-violet-700 dark:text-violet-400" />
+                      )}
+                      <Chiffre n={v.reponses} label="ont répondu" ton="text-foreground" />
+                      {v.pasInteresses > 0 && (
+                        <Chiffre n={v.pasInteresses} label="« ما يهمنيش »" ton="text-muted-foreground" />
+                      )}
+                      <span className="flex-1" />
+                      {v.failed + v.nonLivres > 0 && v.state !== "running" && (
+                        <RelancerEchecs blastId={v.id} bootcampId={id} n={v.failed + v.nonLivres} />
+                      )}
+                    </div>
+                  )}
+
                   {actif && detail && (
                     <div className="border-t border-border px-4 py-3">
+                      <Raisons detail={detail} />
                       <ul className="space-y-1 text-[13px]">
                         {detail.map((d) => (
                           <li key={d.leadId} className="flex flex-wrap items-baseline gap-x-2">
@@ -116,6 +142,12 @@ export default async function EnvoisPage({
                             </Link>
                             {d.numero && <span className="text-muted-foreground">{d.numero}</span>}
                             {d.reason && <span className="text-muted-foreground">— {d.reason}</span>}
+                            {d.meta && d.meta !== "sent" && (
+                              <span className={META_TON[d.meta] ?? "text-muted-foreground"}>
+                                · {META[d.meta] ?? d.meta}
+                                {d.metaErreur ? ` — ${d.metaErreur}` : ""}
+                              </span>
+                            )}
                             {d.status === "pending" && d.scheduledAt && (
                               <span className="text-muted-foreground">
                                 — prévu {formatDateTime(d.scheduledAt)}
@@ -156,3 +188,32 @@ function Chiffre({ n, label, ton }: { n: number; label: string; ton: string }) {
     </span>
   );
 }
+
+const META: Record<string, string> = { delivered: "reçu", read: "lu", failed: "non livré par Meta" };
+const META_TON: Record<string, string> = {
+  delivered: "text-green-700 dark:text-green-400",
+  read: "text-green-700 dark:text-green-400",
+  failed: "text-red-600 dark:text-red-400",
+};
+
+/** Le « pourquoi » d'une vague d'un coup d'œil : chaque raison, combien de personnes. */
+function Raisons({ detail }: { detail: { status: string; reason: string | null; meta: string | null; metaErreur: string | null }[] }) {
+  const compte = new Map<string, number>();
+  for (const d of detail) {
+    const r = d.meta === "failed" ? `Non livré par Meta — ${d.metaErreur ?? "sans détail"}` : d.status !== "sent" && d.reason ? d.reason : null;
+    if (r) compte.set(r, (compte.get(r) ?? 0) + 1);
+  }
+  if (compte.size === 0) return null;
+  return (
+    <ul className="mb-3 space-y-0.5 rounded-lg bg-muted/50 p-3 text-[12.5px]">
+      {[...compte.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([r, n]) => (
+          <li key={r}>
+            <strong className="tabular-nums text-foreground">{n}</strong> <span className="text-muted-foreground">{r}</span>
+          </li>
+        ))}
+    </ul>
+  );
+}
+

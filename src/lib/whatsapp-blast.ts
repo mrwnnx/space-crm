@@ -1,10 +1,10 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, leads, leadStatuses, whatsappBlasts, whatsappBlastTargets } from "@/db/schema";
+import { contacts, leads, leadStatuses, whatsappBlasts, whatsappBlastTargets, whatsappMessages } from "@/db/schema";
 import { buildVariables } from "@/lib/automations";
 import { categorieDuModele, MARKETING_CAP_MS, whatsAppConsentCheck } from "@/lib/whatsapp-consent";
-import { estNumeroDeTest } from "@/lib/messaging/whatsapp";
+import { estNumeroDeTest, numeroJoignable } from "@/lib/messaging/whatsapp";
 
 /**
  * L'envoi d'un modèle à TOUTE une colonne, à l'instant où on clique.
@@ -63,6 +63,9 @@ async function verdict(
 ): Promise<Verdict> {
   const id = lead.id;
   if (!lead.mobileNo) return { sort: "sauter", leadId: id, raison: "Aucun numéro de téléphone" };
+  if (!estNumeroDeTest(lead.mobileNo) && !numeroJoignable(lead.mobileNo)) {
+    return { sort: "sauter", leadId: id, raison: "Numéro incomplet ou mal écrit : à corriger sur la fiche" };
+  }
 
   const test = estNumeroDeTest(lead.mobileNo);
   if (marketing && !test) {
@@ -278,10 +281,17 @@ async function envoyerCible(
   return clore("sent", null, envoi.id);
 }
 
-/** Les vagues d'une formation, la plus récente d'abord, avec leur bilan. */
-export async function listerBlasts(bootcampId: string) {
+/**
+ * Les vagues d'une formation, la plus récente d'abord, avec leur bilan : ce
+ * que le CRM a envoyé, ce que Meta en a fait (reçu, lu, non livré) et ce qui
+ * en est revenu (réponses, formulaires « نحب نسجل » remplis).
+ * `statusId` : seulement celles d'une colonne (l'historique de la fenêtre d'envoi).
+ */
+export async function listerBlasts(bootcampId: string, statusId?: string) {
   const vagues = await db.query.whatsappBlasts.findMany({
-    where: eq(whatsappBlasts.bootcampId, bootcampId),
+    where: statusId
+      ? and(eq(whatsappBlasts.bootcampId, bootcampId), eq(whatsappBlasts.statusId, statusId))
+      : eq(whatsappBlasts.bootcampId, bootcampId),
     orderBy: [desc(whatsappBlasts.createdAt)],
     limit: 50,
   });
@@ -300,9 +310,35 @@ export async function listerBlasts(bootcampId: string) {
     ),
     columns: { blastId: true, status: true },
   });
+  // Meta et les retours, une requête pour toutes les vagues. Un retour compte
+  // s'il arrive après la vague, sur la fiche visée ou sur celle née de son
+  // report (le formulaire fait passer la personne dans une autre formation).
+  const ids = vagues.map((v) => v.id);
+  const bilans = await db.execute<{
+    blast_id: string; recus: number; lus: number; non_livres: number; reponses: number; formulaires: number; pas_interesses: number;
+  }>(sql`
+    select w.id as blast_id,
+      count(*) filter (where m.status in ('delivered', 'read'))::int as recus,
+      count(*) filter (where m.status = 'read')::int as lus,
+      count(*) filter (where m.status = 'failed')::int as non_livres,
+      count(*) filter (where exists (select 1 from activities a where a.reference_type = 'lead'
+        and a.reference_id in (select t.lead_id union select c.id from leads c where c.carried_from_lead_id = t.lead_id)
+        and a.type = 'whatsapp' and a.direction = 'inbound' and a.created_at > w.created_at))::int as reponses,
+      count(*) filter (where exists (select 1 from activities a where a.reference_type = 'lead'
+        and a.reference_id in (select t.lead_id union select c.id from leads c where c.carried_from_lead_id = t.lead_id)
+        and a.subject like 'Formulaire WhatsApp%' and a.created_at > w.created_at))::int as formulaires,
+      count(*) filter (where exists (select 1 from activities a where a.reference_type = 'lead'
+        and a.reference_id = t.lead_id and a.type = 'whatsapp' and a.direction = 'inbound'
+        and a.content = 'ما يهمنيش' and a.created_at > w.created_at))::int as pas_interesses
+    from whatsapp_blasts w
+    join whatsapp_blast_targets t on t.blast_id = w.id
+    left join whatsapp_messages m on m.wamid = t.whatsapp_id
+    where w.id in ${ids}
+    group by w.id`);
   return vagues.map((v) => {
     const miennes = cibles.filter((c) => c.blastId === v.id);
     const par = (s: string) => miennes.filter((c) => c.status === s).length;
+    const b = bilans.find((x) => x.blast_id === v.id);
     return {
       id: v.id,
       template: v.template,
@@ -318,6 +354,12 @@ export async function listerBlasts(bootcampId: string) {
       pending: par("pending"),
       skipped: par("skipped"),
       failed: par("failed"),
+      recus: b?.recus ?? 0,
+      lus: b?.lus ?? 0,
+      nonLivres: b?.non_livres ?? 0,
+      reponses: b?.reponses ?? 0,
+      formulaires: b?.formulaires ?? 0,
+      pasInteresses: b?.pas_interesses ?? 0,
     };
   });
 }
@@ -336,8 +378,17 @@ export async function detailBlast(blastId: string) {
     ),
     columns: { id: true, fullName: true, mobileNo: true },
   });
+  const wamids = cibles.map((c) => c.whatsappId).filter((x): x is string => !!x);
+  const meta = wamids.length
+    ? await db.query.whatsappMessages.findMany({
+        where: inArray(whatsappMessages.wamid, wamids),
+        columns: { wamid: true, status: true, error: true },
+      })
+    : [];
   return cibles
     .map((c) => ({
+      meta: meta.find((m) => m.wamid === c.whatsappId)?.status ?? null,
+      metaErreur: meta.find((m) => m.wamid === c.whatsappId)?.error ?? null,
       leadId: c.leadId,
       nom: fiches.find((f) => f.id === c.leadId)?.fullName ?? "—",
       numero: fiches.find((f) => f.id === c.leadId)?.mobileNo ?? null,
@@ -347,6 +398,27 @@ export async function detailBlast(blastId: string) {
       scheduledAt: c.scheduledAt,
     }))
     .sort((a, b) => a.status.localeCompare(b.status) || a.nom.localeCompare(b.nom));
+}
+
+/**
+ * « Renvoyer aux échecs » : remet en file ceux qui n'ont RIEN reçu — refus du
+ * CRM ou de Meta. Jamais quelqu'un dont le message est arrivé (ou en route).
+ * Chaque renvoi repasse par les mêmes contrôles que le premier envoi
+ * (accord publicitaire, plafond de 24 h, blocage posé par Meta, numéro).
+ */
+export async function relancerEchecs(blastId: string): Promise<number> {
+  const aRelancer = await db.execute<{ id: string }>(sql`
+    select t.id from whatsapp_blast_targets t
+    left join whatsapp_messages m on m.wamid = t.whatsapp_id
+    where t.blast_id = ${blastId}
+      and (t.status = 'failed' or (t.status = 'sent' and m.status = 'failed'))`);
+  if (aRelancer.length === 0) return 0;
+  await db
+    .update(whatsappBlastTargets)
+    .set({ status: "pending", reason: null, scheduledAt: null, sentAt: null, whatsappId: null })
+    .where(inArray(whatsappBlastTargets.id, aRelancer.map((r) => r.id)));
+  await db.update(whatsappBlasts).set({ state: "running", finishedAt: null }).where(eq(whatsappBlasts.id, blastId));
+  return aRelancer.length;
 }
 
 /** Mettre en pause ou reprendre une vague (le bouton « Arrêter » de l'écran). */

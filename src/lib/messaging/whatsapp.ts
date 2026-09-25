@@ -26,6 +26,17 @@ function config() {
 }
 
 /** Le numéro tel que Meta l'attend : chiffres seuls, indicatif compris. */
+/**
+ * Un numéro que Meta peut joindre : indicatif compris, 10 à 15 chiffres, sans
+ * 0 de tête (« 0660… » est un numéro local sans indicatif). Sert à écarter
+ * AVANT l'envoi ce qui échouerait (#131009 : 52516, 015510248460 le 25/09).
+ */
+export function numeroJoignable(brut: string | null | undefined): boolean {
+  if (!brut) return false;
+  const n = normaliser(brut);
+  return n.length >= 10 && n.length <= 15 && !n.startsWith("0");
+}
+
 function normaliser(brut: string): string {
   const chiffres = brut.replace(/\D/g, "");
   // Un numéro tunisien saisi sans indicatif — cas courant dans le CRM, où les
