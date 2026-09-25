@@ -192,9 +192,6 @@ export const CAMPAIGN_STATUSES = [
 ] as const;
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 
-/** Un envoi ne peut PLUS repartir depuis ces états. */
-export const TERMINAL_STATUSES: CampaignStatus[] = ["sent", "cancelled", "archived"];
-
 export async function setCampaignStatus(id: string, status: CampaignStatus) {
   const [row] = await db
     .update(campaigns)

@@ -86,15 +86,3 @@ export function actorLabel(raw: string | null | undefined): string | null {
 export function isHumanActor(raw: string | null | undefined): boolean {
   return !!raw && raw.includes("@");
 }
-
-/** Initiales d'un auteur, pour la pastille. */
-export function actorInitials(raw: string | null | undefined): string {
-  const label = actorLabel(raw);
-  if (!label) return "?";
-  return label
-    .split(/[.\-_\s]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
-    .join("");
-}

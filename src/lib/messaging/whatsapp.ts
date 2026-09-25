@@ -646,29 +646,3 @@ export async function getWhatsAppNumber(): Promise<{ ok: true; numero: WhatsAppN
     return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
   }
 }
-
-/** Le numéro configuré répond-il ? Sert à prouver la connexion sans rien envoyer. */
-export async function checkWhatsApp(): Promise<
-  { ok: true; numero: string; nom: string | null; qualite: string | null } | { ok: false; error: string }
-> {
-  const c = config();
-  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID absent de l'environnement." };
-  try {
-    const res = await fetch(
-      `${API}/${c.phoneId}?fields=display_phone_number,verified_name,quality_rating`,
-      { headers: { Authorization: `Bearer ${c.token}` } }
-    );
-    const json = (await res.json().catch(() => null)) as Record<string, string> & {
-      error?: { message?: string };
-    };
-    if (!res.ok) return { ok: false, error: json?.error?.message ?? `HTTP ${res.status}` };
-    return {
-      ok: true,
-      numero: json.display_phone_number ?? "?",
-      nom: json.verified_name ?? null,
-      qualite: json.quality_rating ?? null,
-    };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
-  }
-}

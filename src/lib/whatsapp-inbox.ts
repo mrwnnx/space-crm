@@ -528,14 +528,6 @@ export async function applyWhatsAppReaction(wamid: string, emoji: string, de: "l
     .where(eq(whatsappMessages.wamid, wamid));
 }
 
-/** Le lead lié à un wamid — pour savoir qui a réagi, sans re-chercher par numéro. */
-export async function getLeadIdByWamid(wamid: string): Promise<string | null> {
-  const row = await db.query.whatsappMessages.findFirst({ where: eq(whatsappMessages.wamid, wamid) });
-  if (!row) return null;
-  const a = await db.query.activities.findFirst({ where: eq(activities.id, row.activityId), columns: { referenceId: true } });
-  return a?.referenceId ?? null;
-}
-
 // ── Réponses rapides ──────────────────────────────────
 
 export async function getQuickReplies() {

@@ -14,7 +14,6 @@ import {
   dealStatuses,
   dealContacts,
   dealProducts,
-  products,
   contacts,
   territories,
   lostReasons,
@@ -79,12 +78,6 @@ export async function getBootcamps(
 export async function getBootcampById(id: string) {
   return db.query.bootcamps.findFirst({
     where: eq(bootcamps.id, id),
-  });
-}
-
-export async function getBootcampBySlug(slug: string) {
-  return db.query.bootcamps.findFirst({
-    where: eq(bootcamps.slug, slug),
   });
 }
 
@@ -326,19 +319,6 @@ export async function countLeads(opts?: LeadFilters) {
 
 export type LeadListItem = Awaited<ReturnType<typeof getLeads>>[number];
 
-export async function getLeadsByStatus(statusId: string) {
-  return db.query.leads.findMany({
-    where: eq(leads.statusId, statusId),
-    with: {
-      status: true,
-      source: true,
-      organization: true,
-      bootcamp: true,
-    },
-    orderBy: [desc(leads.createdAt)],
-  });
-}
-
 // ── Leads: Kanban (grouped by status) ──────────────────
 
 export async function getLeadsKanban(bootcampId?: string) {
@@ -548,19 +528,6 @@ export async function createActivity(data: typeof activities.$inferInsert) {
   return activity;
 }
 
-export async function getActivitiesByReference(
-  referenceType: "lead" | "deal" | "contact" | "organization",
-  referenceId: string
-) {
-  return db.query.activities.findMany({
-    where: and(
-      eq(activities.referenceType, referenceType),
-      eq(activities.referenceId, referenceId)
-    ),
-    orderBy: [desc(activities.createdAt)],
-  });
-}
-
 // ── Stats ──────────────────────────────────────────────
 
 export async function getLeadStats() {
@@ -703,10 +670,6 @@ export async function updateContact(
   return contact;
 }
 
-export async function deleteContact(id: string) {
-  await db.delete(contacts).where(eq(contacts.id, id));
-}
-
 // ── Organizations ──────────────────────────────────────
 
 export type OrganizationWithRelations = typeof organizations.$inferSelect & {
@@ -776,10 +739,6 @@ export async function updateOrganization(
     .where(eq(organizations.id, id))
     .returning();
   return org;
-}
-
-export async function deleteOrganization(id: string) {
-  await db.delete(organizations).where(eq(organizations.id, id));
 }
 
 export async function getOrCreateOrganizationByName(name: string) {
@@ -931,40 +890,12 @@ export async function updateDealStatus(dealId: string, statusId: string) {
   return deal;
 }
 
-export async function deleteDeal(id: string) {
-  await db.delete(deals).where(eq(deals.id, id));
-}
-
 // ── Products ───────────────────────────────────────────
-
-export async function getProducts() {
-  return db.query.products.findMany({
-    orderBy: [desc(products.createdAt)],
-  });
-}
-
-export async function createProduct(data: typeof products.$inferInsert) {
-  const [product] = await db.insert(products).values(data).returning();
-  return product;
-}
 
 // ── Notes ──────────────────────────────────────────────
 
 export async function getNotes() {
   return db.query.notes.findMany({
-    orderBy: [desc(notes.createdAt)],
-  });
-}
-
-export async function getNotesByReference(
-  referenceType: "lead" | "deal" | "contact" | "organization",
-  referenceId: string
-) {
-  return db.query.notes.findMany({
-    where: and(
-      eq(notes.referenceType, referenceType),
-      eq(notes.referenceId, referenceId)
-    ),
     orderBy: [desc(notes.createdAt)],
   });
 }
@@ -985,10 +916,6 @@ export async function updateNote(id: string, data: Partial<typeof notes.$inferIn
   return note;
 }
 
-export async function deleteNote(id: string) {
-  await db.delete(notes).where(eq(notes.id, id));
-}
-
 // ── Tasks ──────────────────────────────────────────────
 
 export async function getTasks(assignedTo?: string) {
@@ -996,33 +923,6 @@ export async function getTasks(assignedTo?: string) {
     // Comparaison insensible à la casse : `assigned_to` est du texte libre
     // (le formulaire dit « Email ou nom »), pas une clé étrangère vers un compte.
     where: assignedTo ? ilike(tasks.assignedTo, assignedTo) : undefined,
-    orderBy: [desc(tasks.createdAt)],
-  });
-}
-
-export async function getTasksByStatus() {
-  const statuses = ["backlog", "todo", "in_progress", "done", "canceled"] as const;
-  const result = await Promise.all(
-    statuses.map(async (status) => ({
-      status,
-      tasks: await db.query.tasks.findMany({
-        where: eq(tasks.status, status),
-        orderBy: [desc(tasks.createdAt)],
-      }),
-    }))
-  );
-  return result;
-}
-
-export async function getTasksByReference(
-  referenceType: "lead" | "deal" | "contact" | "organization",
-  referenceId: string
-) {
-  return db.query.tasks.findMany({
-    where: and(
-      eq(tasks.referenceType, referenceType),
-      eq(tasks.referenceId, referenceId)
-    ),
     orderBy: [desc(tasks.createdAt)],
   });
 }
@@ -1135,19 +1035,6 @@ export async function deleteEmailTemplate(id: string) {
 
 // ── Comments ───────────────────────────────────────────
 
-export async function getCommentsByReference(
-  referenceType: "lead" | "deal" | "contact" | "organization",
-  referenceId: string
-) {
-  return db.query.comments.findMany({
-    where: and(
-      eq(comments.referenceType, referenceType),
-      eq(comments.referenceId, referenceId)
-    ),
-    orderBy: [desc(comments.createdAt)],
-  });
-}
-
 export async function createComment(data: typeof comments.$inferInsert) {
   // Même règle d'attribution que createActivity : un commentaire apparaît dans
   // le fil du lead, il doit porter son auteur.
@@ -1248,25 +1135,11 @@ export async function deleteViewSetting(id: string) {
   await db.delete(viewSettings).where(eq(viewSettings.id, id));
 }
 
-export async function setDefaultView(id: string, routeName: string) {
-  await db.update(viewSettings).set({ isDefault: false }).where(eq(viewSettings.routeName, routeName));
-  await db.update(viewSettings).set({ isDefault: true }).where(eq(viewSettings.id, id));
-}
-
 // ═══════════════════════════════════════════════════════════════
 //  Pivot formation-centric — DAL Phase 1
 // ═══════════════════════════════════════════════════════════════
 
 // ── Bootcamps : helpers ────────────────────────────────
-
-// "A démarré ?" est dérivé de startDate (pas stocké).
-export function hasStarted(bootcamp: { startDate: string | null }): boolean {
-  if (!bootcamp.startDate) return false;
-  const start = new Date(bootcamp.startDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return start <= today;
-}
 
 // Sème les 2 stages système par bootcamp (promote-or-create, idempotent).
 // - converted : cherche kind='converted' ; sinon un stage dont le name matche
@@ -1321,26 +1194,6 @@ export async function ensureSystemStages(bootcampId: string) {
 
   if (updates.length > 0) await Promise.all(updates);
   if (toInsert.length > 0) await db.insert(leadStatuses).values(toInsert);
-}
-
-// Copie les stages normaux (kind='normal') d'un bootcamp vers un autre, position incluse.
-export async function cloneStagesFromBootcamp(srcId: string, dstId: string) {
-  const srcStages = await db.query.leadStatuses.findMany({
-    where: and(eq(leadStatuses.bootcampId, srcId), eq(leadStatuses.kind, "normal")),
-    orderBy: [asc(leadStatuses.position)],
-  });
-  if (srcStages.length === 0) return;
-  await db.insert(leadStatuses).values(
-    srcStages.map((s) => ({
-      name: s.name,
-      color: s.color,
-      position: s.position,
-      isDefault: s.isDefault,
-      isSystem: false,
-      kind: "normal" as const,
-      bootcampId: dstId,
-    }))
-  );
 }
 
 // Réordonne les stages d'un bootcamp selon l'ordre des ids fourni.
@@ -1466,23 +1319,6 @@ export async function getFormSourcesByBootcamp(bootcampId: string) {
   });
 }
 
-export async function createFormSource(data: typeof formSources.$inferInsert) {
-  const [fs] = await db.insert(formSources).values(data).returning();
-  return fs;
-}
-
-export async function updateFormSource(
-  id: string,
-  data: Partial<typeof formSources.$inferInsert>
-) {
-  const [fs] = await db
-    .update(formSources)
-    .set(data)
-    .where(eq(formSources.id, id))
-    .returning();
-  return fs;
-}
-
 // ── Désignation du kind d'une colonne (unicité par bootcamp) ──
 // Au plus UNE colonne 'converted' et UNE 'lost' par bootcamp : on rétrograde
 // d'abord toute colonne du même kind (y compris la cible si elle l'était déjà),
@@ -1525,13 +1361,6 @@ export async function moveLeadToStage(
     toStatusId: statusId,
   });
   return exec.query.leads.findFirst({ where: eq(leads.id, leadId) });
-}
-
-export async function setTemperature(leadId: string, temperature: "hot" | "cold") {
-  await db
-    .update(leads)
-    .set({ temperature, updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
 }
 
 // ── Tags ───────────────────────────────────────────────
@@ -2139,16 +1968,6 @@ export async function recordWpConnectionTest(ok: boolean, message: string) {
 // Un formulaire n'alimente qu'UNE formation : garanti par l'index unique
 // partiel `form_sources_elementor_form_active_key` (migration 0009).
 
-export async function getElementorSourcesByBootcamp(bootcampId: string) {
-  return db.query.formSources.findMany({
-    where: and(
-      eq(formSources.bootcampId, bootcampId),
-      eq(formSources.active, true),
-      sql`${formSources.elementorFormId} is not null`
-    ),
-  });
-}
-
 /** Formulaires déjà pris, avec le nom de la formation qui les détient. */
 export async function getLinkedElementorForms() {
   const rows = await db
@@ -2226,13 +2045,6 @@ export async function unlinkElementorForm(sourceId: string) {
     .where(eq(formSources.id, sourceId));
 }
 
-export async function setSubmissionCursor(sourceId: string, lastSubmissionId: number) {
-  await db
-    .update(formSources)
-    .set({ lastSubmissionId })
-    .where(eq(formSources.id, sourceId));
-}
-
 /** Toutes les sources Elementor actives (pour le cron d'import). */
 export async function getActiveElementorSources() {
   // Une formation archivée ne doit plus recevoir de leads : sinon l'import
@@ -2249,10 +2061,6 @@ export async function getActiveElementorSources() {
       )
     );
   return rows.map((r) => r.source);
-}
-
-export async function getFormSourceById(id: string) {
-  return db.query.formSources.findFirst({ where: eq(formSources.id, id) });
 }
 
 export async function setFieldMapping(sourceId: string, fieldMapping: Record<string, string>) {
@@ -2306,16 +2114,6 @@ export async function getTagIdsForLead(leadId: string) {
     .from(leadTags)
     .where(eq(leadTags.leadId, leadId));
   return rows.map((r) => r.tagId);
-}
-
-/** Tags complets d'un lead (pour l'affichage). */
-export async function getTagsForLead(leadId: string) {
-  return db
-    .select({ id: tags.id, name: tags.name, color: tags.color })
-    .from(leadTags)
-    .innerJoin(tags, eq(tags.id, leadTags.tagId))
-    .where(eq(leadTags.leadId, leadId))
-    .orderBy(asc(tags.name));
 }
 
 /** Toutes les sources, actives ou non — utilisé au nettoyage d'un tag supprimé. */
@@ -2546,10 +2344,6 @@ export async function countLeadsToAnalyze(bootcampId: string) {
       )
     );
   return row?.n ?? 0;
-}
-
-export async function getLeadInsight(leadId: string) {
-  return db.query.leadInsights.findFirst({ where: eq(leadInsights.leadId, leadId) });
 }
 
 /** Insights de tous les leads d'une formation, indexés par leadId. */

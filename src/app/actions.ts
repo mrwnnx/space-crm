@@ -15,20 +15,16 @@ import {
   createActivity,
   createContact as createContactQuery,
   updateContact as updateContactQuery,
-  deleteContact as deleteContactQuery,
   createOrganization as createOrganizationQuery,
   updateOrganization as updateOrganizationQuery,
-  deleteOrganization as deleteOrganizationQuery,
   getOrCreateOrganizationByName,
   getLeadById,
   createDeal as createDealQuery,
   updateDeal as updateDealQuery,
   updateDealStatus as updateDealStatusQuery,
-  deleteDeal as deleteDealQuery,
   getDefaultDealStatus,
   createNote as createNoteQuery,
   updateNote as updateNoteQuery,
-  deleteNote as deleteNoteQuery,
   createTask as createTaskQuery,
   updateTask as updateTaskQuery,
   updateTaskStatus as updateTaskStatusQuery,
@@ -112,115 +108,6 @@ export async function deleteBootcampAction(bootcampId: string) {
 }
 
 // ── Form Sources (formulaires Elementor) actions ───────
-
-// Mapping par défaut champ Elementor → colonne lead whitelistée.
-const DEFAULT_FIELD_MAPPING: Record<string, string> = {
-  name: "fullName",
-  email: "email",
-  phone: "mobileNo",
-};
-
-// Parse + valide le fieldMapping (objet JSON { champ: colonne }). Le webhook
-// re-filtre de toute façon sur sa whitelist ALLOWED_LEAD_FIELDS à la réception.
-function parseFieldMapping(
-  raw: string
-): { ok: true; value: Record<string, string> } | { ok: false } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { ok: true, value: DEFAULT_FIELD_MAPPING };
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { ok: false };
-    }
-    const value: Record<string, string> = {};
-    for (const [k, v] of Object.entries(parsed)) value[String(k)] = String(v);
-    return { ok: true, value };
-  } catch {
-    return { ok: false };
-  }
-}
-
-async function readFormSourceFields(bootcampId: string, formData: FormData) {
-  const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Le nom du formulaire est requis." as const };
-
-  const temperature =
-    String(formData.get("temperature") || "cold") === "hot" ? "hot" : "cold";
-  const tagIds = formData.getAll("tagIds").map(String).filter(Boolean);
-  const active = formData.get("active") != null;
-
-  const fm = parseFieldMapping(String(formData.get("fieldMapping") || ""));
-  if (!fm.ok) return { error: "fieldMapping : JSON invalide (objet attendu)." as const };
-
-  let targetStatusId =
-    String(formData.get("targetStatusId") || "").trim() || null;
-  if (!targetStatusId) {
-    const { getLeadStatuses } = await import("@/lib/queries");
-    const statuses = await getLeadStatuses(bootcampId);
-    targetStatusId =
-      statuses.find((s) => s.kind === "normal")?.id ?? statuses[0]?.id ?? null;
-  }
-
-  return {
-    fields: {
-      name,
-      temperature: temperature as "hot" | "cold",
-      defaultTagIds: tagIds,
-      active,
-      fieldMapping: fm.value,
-      targetStatusId,
-    },
-  };
-}
-
-export async function createFormSourceAction(
-  bootcampId: string,
-  formData: FormData
-) {
-  await requireUser();
-  if (!bootcampId) return { error: "Formation requise." };
-
-  const parsed = await readFormSourceFields(bootcampId, formData);
-  if ("error" in parsed) return { error: parsed.error };
-
-  const { createFormSource } = await import("@/lib/queries");
-  await createFormSource({
-    bootcampId,
-    ...parsed.fields,
-    webhookToken: crypto.randomUUID(), // token unique généré automatiquement
-  });
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true };
-}
-
-export async function updateFormSourceAction(
-  formSourceId: string,
-  bootcampId: string,
-  formData: FormData
-) {
-  await requireUser();
-  const parsed = await readFormSourceFields(bootcampId, formData);
-  if ("error" in parsed) return { error: parsed.error };
-
-  const { updateFormSource } = await import("@/lib/queries");
-  // webhookToken jamais modifié ici (immuable côté UI).
-  await updateFormSource(formSourceId, parsed.fields);
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true };
-}
-
-// Soft delete par défaut : on désactive (active=false) sans supprimer la ligne.
-export async function setFormSourceActiveAction(
-  formSourceId: string,
-  bootcampId: string,
-  active: boolean
-) {
-  await requireUser();
-  const { updateFormSource } = await import("@/lib/queries");
-  await updateFormSource(formSourceId, { active });
-  revalidatePath(`/bootcamps/${bootcampId}`);
-  return { ok: true };
-}
 
 // ── Désignation kind d'une colonne (Converti / Perdu / Normal) ──
 export async function setStageKindAction(
@@ -1138,47 +1025,6 @@ export async function setLeadOfferAction(
   return { ok: true };
 }
 
-export async function rescheduleLeadAction(
-  leadId: string,
-  plan: "total" | "monthly",
-  totalAmount: number,
-  monthlyCount: number
-) {
-  await requireUser();
-
-  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
-    return { error: "Le montant doit être supérieur à zéro." };
-  }
-  if (plan === "monthly" && (!Number.isInteger(monthlyCount) || monthlyCount < 1 || monthlyCount > 24)) {
-    return { error: "Le nombre de mensualités doit être compris entre 1 et 24." };
-  }
-
-  const { rescheduleLead } = await import("@/lib/queries");
-  const res = await rescheduleLead(leadId, plan, totalAmount, plan === "monthly" ? monthlyCount : 1);
-  if (!res.ok) return { error: res.error };
-
-  // Le champ de la fiche suit l'échéancier : les laisser diverger est
-  // exactement ce qui a produit le problème d'origine.
-  const { updateLead } = await import("@/lib/queries");
-  await updateLead(leadId, { intendedPlan: plan });
-
-  const { createActivity } = await import("@/lib/queries");
-  const { currentActor } = await import("@/lib/auth");
-  await createActivity({
-    referenceType: "lead",
-    referenceId: leadId,
-    type: "note",
-    subject: "Offre modifiée",
-    content:
-      `Nouvel échéancier : ${plan === "total" ? "comptant" : `${monthlyCount} mensualités`}, ` +
-      `${totalAmount} au total. Déjà encaissé : ${res.paid}. Reste à devoir : ${res.remaining}.`,
-    createdBy: await currentActor(),
-  });
-
-  revalidatePath(`/leads/${leadId}`);
-  return { ok: true, paid: res.paid, remaining: res.remaining };
-}
-
 /**
  * Pointer une échéance comme encaissée : qui a reçu l'argent, et la preuve.
  *
@@ -1372,32 +1218,6 @@ export async function createContactAction(formData: FormData) {
   revalidatePath("/contacts");
 }
 
-export async function updateContactFieldAction(
-  contactId: string,
-  field: string,
-  value: string
-) {
-  await requireUser();
-  const allowed = [
-    "fullName",
-    "firstName",
-    "lastName",
-    "email",
-    "mobileNo",
-    "phone",
-  ];
-  if (!allowed.includes(field)) return;
-
-  await updateContactQuery(contactId, { [field]: value || null });
-  revalidatePath(`/contacts/${contactId}`);
-}
-
-export async function deleteContactAction(contactId: string) {
-  await requireUser();
-  await deleteContactQuery(contactId);
-  revalidatePath("/contacts");
-}
-
 // ── Organization actions ───────────────────────────────
 
 export async function createOrganizationAction(formData: FormData) {
@@ -1421,25 +1241,6 @@ export async function createOrganizationAction(formData: FormData) {
       | null,
   });
 
-  revalidatePath("/organizations");
-}
-
-export async function updateOrganizationFieldAction(
-  orgId: string,
-  field: string,
-  value: string
-) {
-  await requireUser();
-  const allowed = ["name", "website", "annualRevenue"];
-  if (!allowed.includes(field)) return;
-
-  await updateOrganizationQuery(orgId, { [field]: value || null });
-  revalidatePath(`/organizations/${orgId}`);
-}
-
-export async function deleteOrganizationAction(orgId: string) {
-  await requireUser();
-  await deleteOrganizationQuery(orgId);
   revalidatePath("/organizations");
 }
 
@@ -1519,12 +1320,6 @@ export async function markDealLostAction(
   revalidatePath("/deals");
 }
 
-export async function deleteDealAction(dealId: string) {
-  await requireUser();
-  await deleteDealQuery(dealId);
-  revalidatePath("/deals");
-}
-
 export async function addDealNoteAction(dealId: string, content: string) {
   await requireUser();
   if (!content.trim()) return;
@@ -1561,12 +1356,6 @@ export async function createNoteAction(formData: FormData) {
   if (referenceType && referenceId) {
     revalidatePath(`/${referenceType === "lead" ? "leads" : referenceType === "deal" ? "deals" : referenceType + "s"}/${referenceId}`);
   }
-  revalidatePath("/notes");
-}
-
-export async function deleteNoteAction(noteId: string) {
-  await requireUser();
-  await deleteNoteQuery(noteId);
   revalidatePath("/notes");
 }
 
@@ -1692,39 +1481,6 @@ export async function sendWhatsAppAction(
     type: "whatsapp",
     direction: "outbound",
     subject: "WhatsApp envoyé",
-    content: body,
-  });
-
-  if (referenceType === "lead") {
-    await updateLeadQuery(referenceId, { lastContactedAt: new Date() });
-    revalidatePath(`/leads/${referenceId}`);
-  } else {
-    revalidatePath(`/deals/${referenceId}`);
-  }
-
-  return result;
-}
-
-export async function sendSMSAction(
-  referenceType: "lead" | "deal",
-  referenceId: string,
-  to: string,
-  body: string
-) {
-  await requireUser();
-  const { sendSMS } = await import("@/lib/messaging/sms");
-  const result = await sendSMS({ to, body });
-
-  if (!result.ok) {
-    return result;
-  }
-
-  await createActivity({
-    referenceType,
-    referenceId,
-    type: "sms",
-    direction: "outbound",
-    subject: "SMS envoyé",
     content: body,
   });
 
