@@ -493,6 +493,24 @@ export async function editWhatsAppTemplateBody(
   }
 }
 
+// Les corps des modèles, gardés 10 min : le journal d'une vague de 200 envois
+// ne relit pas 200 fois la liste chez Meta.
+let corpsModeles: { at: number; corps: Map<string, string> } | null = null;
+
+/**
+ * Le texte d'un modèle tel que la personne l'a lu, variables remplies. Sert au
+ * fil de la conversation — « Variables : Ahmed · … » n'apprenait rien à
+ * l'assistant WhatsApp (il ignorait le code promo que la campagne annonçait).
+ */
+export async function texteDuModele(template: string, valeurs: string[]): Promise<string | null> {
+  if (!corpsModeles || Date.now() - corpsModeles.at > 10 * 60_000) {
+    const liste = await listWhatsAppTemplates();
+    corpsModeles = { at: Date.now(), corps: new Map(liste.filter((t) => t.body).map((t) => [t.name, t.body!])) };
+  }
+  const corps = corpsModeles.corps.get(template);
+  return corps ? corps.replace(/\{\{(\d+)\}\}/g, (_, n) => valeurs[Number(n) - 1] ?? "") : null;
+}
+
 /** Retirer un modèle (toutes ses langues) — un nom refusé reste pris tant qu'on ne l'efface pas. */
 export async function deleteWhatsAppTemplate(name: string): Promise<{ ok: boolean; error?: string }> {
   const c = wabaConfig();

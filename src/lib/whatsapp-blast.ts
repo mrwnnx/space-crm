@@ -281,7 +281,10 @@ async function envoyerCible(
     type: "whatsapp",
     direction: "outbound",
     subject: `WhatsApp en masse — modèle « ${blast.template} »`,
-    content: valeurs.length ? `Variables : ${valeurs.join(" · ")}` : "Modèle sans variable",
+    // Le texte lu par la personne (le fil et l'assistant en ont besoin), sinon les valeurs.
+      content:
+        (await (await import("@/lib/messaging/whatsapp")).texteDuModele(blast.template, valeurs).catch(() => null)) ??
+        (valeurs.length ? `Variables : ${valeurs.join(" · ")}` : "Modèle sans variable"),
     createdBy: blast.createdBy ?? "campagne",
   });
   const { recordWhatsAppSent } = await import("@/lib/whatsapp-inbox");

@@ -364,7 +364,10 @@ async function executeRule(
       type: "whatsapp",
       direction: "outbound",
       subject: `WhatsApp automatique — modèle « ${rule.whatsappTemplate} »`,
-      content: valeurs.length ? `Variables : ${valeurs.join(" · ")}` : "Modèle sans variable",
+      // Le texte lu par la personne (le fil et l'assistant en ont besoin), sinon les valeurs.
+      content:
+        (await (await import("@/lib/messaging/whatsapp")).texteDuModele(rule.whatsappTemplate, valeurs).catch(() => null)) ??
+        (valeurs.length ? `Variables : ${valeurs.join(" · ")}` : "Modèle sans variable"),
       createdBy: "automation",
     });
     // Le wamid rattache les accusés (livré, lu, échec) à cette bulle.

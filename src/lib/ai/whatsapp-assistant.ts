@@ -85,17 +85,27 @@ async function contexteLead(leadId: string) {
 
 /** Les derniers échanges avec ce NUMÉRO (une conversation = un numéro, pas une fiche). */
 async function conversation(leadId: string) {
-  const rows = await db.execute<{ direction: string; content: string | null; at: string }>(sql`
-    select a.direction, a.content, a.created_at::text as at
+  const rows = await db.execute<{ direction: string; content: string | null; at: string; template: string | null }>(sql`
+    select a.direction, a.content, a.created_at::text as at,
+           (select m.template from whatsapp_messages m where m.activity_id = a.id limit 1) as template
     from activities a join leads x on x.id = a.reference_id
     where a.type = 'whatsapp' and a.reference_type = 'lead'
       and right(regexp_replace(coalesce(x.mobile_no, ''), '\\D', '', 'g'), 8) =
           (select right(regexp_replace(coalesce(mobile_no, ''), '\\D', '', 'g'), 8) from leads where id = ${leadId})
     order by a.created_at desc limit 12`);
-  return rows
-    .reverse()
-    .map((r) => `${r.direction === "inbound" ? "La personne" : "L'école"} : ${(r.content ?? "").slice(0, 600)}`)
-    .join("\n");
+  // Les envois de modèle d'avant le 25/09 sont notés « Variables : a · b » :
+  // on retrouve le texte réellement lu (c'est lui qui annonce un code promo).
+  const { texteDuModele } = await import("@/lib/messaging/whatsapp");
+  const lignes = await Promise.all(
+    rows.reverse().map(async (r) => {
+      let texte = r.content ?? "";
+      if (r.template && texte.startsWith("Variables : ")) {
+        texte = (await texteDuModele(r.template, texte.slice(12).split(" · ")).catch(() => null)) ?? texte;
+      }
+      return `${r.direction === "inbound" ? "La personne" : "L'école"} : ${texte.slice(0, 900)}`;
+    })
+  );
+  return lignes.join("\n");
 }
 
 async function savoirTexte() {
@@ -131,11 +141,13 @@ Consignes de l'équipe :
 ${consignes}
 
 Règles :
+- Réponds au NOUVEAU MESSAGE, et à lui seul. La conversation sert à comprendre, pas à répondre de nouveau à d'anciennes questions. Une simple salutation (« 3aslema », « عسلامة », « salut ») appelle une salutation chaleureuse et « كيفاش نجم نعاونك ؟ », rien d'autre.
 - Réponds dans la langue et l'écriture de la personne (derja en lettres latines si elle écrit ainsi, en arabe si elle écrit en arabe, français sinon). Les mots courants français/anglais restent en lettres latines.
-- Appuie-toi UNIQUEMENT sur le SAVOIR et le CONTEXTE ci-dessous. N'invente jamais un prix, une date, un lien, un RIB, une promesse.
+- Appuie-toi UNIQUEMENT sur le SAVOIR, le CONTEXTE et ce que l'école a déjà écrit dans la conversation (un message de campagne qui annonce un code promo, une date, fait foi). N'invente jamais un prix, une date, un lien, un RIB, une promesse.
+- Ne redemande JAMAIS une information que le CRM a déjà (nom, téléphone, email, formule choisie) : utilise-la.
 - Si l'information manque, dis simplement qu'un conseiller va répondre.
 - Court : 1 à 4 phrases, comme sur WhatsApp. Pas de signature.
-- sujetArgent = true si le message parle de RIB, virement, paiement effectué ou à vérifier, reçu, remboursement, différence à payer, facture.
+- sujetArgent = true SEULEMENT pour un transfert d'argent : RIB, virement, preuve ou reçu de paiement, paiement à vérifier, remboursement, différence à payer, facture. Un prix, une formule ou un code promo ne sont PAS un sujet d'argent : réponds-y.
 - robot = true si le message est une réponse automatique d'une entreprise, pas une personne.
 
 SAVOIR :
@@ -168,6 +180,8 @@ ${savoir}`;
 - Retire beaucoup si une information (prix, date, lien, promesse) n'est PAS dans le savoir ou le contexte : c'est une invention.
 - Retire si elle ne répond pas à ce que la personne demande, ou si elle est trop vague pour l'aider.
 - Une réponse honnête « un conseiller va te répondre » ne vaut jamais plus de 60 : elle n'aide pas.
+- Ne retire RIEN parce qu'elle n'ajoute pas d'informations non demandées : on juge la réponse au NOUVEAU message. Une salutation qui répond par une salutation et « comment t'aider ? » mérite 95.
+- Retire beaucoup si elle répond à une ancienne question au lieu du nouveau message, ou si elle redemande une information que le CRM a déjà.
 Donne des raisons courtes, en français, lisibles par l'équipe.
 
 SAVOIR :

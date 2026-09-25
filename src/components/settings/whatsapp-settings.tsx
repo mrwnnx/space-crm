@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { WhatsAppNumber, WhatsAppProfile, WhatsAppTemplate } from "@/lib/messaging/whatsapp";
 import { WHATSAPP_VERTICALS } from "@/lib/messaging/whatsapp-verticals";
@@ -70,17 +70,64 @@ export function WhatsAppSettings({
   buttonActions: ActionBoutonInput[];
   tags: { id: string; name: string }[];
 }) {
+  // Sous-onglets : l'onglet WhatsApp était devenu une longue page à faire
+  // défiler pour atteindre les modèles. Le sous-onglet vit dans l'adresse
+  // (?wa=modeles) : un lien ou un rechargement ramène au même endroit.
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const onglet = SOUS_ONGLETS.some((o) => o.id === params.get("wa")) ? params.get("wa")! : "assistant";
+  function aller(id: string) {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("wa", id);
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  }
+
   return (
     <div className="space-y-6">
-      <SectionNumero numero={numero} envoi={envoi} />
-      <SectionProfil profil={profil} nomAffiche={numero.ok ? numero.numero.nom : null} />
-      <SectionAuto initial={autoReplies} />
-      <AssistantWhatsApp {...assistant} />
-      <SectionReponsesRapides items={quickReplies} />
-      <SectionModeles templates={templates} buttonActions={buttonActions} tags={tags} />
+      <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
+        {SOUS_ONGLETS.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => aller(o.id)}
+            className={cn(
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
+              onglet === o.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {o.label}
+            {o.id === "modeles" && templates.length > 0 && (
+              <span className="ml-1.5 tabular-nums text-muted-foreground">{templates.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {onglet === "assistant" && <AssistantWhatsApp {...assistant} />}
+      {onglet === "modeles" && <SectionModeles templates={templates} buttonActions={buttonActions} tags={tags} />}
+      {onglet === "reponses" && (
+        <>
+          <SectionAuto initial={autoReplies} />
+          <SectionReponsesRapides items={quickReplies} />
+        </>
+      )}
+      {onglet === "numero" && (
+        <>
+          <SectionNumero numero={numero} envoi={envoi} />
+          <SectionProfil profil={profil} nomAffiche={numero.ok ? numero.numero.nom : null} />
+        </>
+      )}
     </div>
   );
 }
+
+const SOUS_ONGLETS = [
+  { id: "assistant", label: "Assistant IA" },
+  { id: "modeles", label: "Modèles" },
+  { id: "reponses", label: "Réponses automatiques" },
+  { id: "numero", label: "Numéro et profil" },
+] as const;
 
 export type ActionBoutonInput = {
   template: string;
