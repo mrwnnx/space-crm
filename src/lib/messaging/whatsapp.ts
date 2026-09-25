@@ -31,6 +31,9 @@ function normaliser(brut: string): string {
   // Un numéro tunisien saisi sans indicatif — cas courant dans le CRM, où les
   // leads arrivent en « 25 726 708 ». Sans le 216, Meta ne livre rien.
   if (chiffres.length === 8) return `216${chiffres}`;
+  // Un numéro étranger saisi avec le préfixe « 00 » (0033…, 00965…) : Meta
+  // attend l'indicatif seul et refusait l'envoi (#131009, 4 échecs le 25/09).
+  if (chiffres.startsWith("00")) return chiffres.slice(2);
   return chiffres;
 }
 
