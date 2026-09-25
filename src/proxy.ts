@@ -51,11 +51,17 @@ export async function proxy(request: NextRequest) {
 
   // Borne l'appel auth : si Supabase stalle, on n'attend pas le timeout Vercel (300s).
   // Timeout/erreur → user=null → traité comme non authentifié (redirige /login, le cas sûr).
+  //
+  // Les appels d'API (cloche, pastille WhatsApp : toutes les 15 s, dans chaque
+  // onglet) vérifient le jeton SUR PLACE (signature ES256, sans appel à Supabase) :
+  // ils faisaient ~2 300 appels Auth/heure, le quart du transfert (mesuré le 25/09).
+  // Les pages, elles, gardent l'appel à Supabase : un compte bloqué (retiré de
+  // l'équipe) est ainsi mis dehors dès la page suivante.
+  const verifier = pathname.startsWith("/api/")
+    ? supabase.auth.getClaims().then(({ data }) => (data?.claims?.sub ? data.claims : null))
+    : supabase.auth.getUser().then(({ data }) => data.user);
   const user = await Promise.race([
-    supabase.auth
-      .getUser()
-      .then(({ data }) => data.user)
-      .catch(() => null),
+    verifier.catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
   ]);
 

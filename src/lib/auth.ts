@@ -20,6 +20,18 @@ export async function requireUser() {
 }
 
 /**
+ * Pour les routes d'API lues en boucle (cloche, pastille) : la session est
+ * vérifiée SUR PLACE (jeton signé), sans appel à Supabase. Les écritures, elles,
+ * passent par requireUser().
+ */
+export async function requireSession() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims?.sub) throw new Error("Non authentifié");
+  return data.claims;
+}
+
+/**
  * Email du compte qui exécute l'action, ou `null` hors session (cron Vercel,
  * GitHub Actions, webhook entrant). Sert à attribuer les événements du fil
  * d'activité : on stocke l'email parce que la colonne `created_by` est déjà
@@ -31,11 +43,12 @@ export async function requireUser() {
  */
 export async function currentActor(): Promise<string | null> {
   try {
+    // Lu sur place dans le jeton : c'est une signature d'auteur, appelée à
+    // chaque rendu de page (la mise en page, la boîte WhatsApp toutes les 10 s).
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user?.email ?? null;
+    const { data } = await supabase.auth.getClaims();
+    const email = data?.claims?.email;
+    return typeof email === "string" && email ? email : null;
   } catch {
     return null;
   }
