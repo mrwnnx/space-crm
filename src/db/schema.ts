@@ -516,6 +516,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "mention",
   // Inscription confirmée (migration 0145) : la cloche joue le tiroir-caisse.
   "lead_enrolled",
+  // L'assistant WhatsApp passe la main à un humain (migration 0153).
+  "assistant_escalade",
 ]);
 
 export const notifications = pgTable("notifications", {

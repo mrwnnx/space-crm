@@ -20,6 +20,9 @@ import { recordWhatsAppSent } from "@/lib/whatsapp-inbox";
 // Le jeton qui revient avec la réponse : c'est lui qui dit de quelle fiche il s'agit.
 const PREFIXE = "inscr:";
 
+// Le formulaire publié chez Meta (25/09) — non modifiable : un changement = un nouveau formulaire.
+export const FLOW_INSCRIPTION_ID = "28866668219686929";
+
 const SITUATIONS = ["نخدم", "نقرا", "مانيش نخدم", "فريلانس", "حاجة أخرى"];
 
 export async function donneesFlowInscription(

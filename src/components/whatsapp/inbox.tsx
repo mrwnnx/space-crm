@@ -72,6 +72,8 @@ type Thread = {
   messages: Message[];
   lastInboundAt: string | null;
   ouverte: boolean; // fenêtre de 24 h ouverte — décidé côté serveur, à l'heure du serveur
+  // Ce que l'assistant WhatsApp propose de répondre, en attente d'un humain.
+  proposition: { id: string; draft: string; score: number; decision: string; raisons: string } | null;
 };
 
 type Bootcamp = { id: string; name: string };
@@ -369,6 +371,7 @@ function ThreadView({
               quickReplies={quickReplies}
               citation={citation}
               onCitationClear={() => setCitation(null)}
+              proposition={thread.proposition}
             />
           ) : (
             <ReponseModele leadId={lead.id} to={lead.mobileNo} templates={templates} />
@@ -669,6 +672,7 @@ function ReponseLibre({
   quickReplies,
   citation,
   onCitationClear,
+  proposition,
 }: {
   leadId: string;
   to: string;
@@ -677,9 +681,11 @@ function ReponseLibre({
   quickReplies: QuickReply[];
   citation: Citation | null;
   onCitationClear: () => void;
+  proposition: Thread["proposition"];
 }) {
   const router = useRouter();
   const [texte, setTexte] = useState("");
+  const [propositionVue, setPropositionVue] = useState<string | null>(null);
   const zone = useRef<HTMLTextAreaElement>(null);
   // « / » en début de message ouvre la liste des réponses rapides, filtrée par ce qui suit.
   const filtre = texte.startsWith("/") && !texte.includes("\n") ? texte.slice(1).toLowerCase() : null;
@@ -737,6 +743,43 @@ function ReponseLibre({
         envoyer();
       }}
     >
+      {proposition && propositionVue !== proposition.id && (
+        // La proposition de l'assistant : un clic la met dans la zone de
+        // réponse, où l'on peut la corriger avant d'envoyer.
+        <div
+          className={cn(
+            "mb-2 rounded-lg border p-2.5 text-[12.5px]",
+            proposition.decision === "escalade"
+              ? "border-amber-300 bg-amber-50 text-amber-950"
+              : "border-violet-200 bg-violet-50 text-violet-950"
+          )}
+        >
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="font-medium">
+              ✨ L&apos;assistant propose · {proposition.score} %
+              {proposition.decision === "escalade" ? " · il a passé la main" : ""}
+              {proposition.decision === "formulaire" ? " · + formulaire « نحب نسجل »" : ""}
+            </span>
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={() => {
+                setTexte(proposition.draft);
+                setPropositionVue(proposition.id);
+                zone.current?.focus();
+              }}
+              className="rounded-md bg-violet-600 px-2 py-0.5 text-[12px] font-medium text-white hover:bg-violet-700"
+            >
+              Utiliser
+            </button>
+            <button type="button" onClick={() => setPropositionVue(proposition.id)} className="text-[12px] opacity-70 hover:underline">
+              Ignorer
+            </button>
+          </div>
+          <p dir="auto" className="whitespace-pre-wrap">{proposition.draft}</p>
+          <p className="mt-1 text-[11.5px] opacity-70">{proposition.raisons}</p>
+        </div>
+      )}
       {citation && (
         <div className="mb-1.5 flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted px-2.5 py-1.5 text-xs">
           <div className="min-w-0 flex-1">

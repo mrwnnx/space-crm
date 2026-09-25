@@ -50,6 +50,7 @@ function kaching() {
 const TYPE_ICON: Record<string, string> = {
   lead_assigned: "👤",
   lead_enrolled: "💰",
+  assistant_escalade: "✨",
   lead_status_change: "↻",
   deal_status_change: "↻",
   task_assigned: "✓",
@@ -168,7 +169,12 @@ export function NotificationBell() {
               notifs.map((n) => (
                 <a
                   key={n.id}
-                  href={refHref(n.referenceType, n.referenceId)}
+                  href={
+                    // L'assistant a passé la main : on va droit à la conversation, où sa proposition attend.
+                    n.type === "assistant_escalade" && n.referenceId
+                      ? `/whatsapp?lead=${n.referenceId}`
+                      : refHref(n.referenceType, n.referenceId)
+                  }
                   className={cn(
                     "flex gap-3 border-b border-border px-4 py-2.5 transition-colors hover:bg-muted/40",
                     !n.read && "bg-primary/5"

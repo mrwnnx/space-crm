@@ -73,6 +73,10 @@ export async function replyWhatsAppAction(leadId: string, to: string, body: stri
   });
   if (r.sid) await recordWhatsAppSent(r.sid, activite.id, replyTo);
   await updateLead(leadId, { lastContactedAt: new Date() });
+  // Répondu par un humain : la proposition de l'assistant est traitée, et cette
+  // réponse nourrira sa mémoire.
+  const { noterReponseHumaine } = await import("@/lib/ai/whatsapp-assistant");
+  await noterReponseHumaine(leadId, texte).catch(() => {});
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);
   return { ok: true as const };

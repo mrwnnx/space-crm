@@ -37,6 +37,7 @@ const Redaction = z.object({
   reponse: z.string(),
   sujetArgent: z.boolean(),
   robot: z.boolean(),
+  intentionInscription: z.boolean(),
 });
 
 const Note = z.object({
@@ -120,7 +121,8 @@ async function savoirTexte() {
 }
 
 export type Traitement = {
-  decision: "pret" | "escalade" | "ignore";
+  // formulaire : la personne veut s'inscrire → le formulaire « نحب نسجل » part avec la réponse.
+  decision: "pret" | "escalade" | "ignore" | "formulaire";
   draft: string;
   score: number;
   raisons: string;
@@ -149,6 +151,7 @@ Règles :
 - Court : 1 à 4 phrases, comme sur WhatsApp. Pas de signature.
 - sujetArgent = true SEULEMENT pour un transfert d'argent : RIB, virement, preuve ou reçu de paiement, paiement à vérifier, remboursement, différence à payer, facture. Un prix, une formule ou un code promo ne sont PAS un sujet d'argent : réponds-y.
 - robot = true si le message est une réponse automatique d'une entreprise, pas une personne.
+- intentionInscription = true si la personne veut s'inscrire ou réserver sa place (« نحب نسجل », « كيفاش نقيد », « nheb nsajel »), ou dit oui quand l'école lui proposait de l'inscrire. Le formulaire d'inscription part alors avec ta réponse : écris juste une phrase courte et chaleureuse qui l'invite à le remplir (sans demander nom, téléphone ou email).
 
 SAVOIR :
 ${savoir}`;
@@ -200,6 +203,11 @@ ${savoir}`,
   if (redaction.sujetArgent) {
     return { decision: "escalade", draft: redaction.reponse, score, raisons: `Question d'argent : toujours un humain. ${raisons}` };
   }
+  // Vouloir s'inscrire n'appelle pas une information risquée, mais un geste :
+  // le formulaire. Il part quelle que soit la note de la phrase qui l'accompagne.
+  if (redaction.intentionInscription) {
+    return { decision: "formulaire", draft: redaction.reponse, score, raisons: `Veut s'inscrire : le formulaire « نحب نسجل » part avec la réponse. ${raisons}` };
+  }
   return {
     decision: score >= settings.aiThreshold ? "pret" : "escalade",
     draft: redaction.reponse,
@@ -242,8 +250,31 @@ export async function traiterMessageAssistant(input: {
     const envoyer = settings.aiMode === "auto" || estNumeroDeTest(input.numero);
     if (!envoyer || t.decision === "ignore") return;
 
-    const texte = t.decision === "pret" ? t.draft : MESSAGE_ATTENTE;
-    const envoi = await sendWhatsApp({ to: input.numero, body: texte });
+    // Il passe la main : l'équipe est prévenue (la cloche mène à la conversation,
+    // où sa proposition attend) — sinon « on revient vers toi » resterait sans suite.
+    if (t.decision === "escalade") {
+      const { createNotification } = await import("@/lib/queries");
+      const fiche = await db.query.leads.findFirst({ where: eq(leads.id, input.leadId), columns: { fullName: true } });
+      await createNotification({
+        type: "assistant_escalade",
+        message: `L'assistant passe la main — ${fiche?.fullName ?? "un lead"} : « ${q.slice(0, 80)} »`,
+        referenceType: "lead",
+        referenceId: input.leadId,
+      });
+    }
+
+    let texte: string;
+    let envoi: { ok: boolean; error?: string; sid?: string };
+    if (t.decision === "formulaire") {
+      const { donneesFlowInscription, FLOW_INSCRIPTION_ID } = await import("@/lib/whatsapp-flow");
+      const f = await donneesFlowInscription(input.leadId);
+      texte = t.draft || "باهي 🙌 عمّر الفورمولار هذا باش نكملو التسجيل متاعك 👇";
+      const { sendWhatsAppFlow } = await import("@/lib/messaging/whatsapp");
+      envoi = await sendWhatsAppFlow({ to: input.numero, body: texte, flowId: FLOW_INSCRIPTION_ID, token: f.token, data: f.data });
+    } else {
+      texte = t.decision === "pret" ? t.draft : MESSAGE_ATTENTE;
+      envoi = await sendWhatsApp({ to: input.numero, body: texte });
+    }
     if (!envoi.ok) {
       console.error("Assistant WhatsApp — envoi échoué :", envoi.error);
       return;
@@ -255,7 +286,12 @@ export async function traiterMessageAssistant(input: {
       referenceId: input.leadId,
       type: "whatsapp",
       direction: "outbound",
-      subject: t.decision === "pret" ? `Réponse de l'assistant (note ${t.score} %)` : "Assistant : « on revient vers toi » (passe la main)",
+      subject:
+        t.decision === "pret"
+          ? `Réponse de l'assistant (note ${t.score} %)`
+          : t.decision === "formulaire"
+            ? "Assistant : formulaire « نحب نسجل » envoyé"
+            : "Assistant : « on revient vers toi » (passe la main)",
       content: texte,
       createdBy: "assistant",
     });
@@ -266,3 +302,33 @@ export async function traiterMessageAssistant(input: {
     console.error("Assistant WhatsApp :", e);
   }
 }
+
+/**
+ * La proposition de l'assistant qui attend un humain, pour la conversation
+ * ouverte dans la page Messages : la plus récente des dernières 24 h, pas
+ * encore traitée par l'équipe. Une réponse déjà partie seule n'y figure pas,
+ * sauf quand il a passé la main (« on revient vers toi » est parti, pas la réponse).
+ */
+export async function propositionEnAttente(leadId: string) {
+  const [p] = await db.execute<{ id: string; draft: string; score: number; decision: string; raisons: string }>(sql`
+    select r.id, r.draft, r.score, r.decision, r.raisons
+    from ai_replies r
+    where r.lead_id = ${leadId}
+      and r.created_at > now() - interval '24 hours'
+      and r.decision in ('pret', 'escalade', 'formulaire')
+      and r.human_reply is null
+      and (r.sent_text is null or r.decision = 'escalade')
+      and r.draft <> ''
+    order by r.created_at desc limit 1`);
+  return p ?? null;
+}
+
+/** Ce que l'équipe a répondu à la place de l'assistant : la matière de sa mémoire (étape 4). */
+export async function noterReponseHumaine(leadId: string, texte: string) {
+  await db.execute(sql`
+    update ai_replies set human_reply = ${texte}
+    where id = (select id from ai_replies where lead_id = ${leadId} and human_reply is null
+                  and decision in ('pret', 'escalade', 'formulaire') and created_at > now() - interval '24 hours'
+                order by created_at desc limit 1)`);
+}
+

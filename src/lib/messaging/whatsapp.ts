@@ -155,6 +155,48 @@ export async function sendWhatsApp({
   return r.ok ? { ok: true, sid: r.id } : { ok: false, error: r.error };
 }
 
+/**
+ * Le formulaire « نحب نسجل » envoyé dans la conversation (message interactif,
+ * seulement dans la fenêtre de 24 h — la personne vient d'écrire). Sert à
+ * l'assistant quand quelqu'un dit vouloir s'inscrire.
+ */
+export async function sendWhatsAppFlow({
+  to,
+  body,
+  flowId,
+  token,
+  data,
+  bouton = "نحب نسجل",
+}: {
+  to: string;
+  body: string;
+  flowId: string;
+  token: string;
+  data: Record<string, unknown>;
+  bouton?: string;
+}): Promise<{ ok: boolean; error?: string; sid?: string }> {
+  const r = await envoyer({
+    to: normaliser(to),
+    type: "interactive",
+    interactive: {
+      type: "flow",
+      body: { text: body },
+      action: {
+        name: "flow",
+        parameters: {
+          flow_message_version: "3",
+          flow_id: flowId,
+          flow_token: token,
+          flow_cta: bouton,
+          flow_action: "navigate",
+          flow_action_payload: { screen: "INSCRIPTION", data },
+        },
+      },
+    },
+  });
+  return r.ok ? { ok: true, sid: r.id } : { ok: false, error: r.error };
+}
+
 /** Réagir à un message (le sien ou le nôtre) par un emoji ; "" retire la réaction. */
 export async function sendWhatsAppReaction({
   to,

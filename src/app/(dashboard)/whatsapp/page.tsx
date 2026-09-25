@@ -26,6 +26,11 @@ export default async function WhatsAppPage({
     getQuickReplies(),
   ]);
 
+  // La proposition de l'assistant WhatsApp pour cette conversation, s'il y en a une.
+  const proposition = thread
+    ? await (await import("@/lib/ai/whatsapp-assistant")).propositionEnAttente(thread.lead.id)
+    : null;
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
@@ -48,6 +53,7 @@ export default async function WhatsAppPage({
                 messages: thread.messages.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() })),
                 lastInboundAt: thread.lastInboundAt?.toISOString() ?? null,
                 ouverte: fenetreOuverte(thread.lastInboundAt),
+                proposition,
               }
             : null
         }
