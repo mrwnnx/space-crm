@@ -234,7 +234,15 @@ function AjoutSavoir() {
       {onglet === "fichier" && (
         <form
           className="mt-3 flex flex-wrap items-center gap-2"
-          action={(fd) => startTransition(async () => fini(await ajouterSavoirFichierAction(fd)))}
+          action={(fd) => {
+            // Vérifié AVANT l'envoi : au-delà, la requête serait refusée sans explication.
+            const f = fd.get("fichier");
+            if (f instanceof File && f.size > 4 * 1024 * 1024) {
+              setMessage({ ok: false, texte: `Fichier trop lourd (${(f.size / 1024 / 1024).toFixed(1)} Mo, 4 Mo maximum). Compressez le PDF ou ajoutez-le en plusieurs parties.` });
+              return;
+            }
+            startTransition(async () => fini(await ajouterSavoirFichierAction(fd)));
+          }}
         >
           <input type="file" name="fichier" accept=".pdf,.txt,.md,.csv,application/pdf,text/plain" className="text-xs" />
           <button
