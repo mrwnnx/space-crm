@@ -10,6 +10,8 @@ import {
   createTemplateAction,
   deleteQuickReplyAction,
   deleteTemplateAction,
+  editTemplateAction,
+  reviewTemplateAction,
   saveAutoRepliesAction,
   saveButtonActionAction,
   setAiReplyAction,
@@ -655,6 +657,7 @@ function LigneModele({
 }) {
   const router = useRouter();
   const [confirme, setConfirme] = useState(false);
+  const [edition, setEdition] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const s = STATUT[t.status] ?? { label: t.status, cls: "bg-gray-50 text-muted-foreground" };
@@ -676,6 +679,11 @@ function LigneModele({
         </span>
         <span className={cn("rounded-full px-2 py-0.5 text-[12.5px] font-medium", s.cls)}>{s.label}</span>
         <span className="flex-1" />
+        {!edition && !confirme && (
+          <button type="button" onClick={() => setEdition(true)} className="text-[12.5px] text-muted-foreground hover:text-foreground hover:underline">
+            Modifier
+          </button>
+        )}
         {confirme ? (
           <>
             <button
@@ -696,7 +704,20 @@ function LigneModele({
           </button>
         )}
       </div>
-      {t.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{t.body}</p>}
+      {edition ? (
+        <EditeurModele t={t} onFermer={() => setEdition(false)} />
+      ) : (
+        t.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{t.body}</p>
+      )}
+      {t.autresBoutons.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {t.autresBoutons.map((b) => (
+            <span key={b} className="rounded-md border border-border px-2 py-0.5 text-[12.5px] text-muted-foreground">
+              {b}
+            </span>
+          ))}
+        </div>
+      )}
       {t.buttons.length > 0 && (
         <div className="mt-1.5 space-y-1.5">
           {t.buttons.map((b) => (
@@ -849,6 +870,239 @@ function compterVariables(body: string): number {
   return nums.length ? Math.max(...nums) : 0;
 }
 
+/**
+ * Modifier le texte d'un modèle déjà chez Meta. Les boutons ne bougent pas ;
+ * si le nombre de variables change, les règles qui l'envoient sont listées
+ * avant l'envoi (elles partiraient avec le mauvais nombre).
+ */
+function EditeurModele({ t, onFermer }: { t: WhatsAppTemplate; onFermer: () => void }) {
+  const router = useRouter();
+  const [body, setBody] = useState(t.body ?? "");
+  const [examples, setExamples] = useState<string[]>([]);
+  const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [aConfirmer, setAConfirmer] = useState<{ formation: string; colonne: string; variables: number }[] | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const n = compterVariables(body);
+  const inchange = body.trim() === (t.body ?? "").trim();
+
+  function envoyer(confirme = false) {
+    setMessage(null);
+    startTransition(async () => {
+      const r = await editTemplateAction({ name: t.name, body, examples, confirme });
+      if (r.ok) {
+        setAConfirmer(null);
+        setMessage({ ok: true, texte: "Envoyé à Meta : le modèle repasse « en attente » le temps de la relecture." });
+        router.refresh();
+      } else if ("aConfirmer" in r) {
+        setAConfirmer(r.aConfirmer);
+      } else {
+        setMessage({ ok: false, texte: r.error });
+      }
+    });
+  }
+
+  return (
+    <div className="mt-2 space-y-3 rounded-lg border border-border p-3">
+      <label>
+        <span className={LABEL}>Message</span>
+        <textarea
+          value={body}
+          onChange={(e) => {
+            setBody(e.target.value);
+            setAConfirmer(null);
+          }}
+          rows={6}
+          maxLength={1024}
+          dir="auto"
+          className={cn(INPUT, "resize-y")}
+        />
+        <span className="text-[12.5px] text-muted-foreground">
+          {n} variable{n > 1 ? "s" : ""} · {body.length}/1024
+        </span>
+      </label>
+
+      <RelectureIA
+        name={t.name}
+        category={t.category}
+        language={t.language}
+        body={body}
+        buttons={[...t.buttons, ...t.autresBoutons]}
+        onUtiliser={setBody}
+      />
+
+      {n > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {Array.from({ length: n }, (_, i) => (
+            <label key={i}>
+              <span className={LABEL}>Exemple pour {`{{${i + 1}}}`}</span>
+              <input
+                value={examples[i] ?? ""}
+                onChange={(e) => {
+                  const v = [...examples];
+                  v[i] = e.target.value;
+                  setExamples(v);
+                }}
+                placeholder={i === 0 ? "سنا" : "UX/UI Bootcamp"}
+                className={INPUT}
+              />
+            </label>
+          ))}
+          <p className="text-[12.5px] text-muted-foreground sm:col-span-2">
+            Meta relit le message avec ces exemples à la place des variables.
+          </p>
+        </div>
+      )}
+
+      <p className="text-[12.5px] text-muted-foreground">
+        Les boutons restent tels quels. Meta relit le modèle à nouveau (quelques minutes en général), garde sa
+        catégorie ({t.category.toLowerCase()}) et limite les modifications d&apos;un modèle approuvé à une par jour.
+      </p>
+
+      {aConfirmer && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12.5px] text-amber-900">
+          <p className="font-medium">
+            Le modèle passe à {n} variable{n > 1 ? "s" : ""}, mais ces règles en envoient un autre nombre : elles
+            échoueront tant que vous ne les aurez pas corrigées (Automatisation de la colonne).
+          </p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
+            {aConfirmer.map((r) => (
+              <li key={`${r.formation}-${r.colonne}`}>
+                {r.formation} → colonne « {r.colonne} » ({r.variables} variable{r.variables > 1 ? "s" : ""})
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => envoyer(true)}
+            disabled={isPending}
+            className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          >
+            Envoyer quand même
+          </button>
+        </div>
+      )}
+
+      {message && <p className={cn("text-xs", message.ok ? "text-green-700" : "text-red-600")}>{message.texte}</p>}
+
+      <div className="flex items-center justify-end gap-2">
+        <button type="button" onClick={onFermer} className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted">
+          Fermer
+        </button>
+        <button
+          type="button"
+          onClick={() => envoyer()}
+          disabled={isPending || inchange || !body.trim()}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+        >
+          {isPending ? "Envoi à Meta…" : "Envoyer à Meta"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type Relecture = {
+  verdict: "passe" | "risque" | "refus";
+  categorieProbable: "MARKETING" | "UTILITY";
+  problemes: string[];
+  conseils: string[];
+  versionProposee: string;
+};
+
+const VERDICT: Record<Relecture["verdict"], { label: string; cls: string }> = {
+  passe: { label: "✓ Devrait passer chez Meta", cls: "border-green-200 bg-green-50 text-green-900" },
+  risque: { label: "⚠ Risque de refus ou de reclassement", cls: "border-amber-300 bg-amber-50 text-amber-900" },
+  refus: { label: "✗ Meta le refusera tel quel", cls: "border-red-200 bg-red-50 text-red-900" },
+};
+
+/** « Améliorer avec l'IA » : relit le texte courant et propose une version à reprendre d'un clic. */
+function RelectureIA({
+  name,
+  category,
+  language,
+  body,
+  buttons,
+  onUtiliser,
+}: {
+  name: string;
+  category: string;
+  language: string;
+  body: string;
+  buttons: string[];
+  onUtiliser: (texte: string) => void;
+}) {
+  const [relecture, setRelecture] = useState<Relecture | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function relire() {
+    setErreur(null);
+    startTransition(async () => {
+      const r = await reviewTemplateAction({ name, category, language, body, buttons });
+      if (r.ok) setRelecture(r.review);
+      else setErreur(r.error);
+    });
+  }
+
+  const v = relecture ? VERDICT[relecture.verdict] : null;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={relire}
+        disabled={isPending || !body.trim()}
+        className="rounded-lg border border-violet-300 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-40"
+      >
+        {isPending ? "L'IA relit…" : "✨ Améliorer avec l'IA"}
+      </button>
+      {erreur && <p className="mt-1 text-[12.5px] text-red-600">{erreur}</p>}
+      {relecture && v && (
+        <div className={cn("mt-2 space-y-2 rounded-lg border p-3 text-[12.5px]", v.cls)}>
+          <p className="font-medium">
+            {v.label} · catégorie probable : {relecture.categorieProbable.toLowerCase()}
+            {relecture.categorieProbable !== category.toUpperCase() && ` (demandée : ${category.toLowerCase()})`}
+          </p>
+          {relecture.problemes.length > 0 && (
+            <ul className="list-disc space-y-0.5 pl-4">
+              {relecture.problemes.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {relecture.conseils.length > 0 && (
+            <div>
+              <p className="font-medium">Conseils</p>
+              <ul className="list-disc space-y-0.5 pl-4">
+                {relecture.conseils.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {relecture.versionProposee.trim() && relecture.versionProposee.trim() !== body.trim() && (
+            <div>
+              <p className="font-medium">Version proposée</p>
+              <p dir="auto" className="mt-1 whitespace-pre-wrap rounded-md bg-background/70 p-2 text-foreground">
+                {relecture.versionProposee}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  onUtiliser(relecture.versionProposee);
+                  setRelecture(null);
+                }}
+                className="mt-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+              >
+                Utiliser cette version
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NouveauModele({ existants }: { existants: string[] }) {
   const router = useRouter();
   const [ouvert, setOuvert] = useState(false);
@@ -946,6 +1200,15 @@ function NouveauModele({ existants }: { existants: string[] }) {
           {"{{1}}"}, {"{{2}}"}… sont les variables, remplies à l&apos;envoi. {body.length}/1024
         </span>
       </label>
+
+      <RelectureIA
+        name={name || "nouveau_modele"}
+        category={category}
+        language={language}
+        body={body}
+        buttons={buttons.filter((b) => b.trim())}
+        onUtiliser={setBody}
+      />
 
       {n > 0 && (
         <div className="grid gap-2 sm:grid-cols-2">

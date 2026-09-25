@@ -269,6 +269,7 @@ export type WhatsAppTemplate = {
   body: string | null; // le texte, avec ses {{1}}, {{2}}…
   variables: number; // combien de {{n}} le corps attend
   buttons: string[]; // les réponses rapides, s'il y en a
+  autresBoutons: string[]; // « Copier le code », liens, appels : affichés, pas modifiables ici
   rejectedReason: string | null; // Meta dit pourquoi, quand il refuse
 };
 
@@ -300,15 +301,29 @@ export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
         status: string;
         category: string;
         rejected_reason?: string;
-        components?: { type: string; text?: string; buttons?: { type: string; text: string }[] }[];
+        components?: {
+          type: string;
+          text?: string;
+          buttons?: { type: string; text: string; url?: string; phone_number?: string; example?: string[] | string }[];
+        }[];
       }[];
     } | null;
     if (!res.ok || !json?.data) return [];
     return json.data.map((t) => {
       const body = t.components?.find((c) => c.type === "BODY")?.text ?? null;
-      const buttons = (t.components?.find((c) => c.type === "BUTTONS")?.buttons ?? [])
-        .filter((b) => b.type === "QUICK_REPLY")
-        .map((b) => b.text);
+      const tous = t.components?.find((c) => c.type === "BUTTONS")?.buttons ?? [];
+      const buttons = tous.filter((b) => b.type === "QUICK_REPLY").map((b) => b.text);
+      const autresBoutons = tous
+        .filter((b) => b.type !== "QUICK_REPLY")
+        .map((b) =>
+          b.type === "COPY_CODE"
+            ? `Copier le code : ${Array.isArray(b.example) ? b.example[0] : b.example ?? ""}`
+            : b.type === "URL"
+              ? `${b.text} → ${b.url ?? ""}`
+              : b.type === "PHONE_NUMBER"
+                ? `${b.text} → ${b.phone_number ?? ""}`
+                : `${b.text} (${b.type.toLowerCase()})`
+        );
       return {
         id: t.id,
         name: t.name,
@@ -318,6 +333,7 @@ export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
         body,
         variables: countTemplateVariables(body),
         buttons,
+        autresBoutons,
         // Meta rend "NONE" quand il n'y a rien à dire.
         rejectedReason: t.rejected_reason && t.rejected_reason !== "NONE" ? t.rejected_reason : null,
       };
@@ -379,6 +395,52 @@ export async function createWhatsAppTemplate(input: {
       return { ok: false, error: json?.error?.error_user_msg ?? json?.error?.message ?? `HTTP ${res.status}` };
     }
     return { ok: true, id: json.id, status: json.status ?? "PENDING" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
+  }
+}
+
+/**
+ * Modifier le TEXTE d'un modèle existant. Seul le corps change : en-tête,
+ * pied et boutons sont renvoyés tels que Meta les a. Le modèle repasse en
+ * relecture ; Meta limite les modifications d'un modèle approuvé (une par
+ * 24 h, dix par mois) et n'en change jamais la catégorie.
+ */
+export async function editWhatsAppTemplateBody(
+  name: string,
+  body: string,
+  examples: string[]
+): Promise<{ ok: true; status: string } | { ok: false; error: string }> {
+  const c = wabaConfig();
+  if (!c) return { ok: false, error: "WHATSAPP_TOKEN ou WHATSAPP_WABA_ID absent de l'environnement." };
+  try {
+    const lu = await fetch(
+      `${API}/${c.waba}/message_templates?name=${encodeURIComponent(name)}&fields=id,name,components`,
+      { headers: { Authorization: `Bearer ${c.token}` }, cache: "no-store" }
+    );
+    const j = (await lu.json().catch(() => null)) as {
+      data?: { id: string; name: string; components?: Record<string, unknown>[] }[];
+    } | null;
+    const t = j?.data?.find((x) => x.name === name);
+    if (!t) return { ok: false, error: "Modèle introuvable chez Meta." };
+
+    const n = countTemplateVariables(body);
+    const corps: Record<string, unknown> = { type: "BODY", text: body };
+    if (n > 0) corps.example = { body_text: [examples.slice(0, n)] };
+    const components = (t.components ?? []).map((x) => (x.type === "BODY" ? corps : x));
+
+    const res = await fetch(`${API}/${t.id}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ components }),
+    });
+    const r = (await res.json().catch(() => null)) as
+      | { success?: boolean; error?: { message?: string; error_user_msg?: string } }
+      | null;
+    if (!res.ok || !r?.success) {
+      return { ok: false, error: r?.error?.error_user_msg ?? r?.error?.message ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, status: "PENDING" };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Erreur WhatsApp" };
   }

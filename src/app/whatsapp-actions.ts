@@ -8,6 +8,7 @@ import {
   countTemplateVariables,
   createWhatsAppTemplate,
   deleteWhatsAppTemplate,
+  editWhatsAppTemplateBody,
   listWhatsAppTemplates,
   sendWhatsApp,
   sendWhatsAppMedia,
@@ -287,7 +288,8 @@ export async function createTemplateAction(input: {
     return { ok: false as const, error: "Le nom : minuscules, chiffres et _ seulement (ex. relance_brochure)." };
   }
   if (!body) return { ok: false as const, error: "Le message est vide." };
-  if (body.length > 1024) return { ok: false as const, error: "Le message dépasse 1024 caractères." };
+  const refus = verifierCorps(body);
+  if (refus) return { ok: false as const, error: refus };
   const n = countTemplateVariables(body);
   const examples = input.examples.slice(0, n).map((e) => e.trim());
   if (examples.length < n || examples.some((e) => !e)) {
@@ -425,6 +427,81 @@ export async function arreterBlastAction(blastId: string) {
   const { changerEtatBlast } = await import("@/lib/whatsapp-blast");
   await changerEtatBlast(blastId, "paused");
   return { ok: true as const };
+}
+
+/**
+ * Ce que Meta refuse à coup sûr, dit en clair avant l'envoi plutôt qu'en
+ * code d'erreur après. Chaque règle a coûté un aller-retour avec Meta.
+ */
+function verifierCorps(body: string): string | null {
+  if (body.length > 1024) return "Le message dépasse 1024 caractères.";
+  if (/[ھیک]/.test(body)) return "Le message contient des lettres persanes (ی ک ھ) : Meta les refuse. Remplacez-les par ي ك ه.";
+  if (/\t| {5}/.test(body)) return "Pas de tabulation ni de suite de 5 espaces : Meta refuse.";
+  if (/^\s*\{\{\d+\}\}/.test(body)) return "Le message ne peut pas COMMENCER par une variable : ajoutez un mot avant.";
+  if (/\{\{\d+\}\}\s*$/.test(body)) return "Le message ne peut pas FINIR par une variable : ajoutez un mot ou un emoji après.";
+  const nums = [...new Set([...body.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
+  if (nums.some((v, i) => v !== i + 1)) return "Les variables doivent se suivre : {{1}}, {{2}}, {{3}}… sans trou.";
+  return null;
+}
+
+/**
+ * Modifier le texte d'un modèle existant. Si le nombre de variables change,
+ * les règles qui l'envoient partiraient avec le mauvais nombre (échec chez
+ * Meta, vécu le 25/09) : on les liste et on demande confirmation d'abord.
+ */
+export async function editTemplateAction(input: {
+  name: string;
+  body: string;
+  examples: string[];
+  confirme?: boolean;
+}): Promise<
+  | { ok: true; status: string }
+  | { ok: false; error: string }
+  | { ok: false; aConfirmer: { formation: string; colonne: string; variables: number }[]; variables: number }
+> {
+  await requireUser();
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "Le message est vide." };
+  const refus = verifierCorps(body);
+  if (refus) return { ok: false, error: refus };
+  const n = countTemplateVariables(body);
+  const examples = input.examples.slice(0, n).map((e) => e.trim());
+  if (examples.length < n || examples.some((e) => !e)) {
+    return { ok: false, error: `Donnez un exemple pour chacune des ${n} variables : Meta le demande.` };
+  }
+
+  if (!input.confirme) {
+    const { db } = await import("@/db");
+    const { sql } = await import("drizzle-orm");
+    const regles = await db.execute<{ formation: string; colonne: string; variables: number }>(sql`
+      select b.name as formation, s.name as colonne, jsonb_array_length(a.whatsapp_variables)::int as variables
+      from automations a
+      join bootcamps b on b.id = a.bootcamp_id
+      join lead_statuses s on s.id = a.status_id
+      where a.whatsapp_template = ${input.name}
+        and jsonb_array_length(a.whatsapp_variables) <> ${n}
+      order by b.name`);
+    if (regles.length > 0) return { ok: false, aConfirmer: [...regles], variables: n };
+  }
+
+  const r = await editWhatsAppTemplateBody(input.name, body, examples);
+  if (!r.ok) return r;
+  revalidatePath("/settings");
+  return { ok: true, status: r.status };
+}
+
+/** « Améliorer avec l'IA » : verdict, catégorie probable, problèmes, version corrigée. */
+export async function reviewTemplateAction(input: {
+  name: string;
+  category: string;
+  language: string;
+  body: string;
+  buttons: string[];
+}) {
+  await requireUser();
+  if (!input.body.trim()) return { ok: false as const, error: "Écrivez d'abord un message." };
+  const { reviewWhatsAppTemplate } = await import("@/lib/ai/template-review");
+  return reviewWhatsAppTemplate({ ...input, body: input.body.trim() });
 }
 
 export async function deleteTemplateAction(name: string) {
