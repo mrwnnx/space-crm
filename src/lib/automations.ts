@@ -339,6 +339,7 @@ async function executeRule(
       template: rule.whatsappTemplate,
       langue: rule.whatsappLanguage,
       variables: valeurs,
+      leadId,
     });
     if (!envoi.ok) return log("failed", envoi.error);
 

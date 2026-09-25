@@ -63,7 +63,13 @@ type Entrant = {
   sticker?: MediaMeta;
   // Une réponse par bouton de modèle arrive ici, pas dans `text`.
   button?: { text?: string; payload?: string };
-  interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
+  interactive?: {
+    type?: string;
+    button_reply?: { title?: string };
+    list_reply?: { title?: string };
+    // Un formulaire WhatsApp (Flow) rempli : les réponses, en JSON dans une chaîne.
+    nfm_reply?: { name?: string; response_json?: string };
+  };
 };
 
 /** Le texte lisible d'un message entrant, quel que soit son type. */
@@ -73,6 +79,7 @@ function texteDe(m: Entrant): string {
   const i = m.interactive;
   if (i?.button_reply?.title) return i.button_reply.title;
   if (i?.list_reply?.title) return i.list_reply.title;
+  if (i?.nfm_reply) return "📝 Formulaire « نحب نسجل » rempli";
   return m.type ? `[${m.type} reçu, non lisible dans le CRM]` : "[message vide]";
 }
 
@@ -193,6 +200,10 @@ export async function POST(request: NextRequest) {
           });
           recus++;
           if (r.leadCreated) leadsCrees++;
+          if (m.interactive?.nfm_reply?.response_json) {
+            const { traiterReponseFlow } = await import("@/lib/whatsapp-flow");
+            await traiterReponseFlow({ responseJson: m.interactive.nfm_reply.response_json, leadIdRecu: r.leadId });
+          }
         }
       }
     }

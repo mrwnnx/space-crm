@@ -197,26 +197,44 @@ export async function sendWhatsAppTemplate({
   template,
   langue = "fr",
   variables = [],
+  leadId,
 }: {
   to: string;
   template: string;
   langue?: string;
   variables?: string[];
+  /** Pour un bouton de formulaire : ce qu'on sait déjà de la personne. */
+  leadId?: string | null;
 }): Promise<WhatsAppResult> {
   const components: Record<string, unknown>[] = [];
   if (variables.length) {
     components.push({ type: "body", parameters: variables.map((v) => ({ type: "text", text: v })) });
   }
+  const boutons = await boutonsDynamiques(template);
   // Un bouton « Copier le code » exige son code à CHAQUE envoi, sinon Meta
   // refuse (#131008 Required parameter is missing). Le code est celui
   // déclaré avec le modèle : un seul endroit où le changer.
-  for (const b of await copyCodeButtons(template)) {
+  for (const b of boutons.codes) {
     components.push({
       type: "button",
       sub_type: "copy_code",
       index: String(b.index),
       parameters: [{ type: "coupon_code", coupon_code: b.code }],
     });
+  }
+  // Un bouton de formulaire (Flow) : le seul formulaire du compte est
+  // « نحب نسجل », qui n'affiche que ce qui manque à cette personne.
+  if (boutons.formulaires.length) {
+    const { donneesFlowInscription } = await import("@/lib/whatsapp-flow");
+    const f = await donneesFlowInscription(leadId);
+    for (const index of boutons.formulaires) {
+      components.push({
+        type: "button",
+        sub_type: "flow",
+        index: String(index),
+        parameters: [{ type: "action", action: { flow_token: f.token, flow_action_data: f.data } }],
+      });
+    }
   }
   return envoyer({
     to: normaliser(to),
@@ -231,13 +249,15 @@ export async function sendWhatsAppTemplate({
 
 // Par nom de modèle, le temps de vie de l'instance : une vague de 200 envois
 // ne relit pas 200 fois la définition chez Meta.
-const codesParModele = new Map<string, { index: number; code: string }[]>();
+type BoutonsDynamiques = { codes: { index: number; code: string }[]; formulaires: number[] };
+const codesParModele = new Map<string, BoutonsDynamiques>();
 
-async function copyCodeButtons(template: string): Promise<{ index: number; code: string }[]> {
+async function boutonsDynamiques(template: string): Promise<BoutonsDynamiques> {
   const connu = codesParModele.get(template);
   if (connu) return connu;
+  const aucun = { codes: [], formulaires: [] };
   const c = wabaConfig();
-  if (!c) return [];
+  if (!c) return aucun;
   try {
     const res = await fetch(
       `${API}/${c.waba}/message_templates?name=${encodeURIComponent(template)}&fields=name,components`,
@@ -246,17 +266,19 @@ async function copyCodeButtons(template: string): Promise<{ index: number; code:
     const json = (await res.json().catch(() => null)) as {
       data?: { name: string; components?: { type: string; buttons?: { type: string; example?: string[] | string }[] }[] }[];
     } | null;
-    if (!res.ok || !json?.data) return []; // pas de mémoire : on réessaiera au prochain envoi
+    if (!res.ok || !json?.data) return aucun; // pas de mémoire : on réessaiera au prochain envoi
     const boutons = json.data.find((t) => t.name === template)?.components?.find((x) => x.type === "BUTTONS")?.buttons ?? [];
     const codes = boutons
       .map((b, index) => ({ index, b }))
       .filter(({ b }) => b.type === "COPY_CODE")
       .map(({ index, b }) => ({ index, code: String(Array.isArray(b.example) ? b.example[0] : b.example ?? "") }))
       .filter((x) => x.code);
-    codesParModele.set(template, codes);
-    return codes;
+    const formulaires = boutons.map((b, index) => ({ index, b })).filter(({ b }) => b.type === "FLOW").map(({ index }) => index);
+    const r = { codes, formulaires };
+    codesParModele.set(template, r);
+    return r;
   } catch {
-    return [];
+    return aucun;
   }
 }
 

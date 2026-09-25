@@ -145,6 +145,7 @@ export async function replyWhatsAppTemplateAction(
     template: template.name,
     langue: template.language,
     variables,
+    leadId,
   });
   if (!r.ok) return { ok: false as const, error: r.error };
 

@@ -252,6 +252,7 @@ async function envoyerCible(
     template: blast.template,
     langue: blast.language,
     variables: valeurs,
+    leadId,
   });
   if (!envoi.ok) return clore("failed", envoi.error);
 
