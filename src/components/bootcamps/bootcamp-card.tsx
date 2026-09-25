@@ -185,8 +185,10 @@ export function FeaturedBootcampCard(props: BootcampCardProps) {
   const { id, name, description, startDate, endDate, status, capacity, leadCount, enrolledCount } = props;
   const days = startDate ? daysUntil(startDate) : null;
 
+  // Fond bleu pastel (demande de Marwen) : la formation ouverte se repère d'un coup d'œil.
+  // Pas de variante dark: — l'app n'a pas de thème sombre, dark: suivrait l'OS et assombrirait la carte seule.
   return (
-    <div className="group relative rounded-xl border border-primary/40 bg-primary/5 transition-colors hover:border-primary/60 hover:shadow-sm">
+    <div className="group relative rounded-xl border border-sky-200 bg-sky-50 transition-colors hover:border-sky-300 hover:shadow-sm">
       <div className="absolute right-2 top-2 z-20">
         <CardMenu {...props} />
       </div>
@@ -194,8 +196,8 @@ export function FeaturedBootcampCard(props: BootcampCardProps) {
       <Link href={`/bootcamps/${id}`} className="flex flex-col gap-4 p-5 md:flex-row md:items-center">
         <div className="min-w-0 flex-1 pr-10">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-0.5 text-[12px] font-medium text-primary-foreground">
-              <span className="size-1.5 animate-pulse rounded-full bg-primary-foreground" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-700 px-2.5 py-0.5 text-[12px] font-medium text-white">
+              <span className="size-1.5 animate-pulse rounded-full bg-white" />
               Inscriptions ouvertes
             </span>
             <StatusBadge status={status} />
@@ -230,7 +232,7 @@ export function FeaturedBootcampCard(props: BootcampCardProps) {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: ReactNode }) {
   return (
-    <div className="min-w-24 rounded-lg border border-border bg-card px-3 py-2">
+    <div className="min-w-24 rounded-lg border border-sky-100 bg-card px-3 py-2">
       <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 text-base font-semibold tabular-nums text-foreground">{value}</dd>
       {hint && <dd className="text-[11px] text-muted-foreground">{hint}</dd>}
