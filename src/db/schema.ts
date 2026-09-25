@@ -1277,6 +1277,8 @@ export const whatsappBlasts = pgTable("whatsapp_blasts", {
   // Que faire de ceux qui ont déjà reçu un marketing il y a moins de 24 h :
   // 'reporter' (ils l'auront à l'échéance) ou 'exclure' (ils sautent la vague).
   capPolicy: text("cap_policy").notNull().default("reporter"),
+  // Modèle avec le formulaire « نحب نسجل » : la session où les inscrits arrivent (0150).
+  targetBootcampId: uuid("target_bootcamp_id").references(() => bootcamps.id, { onDelete: "set null" }),
   // running | paused | done
   state: text("state").notNull().default("running"),
   createdBy: text("created_by"),

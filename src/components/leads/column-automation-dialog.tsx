@@ -232,7 +232,7 @@ function RuleForm({
     if (canal !== "whatsapp" || waCatalogue !== null) return;
     listApprovedTemplatesAction(bootcampId)
       .then(setWaCatalogue)
-      .catch(() => setWaCatalogue({ modeles: [], exemples: { fr: {}, ar: {} } }));
+      .catch(() => setWaCatalogue({ modeles: [], exemples: { fr: {}, ar: {} }, formations: [], formationParDefaut: null }));
   }, [canal, waCatalogue, bootcampId]);
   const waModeles = waCatalogue?.modeles ?? null;
   const waModele = waModeles?.find((m) => m.name === waTemplate && m.language === waLangue);

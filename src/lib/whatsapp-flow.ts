@@ -81,7 +81,7 @@ async function formulesAvecPrix(formationId: string | null) {
  * La formation où arrivent aujourd'hui les nouvelles inscriptions : celle qui
  * reçoit les formulaires du site. Après une duplication, elle suit toute seule.
  */
-async function formationActive() {
+export async function formationActive() {
   const [b] = await db.execute<{ id: string; name: string }>(sql`
     select b.id, b.name from bootcamps b
     where b.archived_at is null and b.status not in ('completed', 'cancelled')

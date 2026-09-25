@@ -16,6 +16,7 @@ import {
   replyWhatsAppAction,
   replyWhatsAppTemplateAction,
   sendWhatsAppMediaAction,
+  whatsAppComposerDataAction,
   setWhatsAppArchivedAction,
 } from "@/app/whatsapp-actions";
 
@@ -864,6 +865,17 @@ function ReponseModele({ leadId, to, templates }: { leadId: string; to: string; 
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const modele = templates.find((t) => t.name === nom) ?? null;
+  // Modèle avec le formulaire « نحب نسجل » : les sessions possibles, chargées à la demande.
+  const [formations, setFormations] = useState<{ id: string; name: string }[] | null>(null);
+  const [arrivee, setArrivee] = useState("");
+  useEffect(() => {
+    if (!modele?.formulaire || formations) return;
+    whatsAppComposerDataAction(leadId).then((d) => {
+      if (!d.ok) return setFormations([]);
+      setFormations(d.formations);
+      setArrivee(d.formationParDefaut ?? "");
+    });
+  }, [modele?.formulaire, formations, leadId]);
 
   function envoyer() {
     if (!modele || isPending) return;
@@ -873,7 +885,8 @@ function ReponseModele({ leadId, to, templates }: { leadId: string; to: string; 
         leadId,
         to,
         { name: modele.name, language: modele.language, body: modele.body },
-        Array.from({ length: modele.variables }, (_, i) => variables[i] ?? "")
+        Array.from({ length: modele.variables }, (_, i) => variables[i] ?? ""),
+        modele.formulaire ? arrivee : null
       );
       if (r.ok) {
         setVariables([]);
@@ -928,12 +941,34 @@ function ReponseModele({ leadId, to, templates }: { leadId: string; to: string; 
                 className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring"
               />
             ))}
+          {modele?.formulaire && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-foreground">Formation d&apos;arrivée</span>
+              {formations === null ? (
+                <span className="text-[12.5px] text-muted-foreground">Chargement…</span>
+              ) : formations.length === 0 ? (
+                <span className="text-[12.5px] text-red-600">Aucune autre formation ouverte.</span>
+              ) : (
+                <select
+                  value={arrivee}
+                  onChange={(e) => setArrivee(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                >
+                  {formations.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+          )}
           <div className="flex items-center justify-between gap-2">
             <p className="text-[12.5px] text-red-600">{erreur}</p>
             <button
               type="button"
               onClick={envoyer}
-              disabled={isPending || !modele}
+              disabled={isPending || !modele || (modele.formulaire && !arrivee)}
               className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
             >
               {isPending ? "Envoi…" : "Envoyer le modèle"}

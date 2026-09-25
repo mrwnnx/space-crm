@@ -198,6 +198,7 @@ export async function sendWhatsAppTemplate({
   langue = "fr",
   variables = [],
   leadId,
+  formationId,
 }: {
   to: string;
   template: string;
@@ -205,6 +206,8 @@ export async function sendWhatsAppTemplate({
   variables?: string[];
   /** Pour un bouton de formulaire : ce qu'on sait déjà de la personne. */
   leadId?: string | null;
+  /** Pour un bouton de formulaire : la session où elle arrivera (sinon, la formation active). */
+  formationId?: string | null;
 }): Promise<WhatsAppResult> {
   const components: Record<string, unknown>[] = [];
   if (variables.length) {
@@ -226,7 +229,7 @@ export async function sendWhatsAppTemplate({
   // « نحب نسجل », qui n'affiche que ce qui manque à cette personne.
   if (boutons.formulaires.length) {
     const { donneesFlowInscription } = await import("@/lib/whatsapp-flow");
-    const f = await donneesFlowInscription(leadId);
+    const f = await donneesFlowInscription(leadId, formationId);
     for (const index of boutons.formulaires) {
       components.push({
         type: "button",
@@ -292,6 +295,7 @@ export type WhatsAppTemplate = {
   variables: number; // combien de {{n}} le corps attend
   buttons: string[]; // les réponses rapides, s'il y en a
   autresBoutons: string[]; // « Copier le code », liens, appels : affichés, pas modifiables ici
+  formulaire: boolean; // un bouton de formulaire (Flow) : il faut choisir la formation d'arrivée
   rejectedReason: string | null; // Meta dit pourquoi, quand il refuse
 };
 
@@ -356,6 +360,7 @@ export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
         variables: countTemplateVariables(body),
         buttons,
         autresBoutons,
+        formulaire: tous.some((b) => b.type === "FLOW"),
         // Meta rend "NONE" quand il n'y a rien à dire.
         rejectedReason: t.rejected_reason && t.rejected_reason !== "NONE" ? t.rejected_reason : null,
       };

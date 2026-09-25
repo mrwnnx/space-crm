@@ -181,6 +181,8 @@ function EnvoiModele({
   const [valeurs, setValeurs] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Modèle avec le formulaire « نحب نسجل » : la session où la personne arrivera.
+  const [arrivee, setArrivee] = useState(donnees.formationParDefaut ?? "");
   const modele = donnees.modeles.find((m) => m.name === nom) ?? null;
   const dico = donnees.valeurs[modele?.language.startsWith("ar") ? "ar" : "fr"];
 
@@ -208,14 +210,17 @@ function EnvoiModele({
         leadId,
         to,
         { name: modele.name, language: modele.language, body: modele.body },
-        valeurs.map((v) => v.trim())
+        valeurs.map((v) => v.trim()),
+        modele.formulaire ? arrivee : null
       );
       setFeedback(r.ok ? { ok: true, msg: "Modèle envoyé" } : { ok: false, msg: r.error });
       if (r.ok) setTimeout(onClose, 1500);
     });
   }
 
-  const manque = modele ? valeurs.slice(0, modele.variables).some((v) => !v?.trim()) : true;
+  const manque = modele
+    ? valeurs.slice(0, modele.variables).some((v) => !v?.trim()) || (modele.formulaire && !arrivee)
+    : true;
 
   return (
     <div className="space-y-2">
@@ -271,6 +276,30 @@ function EnvoiModele({
             </select>
           </div>
         ))}
+
+      {modele?.formulaire && (
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-foreground">Formation d&apos;arrivée</span>
+          {donnees.formations.length === 0 ? (
+            <span className="text-[12.5px] text-red-600">Aucune autre formation ouverte.</span>
+          ) : (
+            <select
+              value={arrivee}
+              onChange={(e) => setArrivee(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+            >
+              {donnees.formations.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="text-[12px] text-muted-foreground">
+            S&apos;il remplit « نحب نسجل », il y arrive en Intéressé, avec les prix de cette formation.
+          </span>
+        </label>
+      )}
 
       {modele && modele.category === "MARKETING" && (
         <p className="text-[12px] text-muted-foreground">

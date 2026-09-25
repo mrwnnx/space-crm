@@ -132,6 +132,7 @@ export async function creerBlast(input: {
   variables: string[];
   capPolicy: CapPolicy;
   createdBy?: string | null;
+  targetBootcampId?: string | null;
 }) {
   const modele = { template: input.template, language: input.language, variables: input.variables };
   const v = await verdicts(input.statusId, modele, input.capPolicy);
@@ -147,6 +148,7 @@ export async function creerBlast(input: {
       variables: input.variables,
       capPolicy: input.capPolicy,
       createdBy: input.createdBy ?? null,
+      targetBootcampId: input.targetBootcampId ?? null,
     })
     .returning();
 
@@ -253,6 +255,7 @@ async function envoyerCible(
     langue: blast.language,
     variables: valeurs,
     leadId,
+    formationId: blast.targetBootcampId,
   });
   if (!envoi.ok) return clore("failed", envoi.error);
 

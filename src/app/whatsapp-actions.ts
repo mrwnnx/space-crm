@@ -132,7 +132,9 @@ export async function replyWhatsAppTemplateAction(
   leadId: string,
   to: string,
   template: { name: string; language: string; body: string | null },
-  variables: string[]
+  variables: string[],
+  // Modèle avec le formulaire « نحب نسجل » : la session d'arrivée choisie.
+  formationId?: string | null
 ) {
   await requireUser();
   // Règle Meta : pas de marketing sans consentement tracé.
@@ -146,6 +148,7 @@ export async function replyWhatsAppTemplateAction(
     langue: template.language,
     variables,
     leadId,
+    formationId,
   });
   if (!r.ok) return { ok: false as const, error: r.error };
 
@@ -336,7 +339,9 @@ export async function listApprovedTemplatesAction(bootcampId: string) {
         variables: t.variables,
         buttons: t.buttons,
         body: t.body,
+        formulaire: t.formulaire,
       })),
+    ...(await formationsDArrivee(bootcampId)),
     // La date se lit dans la langue du modèle (« 28 septembre » / « 28 سبتمبر »).
     exemples: { fr: buildVariables(leadExemple), ar: buildVariables(leadExemple, true) },
   };
@@ -383,9 +388,27 @@ export async function whatsAppComposerDataAction(leadId: string) {
     dernierEntrant: dernier?.createdAt?.toISOString() ?? null,
     modeles: modeles
       .filter((t) => t.status === "APPROVED")
-      .map((t) => ({ name: t.name, language: t.language, category: t.category, variables: t.variables, buttons: t.buttons, body: t.body })),
+      .map((t) => ({ name: t.name, language: t.language, category: t.category, variables: t.variables, buttons: t.buttons, body: t.body, formulaire: t.formulaire })),
     valeurs,
     mappings,
+    ...(await formationsDArrivee(lead.bootcampId)),
+  };
+}
+
+/**
+ * Pour un modèle avec le formulaire « نحب نسجل » : les sessions où l'on peut
+ * faire arriver les inscrits (ouvertes, hors celle du lead), et celle proposée
+ * par défaut — la formation qui reçoit les formulaires du site.
+ */
+async function formationsDArrivee(
+  sauf: string | null
+): Promise<{ formations: { id: string; name: string }[]; formationParDefaut: string | null }> {
+  const { getOpenBootcamps } = await import("@/lib/queries");
+  const { formationActive } = await import("@/lib/whatsapp-flow");
+  const [ouvertes, active] = await Promise.all([getOpenBootcamps(sauf ?? undefined), formationActive()]);
+  return {
+    formations: ouvertes.map((b) => ({ id: b.id, name: b.name })),
+    formationParDefaut: active && active.id !== sauf ? active.id : (ouvertes[0]?.id ?? null),
   };
 }
 
@@ -409,6 +432,7 @@ export async function lancerBlastAction(input: {
   language: string;
   variables: string[];
   capPolicy: "reporter" | "exclure";
+  targetBootcampId?: string | null;
 }) {
   const user = await requireUser();
   const { creerBlast } = await import("@/lib/whatsapp-blast");

@@ -41,6 +41,8 @@ export function ColumnBlastDialog({
   const [nom, setNom] = useState("");
   const [valeurs, setValeurs] = useState<string[]>([]);
   const [capPolicy, setCapPolicy] = useState<"reporter" | "exclure">("reporter");
+  // Modèle avec le formulaire « نحب نسجل » : la session où arriveront ceux qui le remplissent.
+  const [arrivee, setArrivee] = useState("");
   const [apercu, setApercu] = useState<Apercu | null>(null);
   const [calcul, setCalcul] = useState(false);
   const [blastId, setBlastId] = useState<string | null>(null);
@@ -51,12 +53,16 @@ export function ColumnBlastDialog({
   useEffect(() => {
     listApprovedTemplatesAction(bootcampId)
       .then(setCatalogue)
-      .catch(() => setCatalogue({ modeles: [], exemples: { fr: {}, ar: {} } }));
+      .catch(() => setCatalogue({ modeles: [], exemples: { fr: {}, ar: {} }, formations: [], formationParDefaut: null }));
   }, [bootcampId]);
 
   const modele = catalogue?.modeles.find((m) => m.name === nom) ?? null;
   const exemples = catalogue?.exemples[modele?.language.startsWith("ar") ? "ar" : "fr"] ?? {};
-  const complet = !!modele && valeurs.slice(0, modele.variables).every((v) => v?.trim());
+  const formationArrivee = arrivee || catalogue?.formationParDefaut || "";
+  const complet =
+    !!modele &&
+    valeurs.slice(0, modele.variables).every((v) => v?.trim()) &&
+    (!modele.formulaire || !!formationArrivee);
 
   // Le décompte se refait à chaque changement de modèle, de variable ou de
   // politique : c'est lui qui donne le droit de cliquer.
@@ -103,6 +109,7 @@ export function ColumnBlastDialog({
         language: modele.language,
         variables: valeurs,
         capPolicy,
+        targetBootcampId: modele.formulaire ? formationArrivee : null,
       });
       if (!r.ok) return setErreur(r.error);
       setBlastId(r.blastId);
@@ -203,6 +210,31 @@ export function ColumnBlastDialog({
                   <p className="mt-1 text-[13px] text-muted-foreground">
                     Une variable du CRM prend la valeur de chaque lead. Une valeur fixe est la même
                     pour tous.
+                  </p>
+                </div>
+              )}
+
+              {modele?.formulaire && catalogue && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-medium text-foreground">Formation d&apos;arrivée</label>
+                  {catalogue.formations.length === 0 ? (
+                    <p className="text-[13px] text-red-600">Aucune autre formation ouverte : créez d&apos;abord la session suivante.</p>
+                  ) : (
+                    <select
+                      value={formationArrivee}
+                      onChange={(e) => setArrivee(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                    >
+                      {catalogue.formations.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Ceux qui remplissent le formulaire « نحب نسجل » y arrivent en colonne Intéressé ; les prix
+                    affichés sont ceux de cette formation.
                   </p>
                 </div>
               )}
