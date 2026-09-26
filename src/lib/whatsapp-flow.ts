@@ -32,14 +32,17 @@ const SITUATIONS = ["نخدم", "نقرا", "مانيش نخدم", "فريلان
 export async function donneesFlowInscription(
   leadId: string | null | undefined,
   // La session visée, choisie à l'envoi ; à défaut, celle qui reçoit les formulaires du site.
-  formationId?: string | null
+  formationId?: string | null,
+  // Le bouton du modèle « formation_complete_inscription » ouvre l'ANCIEN
+  // formulaire (id figé dans le modèle chez Meta) : il ne connaît pas l'email.
+  ancienFormulaire = false
 ) {
   const lead = leadId ? await getLeadById(leadId) : null;
   const formation = formationId ?? (await formationActive())?.id ?? null;
   const need_age = lead?.contact?.age == null;
   const need_situation = !lead?.jobTitle?.trim();
   const need_plan = !lead?.intendedPlan;
-  const need_email = !!FLOW_AVEC_EMAIL_ID && !lead?.email?.trim() && !lead?.contact?.email?.trim();
+  const need_email = !!FLOW_AVEC_EMAIL_ID && !ancienFormulaire && !lead?.email?.trim() && !lead?.contact?.email?.trim();
   const rien = !need_age && !need_situation && !need_plan && !need_email;
   const formules = await formulesAvecPrix(formation, lead?.promoCodeId, lead?.id);
   return {
@@ -51,7 +54,7 @@ export async function donneesFlowInscription(
       need_age,
       need_situation,
       need_plan,
-      ...(FLOW_AVEC_EMAIL_ID ? { need_email } : {}),
+      ...(FLOW_AVEC_EMAIL_ID && !ancienFormulaire ? { need_email } : {}),
       formules,
     },
   };

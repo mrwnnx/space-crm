@@ -302,7 +302,7 @@ export async function sendWhatsAppTemplate({
   // « نحب نسجل », qui n'affiche que ce qui manque à cette personne.
   if (boutons.formulaires.length) {
     const { donneesFlowInscription } = await import("@/lib/whatsapp-flow");
-    const f = await donneesFlowInscription(leadId, formationId);
+    const f = await donneesFlowInscription(leadId, formationId, true);
     for (const index of boutons.formulaires) {
       components.push({
         type: "button",
