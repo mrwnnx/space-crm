@@ -1245,6 +1245,8 @@ export const whatsappSettings = pgTable("whatsapp_settings", {
   aiMode: text("ai_mode").notNull().default("off"),
   aiThreshold: integer("ai_threshold").notNull().default(90),
   aiInstructions: text("ai_instructions").notNull().default(""),
+  // Numéros auxquels l'assistant répond seul, même en répétition (0157).
+  aiTesters: text("ai_testers").notNull().default(""),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

@@ -68,11 +68,12 @@ export function sendMode(): SendMode {
   return process.env.NODE_ENV === "production" ? "live" : "dry_run";
 }
 
-export function allowlist(): string[] {
+/** Une liste de numéros tapée à la main → numéros complets (216 ajouté aux 8 chiffres). */
+export function lireNumeros(texte: string): string[] {
   // Un numéro peut être tapé avec des espaces (« +216 26 023 393 ») : on
   // coupe d'abord aux virgules ; un morceau trop long pour un seul numéro,
   // c'est une liste séparée par des espaces.
-  return (process.env.WHATSAPP_TEST_ALLOWLIST ?? "")
+  return texte
     .split(/[,;\n]+/)
     .flatMap((morceau) => {
       const n = morceau.replace(/\D/g, "");
@@ -82,14 +83,18 @@ export function allowlist(): string[] {
     .map((n) => (n.length === 8 ? `216${n}` : n));
 }
 
+export function allowlist(): string[] {
+  return lireNumeros(process.env.WHATSAPP_TEST_ALLOWLIST ?? "");
+}
+
 /**
  * Un numéro de test (l'équipe) : notre règle de confort — 1 marketing par
  * 24 h — ne s'applique pas, pour enchaîner les tests. Les règles Meta
  * (consentement, STOP) restent.
  */
-export function estNumeroDeTest(to: string | null | undefined): boolean {
+export function estNumeroDeTest(to: string | null | undefined, enPlus: string[] = []): boolean {
   const n = String(to ?? "").replace(/\D/g, "");
-  return allowlist().includes(n.length === 8 ? `216${n}` : n);
+  return [...allowlist(), ...enPlus].includes(n.length === 8 ? `216${n}` : n);
 }
 
 /** Un identifiant de message qui n'existe pas chez Meta : la bulle le dira. */

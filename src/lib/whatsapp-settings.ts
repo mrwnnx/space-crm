@@ -15,11 +15,11 @@ export async function getWhatsAppSettings() {
 }
 
 /** L'assistant WhatsApp : mode (éteint / répétition / automatique), seuil, consignes. */
-export async function saveAssistantReglages(input: { mode: "off" | "repetition" | "auto"; threshold: number; instructions: string }) {
+export async function saveAssistantReglages(input: { mode: "off" | "repetition" | "auto"; threshold: number; instructions: string; testers: string }) {
   await getWhatsAppSettings(); // garantit la ligne
   await db
     .update(whatsappSettings)
-    .set({ aiMode: input.mode, aiThreshold: input.threshold, aiInstructions: input.instructions, updatedAt: new Date() });
+    .set({ aiMode: input.mode, aiThreshold: input.threshold, aiInstructions: input.instructions, aiTesters: input.testers, updatedAt: new Date() });
 }
 
 export type AutoRepliesInput = {

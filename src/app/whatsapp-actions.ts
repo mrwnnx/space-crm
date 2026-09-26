@@ -243,12 +243,19 @@ export async function deleteQuickReplyAction(id: string) {
 
 // ── Assistant WhatsApp : réglages et savoir ───────────
 
-export async function saveAssistantAction(input: { mode: "off" | "repetition" | "auto"; threshold: number; instructions: string }) {
+export async function saveAssistantAction(input: { mode: "off" | "repetition" | "auto"; threshold: number; instructions: string; testers: string }) {
   await requireUser();
   // L'envoi automatique arrive à l'étape 3 : d'ici là, pas d'« auto » possible.
   if (input.mode === "auto") return { ok: false as const, error: "L'envoi automatique n'est pas encore disponible : commencez par le mode répétition." };
   const threshold = Math.min(100, Math.max(50, Math.round(input.threshold)));
-  await saveAssistantReglages({ mode: input.mode, threshold, instructions: input.instructions.trim().slice(0, 8000) });
+  const { lireNumeros } = await import("@/lib/messaging/whatsapp");
+  await saveAssistantReglages({
+    mode: input.mode,
+    threshold,
+    instructions: input.instructions.trim().slice(0, 8000),
+    // Rangés sous forme propre : ce qu'on relit est ce qui sert.
+    testers: lireNumeros(input.testers).slice(0, 20).join(", "),
+  });
   revalidatePath("/settings");
   return { ok: true as const };
 }

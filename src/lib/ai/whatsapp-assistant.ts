@@ -5,7 +5,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { aiReplies, leads } from "@/db/schema";
-import { estNumeroDeTest, sendWhatsApp } from "@/lib/messaging/whatsapp";
+import { estNumeroDeTest, lireNumeros, sendWhatsApp } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
 import { savoirActif } from "@/lib/ai/knowledge";
 import { codesPourAssistant } from "@/lib/promo";
@@ -297,7 +297,7 @@ export async function traiterMessageAssistant(input: {
       }
     }
 
-    const envoyer = settings.aiMode === "auto" || estNumeroDeTest(input.numero);
+    const envoyer = settings.aiMode === "auto" || estNumeroDeTest(input.numero, lireNumeros(settings.aiTesters));
     if (!envoyer || t.decision === "ignore") return;
 
     // Il passe la main : l'équipe est prévenue (la cloche mène à la conversation,

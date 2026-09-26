@@ -61,7 +61,7 @@ export function WhatsAppSettings({
   profil: { ok: true; profil: WhatsAppProfile } | { ok: false; error: string };
   templates: WhatsAppTemplate[];
   /** L'assistant WhatsApp : réglages et savoir. */
-  assistant: { mode: string; threshold: number; instructions: string; savoir: SavoirItem[] };
+  assistant: { mode: string; threshold: number; instructions: string; testers: string; savoir: SavoirItem[] };
   quickReplies: QuickReply[];
   autoReplies: AutoReplies;
   /** Mode d'envoi (variable d'environnement) et numéros de test. */

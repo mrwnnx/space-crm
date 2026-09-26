@@ -49,24 +49,27 @@ export function AssistantWhatsApp({
   mode,
   threshold,
   instructions,
+  testers,
   savoir,
 }: {
   mode: string;
   threshold: number;
   instructions: string;
+  testers: string;
   savoir: SavoirItem[];
 }) {
   const router = useRouter();
   const [m, setM] = useState(mode);
   const [seuil, setSeuil] = useState(threshold);
   const [consignes, setConsignes] = useState(instructions);
+  const [testeurs, setTesteurs] = useState(testers);
   const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function enregistrer() {
     setMessage(null);
     startTransition(async () => {
-      const r = await saveAssistantAction({ mode: m as "off" | "repetition" | "auto", threshold: seuil, instructions: consignes });
+      const r = await saveAssistantAction({ mode: m as "off" | "repetition" | "auto", threshold: seuil, instructions: consignes, testers: testeurs });
       setMessage(r.ok ? { ok: true, texte: "Enregistré." } : { ok: false, texte: r.error });
       if (r.ok) router.refresh();
     });
@@ -135,6 +138,19 @@ export function AssistantWhatsApp({
           />
         </label>
       </div>
+
+      <label className="mt-4 block">
+        <span className="mb-1 block text-[12.5px] font-medium text-foreground">Testeurs</span>
+        <input
+          value={testeurs}
+          onChange={(e) => setTesteurs(e.target.value)}
+          placeholder="Ex. : 26023393, 50978686"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+        />
+        <span className="text-[12px] text-muted-foreground">
+          Il répond seul à ces numéros, même en mode répétition — pour tester sur de vraies conversations. Séparez par des virgules.
+        </span>
+      </label>
 
       <div className="mt-3 flex items-center justify-end gap-3">
         {message && <span className={cn("text-xs", message.ok ? "text-green-700" : "text-red-600")}>{message.texte}</span>}

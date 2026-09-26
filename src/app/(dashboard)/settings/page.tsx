@@ -205,6 +205,7 @@ export default async function SettingsPage({
                 mode: waSettings.aiMode,
                 threshold: waSettings.aiThreshold,
                 instructions: waSettings.aiInstructions,
+                testers: waSettings.aiTesters,
                 savoir: waSavoir.map((k) => ({
                   id: k.id,
                   kind: k.kind,
