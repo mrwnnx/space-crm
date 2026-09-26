@@ -166,3 +166,86 @@ export async function codeDuLead(leadId: string) {
 }
 
 export type CodeDuLead = NonNullable<Awaited<ReturnType<typeof codeDuLead>>>;
+
+// ── Pour l'assistant WhatsApp (brique 3) ─────────────────
+
+const MOT_CODE = /(code|cod\b|كود|كوبون|coupon|promo|برومو)/i;
+
+/**
+ * Les codes que la personne cite dans son message. Un mot n'est candidat que
+ * s'il porte un chiffre, ou si le message parle de code : sinon « space
+ * academy » deviendrait SPACE20.
+ */
+export function codesCites(message: string, codes: CodePromo[]) {
+  const parleDeCode = MOT_CODE.test(message);
+  const mots = message.split(/[\s,.;:!?؟،()«»"']+/).filter(Boolean);
+  const candidats = [...mots, ...mots.slice(1).map((m, i) => mots[i] + m)];
+  const trouves = new Map<string, CodePromo>();
+  for (const m of candidats) {
+    const n = normaliserCode(m);
+    if (n.length < 4 || (!parleDeCode && !/\d/.test(n)) || (/^\d+$/.test(n) && !codes.some((c) => c.code === n))) continue;
+    const c = rapprocher(m, codes);
+    if (c) trouves.set(c.id, codes.find((x) => x.id === c.id)!);
+  }
+  return [...trouves.values()];
+}
+
+function lignePrix(
+  c: CodePromo,
+  b: { name: string; priceTotal: string | null; monthlyCount: number | null; monthlyAmount: string | null; currency: string | null },
+  bootcampId: string
+) {
+  const devise = b.currency ?? "TND";
+  if (!c.actif) return `${c.code} : désactivé, il ne vaut plus.`;
+  if (!codeValable(c, bootcampId)) {
+    const fin = c.validUntil && c.validUntil < new Date().toISOString().slice(0, 10);
+    return `${c.code} : ${fin ? `expiré depuis le ${c.validUntil}` : `ne vaut pas pour ${b.name}`}.`;
+  }
+  const p = prixAvecCode(b, c);
+  return [
+    `${c.code} (${b.name}) :`,
+    p.total != null ? `en une fois ${p.total} ${devise} au lieu de ${Number(b.priceTotal)} (−${Number(c.remiseTotalPct)} %)` : "ne vaut PAS pour le paiement en une fois",
+    p.mensualite != null
+      ? `; en facilité ${b.monthlyCount} × ${p.mensualite} ${devise} au lieu de ${b.monthlyCount} × ${Number(b.monthlyAmount)} (−${Number(c.remiseFacilitePct)} %)`
+      : "; ne vaut PAS pour le paiement en plusieurs fois",
+    c.validUntil ? `; valable jusqu'au ${c.validUntil}` : "",
+  ].join(" ");
+}
+
+/**
+ * Ce que l'assistant sait des codes pour CE message : les codes cités (prix
+ * exacts ou raison du refus), celui de la fiche, et au plus un code qu'il peut
+ * proposer — s'il ne l'a jamais donné à ce numéro.
+ */
+export async function codesPourAssistant(leadId: string, message: string, dejaEcrit: string) {
+  const codes = await db.query.promoCodes.findMany();
+  if (codes.length === 0) return { texte: "", cites: [] as CodePromo[] };
+  const lead = await db.query.leads.findFirst({
+    where: eq(leads.id, leadId),
+    columns: { promoCodeId: true, bootcampId: true },
+    with: { bootcamp: true },
+  });
+  // Les prix d'une session terminée ne servent à rien : on prend celle où l'on s'inscrit.
+  let b = lead?.bootcamp && !["completed", "cancelled"].includes(lead.bootcamp.status) ? lead.bootcamp : null;
+  if (!b) {
+    const { formationActive } = await import("@/lib/whatsapp-flow");
+    const a = await formationActive();
+    b = a ? ((await db.query.bootcamps.findFirst({ where: (t, { eq }) => eq(t.id, a.id) })) ?? null) : null;
+  }
+  if (!b) return { texte: "", cites: [] as CodePromo[] };
+
+  const cites = codesCites(message, codes);
+  const sien = codes.find((c) => c.id === lead?.promoCodeId && !cites.some((x) => x.id === c.id));
+  const ecrit = dejaEcrit.toUpperCase();
+  const proposable = codes.find(
+    (c) => c.assistantPeutProposer && codeValable(c, b.id) && !ecrit.includes(c.code) && c.id !== lead?.promoCodeId
+  );
+  const lignes = [
+    cites.length ? `Codes cités dans le NOUVEAU message (déjà reconnus, fautes de frappe comprises) :\n${cites.map((c) => `- ${lignePrix(c, b, b.id)}`).join("\n")}` : "",
+    sien ? `Code déjà noté sur sa fiche : ${lignePrix(sien, b, b.id)}` : "",
+    proposable
+      ? `Code que tu PEUX proposer, une seule fois, UNIQUEMENT si la personne trouve le prix trop cher ou hésite à cause du prix : ${lignePrix(proposable, b, b.id)}`
+      : "Aucun code à proposer de toi-même : n'en invente jamais un.",
+  ];
+  return { texte: lignes.filter(Boolean).join("\n"), cites };
+}

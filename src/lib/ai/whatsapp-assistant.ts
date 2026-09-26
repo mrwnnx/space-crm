@@ -8,6 +8,7 @@ import { aiReplies, leads } from "@/db/schema";
 import { estNumeroDeTest, sendWhatsApp } from "@/lib/messaging/whatsapp";
 import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
 import { savoirActif } from "@/lib/ai/knowledge";
+import { codesPourAssistant } from "@/lib/promo";
 
 /*
  * L'assistant WhatsApp (lot 3). Pour chaque message reçu :
@@ -38,6 +39,7 @@ const Redaction = z.object({
   sujetArgent: z.boolean(),
   robot: z.boolean(),
   intentionInscription: z.boolean(),
+  prometUnHumain: z.boolean(),
 });
 
 const Note = z.object({
@@ -137,6 +139,8 @@ export type Traitement = {
   draft: string;
   score: number;
   raisons: string;
+  // Les codes promo reconnus dans le message : notés sur la fiche s'il n'y en a pas.
+  codes?: { id: string; code: string }[];
 };
 
 /** Rédige et note, sans rien envoyer ni écrire. Sert au webhook et aux essais. */
@@ -146,6 +150,9 @@ export async function preparerReponse(input: { leadId: string; question: string 
     return { decision: "ignore", draft: "", score: 0, raisons: "Message automatique d'une autre entreprise : on ne répond pas à un robot." };
   }
   const [ctx, conv, savoir, rs] = await Promise.all([contexteLead(input.leadId), conversation(input.leadId), savoirTexte(), reglesEtStyle()]);
+  const promos = await codesPourAssistant(input.leadId, input.question, conv);
+  const ctxComplet = promos.texte ? `${ctx}\n\nCODES PROMO :\n${promos.texte}` : ctx;
+  const codes = promos.cites.map((c) => ({ id: c.id, code: c.code }));
   const consignes = settings.aiInstructions?.trim() || "Réponds en derja tunisienne, en tutoyant, court et chaleureux.";
 
   const system = `Tu es l'assistant WhatsApp de Space Academy, école tunisienne de design UX/UI. Tu réponds aux personnes qui écrivent au numéro de l'école.
@@ -167,7 +174,9 @@ Règles :
 - Si l'information manque, dis simplement qu'un conseiller va répondre.
 - Court : 1 à 4 phrases, comme sur WhatsApp. Pas de signature.
 - sujetArgent = true SEULEMENT pour un transfert d'argent : RIB, virement, preuve ou reçu de paiement, paiement à vérifier, remboursement, différence à payer, facture. Un prix, une formule ou un code promo ne sont PAS un sujet d'argent : réponds-y.
+- prometUnHumain = true si ta réponse annonce qu'un conseiller ou l'équipe va répondre, vérifier ou revenir vers la personne (une simple proposition « tu veux qu'on t'appelle ? » ne compte pas).
 - robot = true si le message est une réponse automatique d'une entreprise, pas une personne.
+- Codes promo : n'utilise QUE les prix de la section CODES PROMO du contexte, au dinar près ; un code expiré ou qui ne vaut pas pour la formule demandée, dis-le simplement. Un code que la section ne connaît pas : dis qu'un conseiller va vérifier. Ne propose un code de toi-même que si la section l'autorise ET que la personne trouve le prix trop cher.
 - intentionInscription = true si la personne veut s'inscrire ou réserver sa place (« نحب نسجل », « كيفاش نقيد », « nheb nsajel »), ou dit oui quand l'école lui proposait de l'inscrire. Le formulaire d'inscription part alors avec ta réponse : écris juste une phrase courte et chaleureuse qui l'invite à le remplir (sans demander nom, téléphone ou email).
 
 SAVOIR :
@@ -182,7 +191,7 @@ ${savoir}`;
     messages: [
       {
         role: "user",
-        content: `CONTEXTE DE LA PERSONNE :\n${ctx}\n\nCONVERSATION (la plus récente en dernier) :\n${conv || "(début de conversation)"}\n\nNOUVEAU MESSAGE À TRAITER :\n${input.question}`,
+        content: `CONTEXTE DE LA PERSONNE :\n${ctxComplet}\n\nCONVERSATION (la plus récente en dernier) :\n${conv || "(début de conversation)"}\n\nNOUVEAU MESSAGE À TRAITER :\n${input.question}`,
       },
     ],
   });
@@ -202,6 +211,7 @@ ${savoir}`;
 - Une réponse honnête « un conseiller va te répondre » ne vaut jamais plus de 60 : elle n'aide pas.
 - Ne retire RIEN parce qu'elle n'ajoute pas d'informations non demandées : on juge la réponse au NOUVEAU message. Une salutation qui répond par une salutation et « comment t'aider ? » mérite 95.
 - Retire beaucoup si elle répond à une ancienne question au lieu du nouveau message, ou si elle redemande une information que le CRM a déjà.
+- Un prix avec code promo est juste s'il figure dans la section CODES PROMO du contexte ; proposer un code que cette section n'autorise pas est une faute grave.
 - Retire beaucoup si elle enfreint une RÈGLE DE L'ÉQUIPE ci-dessous : l'équipe l'a demandée explicitement.
 Donne des raisons courtes, en français, lisibles par l'équipe.
 
@@ -213,7 +223,7 @@ ${savoir}`,
     messages: [
       {
         role: "user",
-        content: `CONTEXTE DE LA PERSONNE :\n${ctx}\n\nCONVERSATION :\n${conv || "(début)"}\n\nMESSAGE DE LA PERSONNE :\n${input.question}\n\nRÉPONSE PROPOSÉE :\n${redaction.reponse}${
+        content: `CONTEXTE DE LA PERSONNE :\n${ctxComplet}\n\nCONVERSATION :\n${conv || "(début)"}\n\nMESSAGE DE LA PERSONNE :\n${input.question}\n\nRÉPONSE PROPOSÉE :\n${redaction.reponse}${
           // Sans cette précision, la note traitait d'« invention » la mention du formulaire.
           redaction.intentionInscription
             ? "\n\n(Le formulaire d'inscription « نحب نسجل » est joint automatiquement à cette réponse : la mentionner est juste.)"
@@ -227,18 +237,23 @@ ${savoir}`,
   const raisons = note?.raisons?.trim() || "Note illisible.";
 
   if (redaction.sujetArgent) {
-    return { decision: "escalade", draft: redaction.reponse, score, raisons: `Question d'argent : toujours un humain. ${raisons}` };
+    return { decision: "escalade", draft: redaction.reponse, score, raisons: `Question d'argent : toujours un humain. ${raisons}`, codes };
+  }
+  // Promettre un humain sans le prévenir laisserait la personne sans réponse.
+  if (redaction.prometUnHumain && !redaction.intentionInscription) {
+    return { decision: "escalade", draft: redaction.reponse, score, raisons: `Sa réponse promet un conseiller : l'équipe est prévenue. ${raisons}`, codes };
   }
   // Vouloir s'inscrire n'appelle pas une information risquée, mais un geste :
   // le formulaire. Il part quelle que soit la note de la phrase qui l'accompagne.
   if (redaction.intentionInscription) {
-    return { decision: "formulaire", draft: redaction.reponse, score, raisons: `Veut s'inscrire : le formulaire « نحب نسجل » part avec la réponse. ${raisons}` };
+    return { decision: "formulaire", draft: redaction.reponse, score, raisons: `Veut s'inscrire : le formulaire « نحب نسجل » part avec la réponse. ${raisons}`, codes };
   }
   return {
     decision: score >= settings.aiThreshold ? "pret" : "escalade",
     draft: redaction.reponse,
     score,
     raisons,
+    codes,
   };
 }
 
@@ -272,6 +287,15 @@ export async function traiterMessageAssistant(input: {
         raisons: t.raisons,
       })
       .returning({ id: aiReplies.id });
+
+    // Un code cité sur WhatsApp va sur la fiche, comme s'il avait été tapé dans
+    // le formulaire du site — avant l'envoi : le formulaire « نحب نسجل » en tient compte.
+    if (t.codes?.length) {
+      const fiche = await db.query.leads.findFirst({ where: eq(leads.id, input.leadId), columns: { promoCode: true } });
+      if (!fiche?.promoCode?.trim()) {
+        await db.update(leads).set({ promoCode: t.codes[0].code, promoCodeId: t.codes[0].id }).where(eq(leads.id, input.leadId));
+      }
+    }
 
     const envoyer = settings.aiMode === "auto" || estNumeroDeTest(input.numero);
     if (!envoyer || t.decision === "ignore") return;
