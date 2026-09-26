@@ -103,13 +103,20 @@ export async function ajouterLien(adresse: string, auteur: string | null) {
   } catch {
     return { ok: false as const, error: "Adresse invalide." };
   }
-  const hote = url.hostname.toLowerCase();
-  if (url.protocol !== "https:" || /^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)/.test(hote) || !hote.includes(".")) {
-    return { ok: false as const, error: "Seulement une page web publique en https." };
-  }
   let html = "";
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: "follow", headers: { "User-Agent": "Mozilla/5.0 (compatible; SpaceAcademyCRM)" } });
+    // Chaque redirection est revérifiée : une page publique qui renvoie vers une
+    // adresse interne ne doit pas faire lire le réseau du serveur (audit 26/09).
+    let res: Response | null = null;
+    for (let saut = 0; saut < 5; saut++) {
+      if (!(await adressePublique(url))) return { ok: false as const, error: "Seulement une page web publique en https." };
+      res = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (compatible; SpaceAcademyCRM)" } });
+      const suite = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!suite) break;
+      url = new URL(suite, url);
+      res = null;
+    }
+    if (!res) return { ok: false as const, error: "Trop de redirections." };
     if (!res.ok) return { ok: false as const, error: `La page répond ${res.status}.` };
     html = (await res.text()).slice(0, 2_000_000);
   } catch (e) {
@@ -129,6 +136,32 @@ export async function ajouterLien(adresse: string, auteur: string | null) {
   if (propre.length < 50) return { ok: false as const, error: "Presque aucun texte lisible sur cette page." };
   await db.insert(aiKnowledge).values({ kind: "lien", title: titre.replace(/\s+/g, " ").slice(0, 200), content: propre, source: url.toString(), createdBy: auteur });
   return { ok: true as const, coupe };
+}
+
+/** https, un vrai nom de domaine, et toutes ses adresses IP publiques. */
+async function adressePublique(url: URL) {
+  const hote = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (url.protocol !== "https:" || !hote.includes(".") || hote === "localhost") return false;
+  const { lookup } = await import("node:dns/promises");
+  const { isIP } = await import("node:net");
+  const ips = isIP(hote) ? [hote] : (await lookup(hote, { all: true }).catch(() => [])).map((a) => a.address);
+  if (ips.length === 0) return false;
+  return ips.every((ip) => {
+    if (ip.includes(":")) {
+      const v = ip.toLowerCase();
+      if (v.startsWith("::ffff:")) return ipv4Publique(v.slice(7));
+      return !(v === "::" || v === "::1" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80"));
+    }
+    return ipv4Publique(ip);
+  });
+}
+
+function ipv4Publique(ip: string) {
+  const [a, b] = ip.split(".").map(Number);
+  return !(
+    a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224
+  );
 }
 
 export async function changerStatutSavoir(id: string, status: "actif" | "archive") {

@@ -300,12 +300,17 @@ export function LeadsList({
                       </Link>
                     </td>
                     <td>
-                      <Link
-                        href={`/bootcamps/${lead.bootcampId}`}
-                        className="text-sm text-muted-foreground hover:text-primary"
-                      >
-                        {lead.bootcamp?.name || "—"}
-                      </Link>
+                      {/* Sans formation, pas de lien : /bootcamps/null finissait en page d'erreur. */}
+                      {lead.bootcampId ? (
+                        <Link
+                          href={`/bootcamps/${lead.bootcampId}`}
+                          className="text-sm text-muted-foreground hover:text-primary"
+                        >
+                          {lead.bootcamp?.name || "—"}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td>
                       {sc && lead.status && (

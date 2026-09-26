@@ -20,6 +20,10 @@ const STATUS_LABELS: Record<string, string> = {
   canceled: "Canceled",
 };
 
+// Le jour tel qu'on le vit en Tunisie : toISOString() donnait le jour UTC, et
+// « aujourd'hui » glissait d'un jour selon l'heure et le fuseau du serveur.
+const jourTunis = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Africa/Tunis" });
+
 export default async function CalendarPage() {
   const tasks = await getTasks();
   const tasksWithDates = tasks.filter((t) => t.dueDate);
@@ -27,7 +31,7 @@ export default async function CalendarPage() {
   // Group by day
   const byDay = new Map<string, Task[]>();
   for (const task of tasksWithDates) {
-    const dateKey = new Date(task.dueDate!).toISOString().slice(0, 10);
+    const dateKey = jourTunis(new Date(task.dueDate!));
     if (!byDay.has(dateKey)) byDay.set(dateKey, []);
     byDay.get(dateKey)!.push(task);
   }
@@ -37,14 +41,14 @@ export default async function CalendarPage() {
 
   // Generate current month calendar grid
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const todayStr = jourTunis(now);
+  const year = Number(todayStr.slice(0, 4));
+  const month = Number(todayStr.slice(5, 7)) - 1;
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const daysInMonth = lastDay.getDate();
   const startWeekday = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // Monday-first
 
-  const todayStr = now.toISOString().slice(0, 10);
   const weekdays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
   return (
@@ -68,7 +72,7 @@ export default async function CalendarPage() {
               ))}
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const day = i + 1;
-                const dateStr = new Date(year, month, day).toISOString().slice(0, 10);
+                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 const dayTasks = byDay.get(dateStr) || [];
                 const isToday = dateStr === todayStr;
                 return (

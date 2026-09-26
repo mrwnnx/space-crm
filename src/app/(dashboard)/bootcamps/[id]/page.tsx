@@ -79,6 +79,8 @@ export default async function BootcampDetailPage({
   }));
 
   const totalLeads = kanbanData.reduce((sum, s) => sum + s.leads.length, 0);
+  // La capacité se compare aux INSCRITS (colonnes « converti »), pas aux leads.
+  const inscrits = kanbanData.filter((s) => s.kind === "converted").reduce((sum, s) => sum + s.leads.length, 0);
 
   // « Non traité » = arrivé par un import et JAMAIS ouvert (seenAt null).
   // Remplace l'ancienne règle des 24 h, qui s'éteignait toute seule même si
@@ -134,7 +136,7 @@ export default async function BootcampDetailPage({
             <p className="mt-0.5 text-xs text-muted-foreground">
               {formatDate(bootcamp.startDate)}
               {bootcamp.endDate && ` → ${formatDate(bootcamp.endDate)}`}
-              {bootcamp.capacity && ` · ${totalLeads}/${bootcamp.capacity} inscrits`}
+              {bootcamp.capacity && ` · ${inscrits}/${bootcamp.capacity} inscrits`}
             </p>
           )}
         </div>

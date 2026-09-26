@@ -43,8 +43,12 @@ export function rapprocher(saisi: string | null | undefined, codes: Pick<CodePro
   if (s.length < 3) return null;
   const exact = codes.find((c) => c.code === s);
   if (exact) return exact;
+  // Le chiffre, c'est la remise : « Space25 » n'est pas SPACE20 (audit 26/09).
+  // Seules les lettres tolèrent une faute ; des chiffres tapés doivent être exacts.
+  const chiffresSaisis = s.match(/\d+$/)?.[0] ?? "";
   let meilleur: { c: (typeof codes)[number]; d: number } | null = null;
   for (const c of codes) {
+    if (chiffresSaisis && (c.code.match(/\d+$/)?.[0] ?? "") !== chiffresSaisis) continue;
     const tol = c.code.length >= 8 ? 2 : 1;
     let d = distance(s, c.code);
     // Le préfixe exact d'un code, sans ses chiffres (« WAJAHNI » pour WAJAHNI20).

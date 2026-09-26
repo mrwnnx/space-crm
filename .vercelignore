@@ -1,0 +1,5 @@
+# Jamais dans un déploiement : secrets et fichiers de travail.
+.env
+.env.*
+scratchpad/
+.claude/
