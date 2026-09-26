@@ -24,7 +24,7 @@ const PREFIXE = "inscr:";
 // Le formulaire publié chez Meta (25/09) — non modifiable : un changement = un nouveau formulaire.
 // La version 2 (champ email, whatsapp/flow-inscription.json) attend sa publication :
 // mettre son identifiant ici l'active. L'ancienne ne connaît pas `need_email`.
-const FLOW_AVEC_EMAIL_ID: string | null = null;
+const FLOW_AVEC_EMAIL_ID: string | null = "1127437653274034"; // publiée le 26/09
 export const FLOW_INSCRIPTION_ID = FLOW_AVEC_EMAIL_ID ?? "28866668219686929";
 
 const SITUATIONS = ["نخدم", "نقرا", "مانيش نخدم", "فريلانس", "حاجة أخرى"];
