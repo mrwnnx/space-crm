@@ -2588,7 +2588,7 @@ export async function getReturningByBootcamp(
     alumni: boolean;
   }>(sql`
     select l.id as lead_id,
-           array_agg(distinct ob.name) as formations,
+           to_jsonb(array_agg(distinct ob.name)) as formations,
            bool_or(o.converted) as alumni
     from leads l
     join leads o
@@ -2611,7 +2611,7 @@ export async function getReturningByBootcamp(
 /** Même information pour UN lead, pour la fiche. */
 export async function getReturningForLead(leadId: string): Promise<ReturningInfo | null> {
   const rows = await db.execute<{ formations: string[]; alumni: boolean }>(sql`
-    select array_agg(distinct ob.name) as formations, bool_or(o.converted) as alumni
+    select to_jsonb(array_agg(distinct ob.name)) as formations, bool_or(o.converted) as alumni
     from leads l
     join leads o
       on o.contact_id = l.contact_id
@@ -2959,7 +2959,7 @@ export async function getMultiFormByBootcamp(
   if (signatures.some((sig) => sig.length === 0)) return new Set();
 
   const rows = await db.execute<{ id: string; keys: string[] }>(sql`
-    select l.id, array_agg(distinct k) as keys
+    select l.id, to_jsonb(array_agg(distinct k)) as keys
     from leads l,
          lateral jsonb_each(l.raw_payload) as blocks(bk, bv),
          lateral jsonb_object_keys(bv) as k
