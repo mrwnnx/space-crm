@@ -50,6 +50,10 @@
               "title": "على 3 أقساط — 3 × 500 دينار"
             }
           ]
+        },
+        "need_email": {
+          "type": "boolean",
+          "__example__": true
         }
       },
       "layout": {
@@ -58,6 +62,14 @@
           {
             "type": "TextBody",
             "text": "${data.intro}"
+          },
+          {
+            "type": "TextInput",
+            "name": "email",
+            "label": "الإيميل",
+            "input-type": "email",
+            "visible": "${data.need_email}",
+            "required": "${data.need_email}"
           },
           {
             "type": "TextInput",
@@ -112,7 +124,8 @@
               "payload": {
                 "age": "${form.age}",
                 "situation": "${form.situation}",
-                "formule": "${form.formule}"
+                "formule": "${form.formule}",
+                "email": "${form.email}"
               }
             }
           }

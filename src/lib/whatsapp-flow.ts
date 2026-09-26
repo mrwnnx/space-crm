@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db";
 import { contacts, leads } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { sendWhatsApp } from "@/lib/messaging/whatsapp";
 import { carryLeadsOver, createActivity, getLeadById, moveLeadToStage, updateLead } from "@/lib/queries";
 import { recordWhatsAppSent } from "@/lib/whatsapp-inbox";
@@ -22,7 +22,10 @@ import { codeValable, prixAvecCode } from "@/lib/promo";
 const PREFIXE = "inscr:";
 
 // Le formulaire publié chez Meta (25/09) — non modifiable : un changement = un nouveau formulaire.
-export const FLOW_INSCRIPTION_ID = "28866668219686929";
+// La version 2 (champ email, whatsapp/flow-inscription.json) attend sa publication :
+// mettre son identifiant ici l'active. L'ancienne ne connaît pas `need_email`.
+const FLOW_AVEC_EMAIL_ID: string | null = null;
+export const FLOW_INSCRIPTION_ID = FLOW_AVEC_EMAIL_ID ?? "28866668219686929";
 
 const SITUATIONS = ["نخدم", "نقرا", "مانيش نخدم", "فريلانس", "حاجة أخرى"];
 
@@ -36,8 +39,9 @@ export async function donneesFlowInscription(
   const need_age = lead?.contact?.age == null;
   const need_situation = !lead?.jobTitle?.trim();
   const need_plan = !lead?.intendedPlan;
-  const rien = !need_age && !need_situation && !need_plan;
-  const formules = await formulesAvecPrix(formation, lead?.promoCodeId);
+  const need_email = !!FLOW_AVEC_EMAIL_ID && !lead?.email?.trim() && !lead?.contact?.email?.trim();
+  const rien = !need_age && !need_situation && !need_plan && !need_email;
+  const formules = await formulesAvecPrix(formation, lead?.promoCodeId, lead?.id);
   return {
     token: lead ? `${PREFIXE}${lead.id}${formationId ? `:${formationId}` : ""}` : "unused",
     data: {
@@ -47,38 +51,49 @@ export async function donneesFlowInscription(
       need_age,
       need_situation,
       need_plan,
+      ...(FLOW_AVEC_EMAIL_ID ? { need_email } : {}),
       formules,
     },
   };
 }
 
-// Le code annoncé dans « formation complète » : il vaut pour tous ceux qui ouvrent ce formulaire.
+// Le code annoncé dans le modèle « formation complète » (bouton « copier le code »).
 const CODE_DU_MODELE = "NEXTLEVEL20";
 
 /**
- * Le code qui fixe les prix du formulaire : celui que la personne a déjà tapé
- * s'il vaut pour cette session, sinon celui du modèle (réglé dans Codes promo).
+ * Le code qui fixe les prix du formulaire : celui que la personne a tapé s'il
+ * vaut pour cette session, sinon celui du modèle — seulement si elle a REÇU ce
+ * modèle. Sans code, prix normal (Balkis, 26/09 : une remise sans code).
  */
-async function codePourFlow(promoCodeId: string | null | undefined, formationId: string | null) {
+async function codePourFlow(promoCodeId: string | null | undefined, formationId: string | null, leadId?: string | null) {
   const codes = await db.query.promoCodes.findMany();
   const sien = codes.find((c) => c.id === promoCodeId);
   if (sien && codeValable(sien, formationId)) return sien;
   const modele = codes.find((c) => c.code === CODE_DU_MODELE);
-  return modele && codeValable(modele, formationId) ? modele : null;
+  if (!modele || !codeValable(modele, formationId) || !leadId) return null;
+  const [recu] = await db.execute<{ ok: number }>(sql`
+    select 1 as ok from whatsapp_messages m
+    join activities a on a.id = m.activity_id
+    join leads x on x.id = a.reference_id
+    where m.template like 'formation_complete%'
+      and right(regexp_replace(coalesce(x.mobile_no, ''), '\\D', '', 'g'), 8) =
+          (select right(regexp_replace(coalesce(mobile_no, ''), '\\D', '', 'g'), 8) from leads where id = ${leadId})
+    limit 1`);
+  return recu ? modele : null;
 }
 
 /**
  * Les deux formules avec le prix de la session visée, remise déjà faite, et
  * le prix normal en petit : le prix se lit au moment de choisir, pas après.
  */
-async function formulesAvecPrix(formationId: string | null, promoCodeId?: string | null) {
+async function formulesAvecPrix(formationId: string | null, promoCodeId?: string | null, leadId?: string | null) {
   const [b] = formationId
     ? await db.execute<{ price_total: string | null; monthly_count: number | null; monthly_amount: string | null; currency: string }>(sql`
         select price_total::text, monthly_count, monthly_amount::text, currency from bootcamps where id = ${formationId}`)
     : [];
   const devise = !b?.currency || b.currency === "TND" ? "دينار" : b.currency;
   const normal = (v: string) => String(Number(v));
-  const code = b ? await codePourFlow(promoCodeId, formationId) : null;
+  const code = b ? await codePourFlow(promoCodeId, formationId, leadId) : null;
   const prix = code && b ? prixAvecCode({ priceTotal: b.price_total, monthlyCount: b.monthly_count, monthlyAmount: b.monthly_amount }, code) : null;
   const pct = (v: string | null) => String(Number(v));
   return [
@@ -180,7 +195,23 @@ export async function traiterReponseFlow(input: { responseJson: string; leadIdRe
       maj.intendedPlan = formule;
       recu.push(formule === "total" ? "paiement en une fois" : "paiement mensuel");
     }
+    const email = String(r.email ?? "").trim().toLowerCase();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      maj.email = email;
+      recu.push(`email ${email}`);
+      if (lead.contactId) {
+        await db.update(contacts).set({ email }).where(and(eq(contacts.id, lead.contactId), sql`coalesce(trim(${contacts.email}), '') = ''`));
+      }
+    }
     if (Object.keys(maj).length > 0) await updateLead(lead.id, maj);
+
+    // Elle a rempli le formulaire depuis WhatsApp : elle accepte d'y être contactée.
+    if (lead.contactId) {
+      await db
+        .update(contacts)
+        .set({ whatsappConsentAt: new Date(), whatsappConsentSource: "Formulaire WhatsApp « نحب نسجل »" })
+        .where(and(eq(contacts.id, lead.contactId), sql`${contacts.whatsappConsentAt} is null`, sql`${contacts.whatsappUnsubscribedAt} is null`));
+    }
 
     // La fiche de la session visée, colonne Intéressé : reportée, déjà là, ou elle-même.
     const cible = formationJeton ? await formationParId(formationJeton) : await formationActive();
