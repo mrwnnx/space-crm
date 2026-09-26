@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { refreshLeadInsightAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { AskAssistantButton } from "@/components/assistant/ask-assistant-button";
+import { TemperatureProposal } from "@/components/leads/temperature-proposal";
 import type { Recommendation } from "@/lib/lead-recommendation";
 import type { TimelineEvent } from "@/lib/queries";
 
@@ -22,6 +23,10 @@ type Insight = {
   intent: string;
   objection: string | null;
   recommendation: string | null;
+  suggestedTemperature?: "hot" | "cold" | null;
+  temperatureProof?: string | null;
+  nextAction?: string | null;
+  waSignals?: { sens: "chaud" | "froid" | "frein"; label: string }[] | null;
   createdAt?: Date | string | null;
 } | null;
 
@@ -96,6 +101,7 @@ export function LeadTabs({
   insight,
   recommendation,
   timeline,
+  temperature,
 }: {
   leadId: string;
   /** L'onglet Aperçu, calculé par la page. */
@@ -106,6 +112,8 @@ export function LeadTabs({
   insight: Insight;
   recommendation: Recommendation;
   timeline: TimelineEvent[];
+  /** La température actuelle du lead, pour savoir si la proposition la contredit. */
+  temperature: "hot" | "cold";
 }) {
   // Aperçu d'abord : on ouvre une fiche pour savoir où on en est, pas pour écrire.
   const [tab, setTab] = useState<"overview" | "exchanges" | "score" | "activity">("overview");
@@ -232,6 +240,14 @@ export function LeadTabs({
                   prochaine relecture de ce lead.
                 </p>
               )}
+              <TemperatureProposal
+                leadId={leadId}
+                current={temperature}
+                suggested={insight.suggestedTemperature ?? null}
+                proof={insight.temperatureProof ?? null}
+                nextAction={insight.nextAction ?? null}
+                signals={insight.waSignals ?? null}
+              />
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border p-4">

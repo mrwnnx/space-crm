@@ -290,6 +290,42 @@ export async function refreshLeadInsightAction(leadId: string, force = false) {
   return res;
 }
 
+/**
+ * « Appliquer » la température proposée par la lecture IA. Rien ne change sans
+ * ce clic. La valeur est RELUE en base, pas reçue du navigateur : le bouton ne
+ * peut appliquer que ce que l'IA a réellement proposé. Journalisé avec son
+ * auteur (createActivity pose le compte connecté).
+ */
+export async function applySuggestedTemperatureAction(leadId: string) {
+  await requireUser();
+  const { db } = await import("@/db");
+  const { leads, leadInsights } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ proposee: leadInsights.suggestedTemperature, preuve: leadInsights.temperatureProof, actuelle: leads.temperature })
+    .from(leadInsights)
+    .innerJoin(leads, eq(leads.id, leadInsights.leadId))
+    .where(eq(leadInsights.leadId, leadId))
+    .limit(1);
+  if (!row?.proposee) return { error: "Aucune température proposée pour ce lead." };
+  if (row.proposee === row.actuelle) return { ok: true };
+
+  await updateLeadQuery(leadId, { temperature: row.proposee });
+  const libelle = (t: "hot" | "cold") => (t === "hot" ? "🔥 chaud" : "❄️ froid");
+  await createActivity({
+    referenceType: "lead",
+    referenceId: leadId,
+    type: "status_change",
+    direction: "outbound",
+    subject: "Température modifiée",
+    content: `${libelle(row.actuelle)} → ${libelle(row.proposee)} (proposée par la lecture IA${row.preuve ? ` : ${row.preuve}` : ""})`,
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/leads");
+  return { ok: true };
+}
+
 export async function deleteColumnAutomationAction(bootcampId: string, automationId: string) {
   await requireUser();
   const { deleteAutomation } = await import("@/lib/queries");

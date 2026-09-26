@@ -27,6 +27,7 @@ import { QUALIFICATIONS } from "@/components/leads/call-outcome-form";
 import { EnrollLeadDialog } from "@/components/leads/enroll-lead-dialog";
 import { WhatsAppComposer } from "@/components/activities/whatsapp-composer";
 import { EmailComposer } from "@/components/activities/email-composer";
+import { TemperatureProposal } from "@/components/leads/temperature-proposal";
 import type { Lead, Bootcamp, EmailTemplate } from "@/db/schema";
 
 /**
@@ -52,7 +53,16 @@ export type LeadMobileData = {
   qualification: string | null;
   /** Calculé côté serveur : l'heure « maintenant » ne se lit pas pendant le rendu. */
   followUp: { at: string; isDue: boolean; lateDays: number } | null;
-  insight: { summary: string | null; objection: string | null } | null;
+  insight: {
+    summary: string | null;
+    objection: string | null;
+    // Température proposée (0156) : même bloc « Appliquer » que sur le bureau.
+    suggestedTemperature: "hot" | "cold" | null;
+    temperatureProof: string | null;
+    nextAction: string | null;
+    waSignals: { sens: "chaud" | "froid" | "frein"; label: string }[] | null;
+  } | null;
+  temperature: "hot" | "cold";
   recent: Recent[];
   back: { href: string; label: string };
   nav: { index: number; total: number; prevHref: string | null; nextHref: string | null } | null;
@@ -319,6 +329,14 @@ export function LeadMobileView({
             {data.insight.objection && (
               <p className="text-[13.5px] text-amber-700">Frein : {data.insight.objection}</p>
             )}
+            <TemperatureProposal
+              leadId={data.id}
+              current={data.temperature}
+              suggested={data.insight.suggestedTemperature}
+              proof={data.insight.temperatureProof}
+              nextAction={data.insight.nextAction}
+              signals={data.insight.waSignals}
+            />
           </section>
         )}
 

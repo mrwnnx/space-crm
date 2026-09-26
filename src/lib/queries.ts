@@ -2360,6 +2360,9 @@ export async function getInsightsByBootcamp(bootcampId: string) {
       summary: leadInsights.summary,
       intent: leadInsights.intent,
       objection: leadInsights.objection,
+      // Pour le badge 🔥/❄️ de la carte, quand la proposition diffère de l'actuelle.
+      suggestedTemperature: leadInsights.suggestedTemperature,
+      temperatureProof: leadInsights.temperatureProof,
     })
     .from(leadInsights)
     .innerJoin(leads, eq(leads.id, leadInsights.leadId))
@@ -2386,6 +2389,8 @@ export type QueueLead = {
   lastCallStatus: string | null;
   qualification: string | null;
   nextFollowUpAt: Date | null;
+  /** Température proposée par la lecture IA quand elle diffère de l'actuelle, avec sa preuve. */
+  proposedTemperature: { value: "hot" | "cold"; proof: string | null } | null;
   /** A rempli plusieurs formulaires de la formation (brochure PUIS inscription). */
   multiForm: boolean;
   score: number;
@@ -2418,6 +2423,9 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     last_call_status: string | null;
     qualification: string | null;
     next_follow_up_at: Date | null;
+    temperature: "hot" | "cold";
+    suggested_temperature: "hot" | "cold" | null;
+    temperature_proof: string | null;
     a_ouvert: boolean;
     a_clique: boolean;
     a_vu_video: boolean;
@@ -2428,6 +2436,8 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
            (l.seen_at is not null) as seen,
            l.intended_plan::text as intended_plan,
            li.intent::text as intent, li.summary, li.objection,
+           l.temperature::text as temperature,
+           li.suggested_temperature::text as suggested_temperature, li.temperature_proof,
            l.qualification::text as qualification, l.next_follow_up_at,
            c.created_at as last_call_at, c.status::text as last_call_status,
            coalesce(eng.opened, false) as a_ouvert,
@@ -2537,6 +2547,16 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
     }
     if (!r.seen) { score += 5; }
 
+    // La température PROPOSÉE par la lecture IA (fil WhatsApp compris), quand
+    // elle contredit l'actuelle. Poids modéré : c'est une lecture, pas une
+    // qualification humaine — celle-ci reste au-dessus.
+    const proposee =
+      r.suggested_temperature && r.suggested_temperature !== r.temperature
+        ? { value: r.suggested_temperature, proof: r.temperature_proof }
+        : null;
+    if (proposee?.value === "hot") { score += 30; reasons.unshift("🔥 proposé chaud"); }
+    else if (proposee?.value === "cold") { score -= 15; reasons.push("❄️ proposé froid"); }
+
     return {
       id: r.id,
       fullName: r.full_name,
@@ -2554,6 +2574,7 @@ export async function getCallQueue(limit = 40): Promise<QueueLead[]> {
       lastCallStatus: r.last_call_status,
       qualification: r.qualification,
       nextFollowUpAt: r.next_follow_up_at,
+      proposedTemperature: proposee,
       multiForm,
       score,
       reasons,
@@ -2897,6 +2918,10 @@ export async function getInsightForLead(leadId: string) {
       intent: leadInsights.intent,
       objection: leadInsights.objection,
       recommendation: leadInsights.recommendation,
+      suggestedTemperature: leadInsights.suggestedTemperature,
+      temperatureProof: leadInsights.temperatureProof,
+      nextAction: leadInsights.nextAction,
+      waSignals: leadInsights.waSignals,
       createdAt: leadInsights.createdAt,
     })
     .from(leadInsights)

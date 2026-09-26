@@ -30,6 +30,14 @@ import type { Lead, LeadStatus, LeadSource, Organization, Bootcamp } from "@/db/
 // raw_payload n'est pas chargé par getLeadsKanban (perf) → on l'omet du type.
 type KanbanLead = Omit<Lead, "rawPayload">;
 
+type InsightCarte = {
+  summary: string;
+  intent: string;
+  objection: string | null;
+  suggestedTemperature?: "hot" | "cold" | null;
+  temperatureProof?: string | null;
+};
+
 // ── Recherche par code promo ────────────────────────────
 // Les codes sont saisis à la main par les leads : « Space20 », « space20 »,
 // « Space 20 », « Dooda15 » / « Douda15 ». On compare donc des formes
@@ -98,7 +106,7 @@ type StageWithLeads = LeadStatus & {
     // Dernière personne intervenue sur ce lead (email), null si personne.
     lastActor?: string | null;
     // Lecture IA de ce que le lead a écrit lui-même.
-    insight?: { summary: string; intent: string; objection: string | null } | null;
+    insight?: InsightCarte | null;
     // Déjà passé par une autre formation.
     returning?: { formations: string[]; alumni: boolean } | null;
     // A rempli brochure ET inscription.
@@ -601,12 +609,18 @@ const KanbanCard = memo(function KanbanCard({
     organization: Organization | null;
     isNew?: boolean;
     lastActor?: string | null;
-    insight?: { summary: string; intent: string; objection: string | null } | null;
+    insight?: InsightCarte | null;
     returning?: { formations: string[]; alumni: boolean } | null;
     multiForm?: boolean;
     engaged?: { opened: boolean; clicked: boolean; video: boolean } | null;
   };
 }) {
+  // Badge seulement quand la lecture IA CONTREDIT la température actuelle :
+  // une proposition identique n'apprend rien.
+  const proposee =
+    lead.insight?.suggestedTemperature && lead.insight.suggestedTemperature !== lead.temperature
+      ? lead.insight.suggestedTemperature
+      : null;
   // État de drag LOCAL : seule la carte tirée se re-render (board fluide).
   const [dragging, setDragging] = useState(false);
   const { resolve } = useTeamProfiles();
@@ -705,6 +719,14 @@ const KanbanCard = memo(function KanbanCard({
           >
             {INTENT_LABEL[lead.insight.intent] ?? lead.insight.intent}
           </span>
+          {proposee && (
+            <span
+              title={`Température proposée : ${proposee === "hot" ? "chaud" : "froid"}${lead.insight.temperatureProof ? ` — ${lead.insight.temperatureProof}` : ""}. À appliquer depuis la fiche.`}
+              className="ml-1 inline-block cursor-help align-middle text-[13px] leading-none"
+            >
+              {proposee === "hot" ? "🔥" : "❄️"}
+            </span>
+          )}
           <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
             {lead.insight.summary}
           </p>

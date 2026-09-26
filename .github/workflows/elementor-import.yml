@@ -157,3 +157,26 @@ jobs:
             echo "::error::L'endpoint des campagnes programmées a répondu $CODE."
             exit 1
           fi
+
+      # Relecture IA des conversations WhatsApp retombées (dernier message reçu
+      # il y a plus de 30 min). L'endpoint borne lui-même le passage (10 leads,
+      # ~100 s) : le reste passe au suivant.
+      - name: Relecture IA après WhatsApp
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRM_URL: https://space-crm-psi.vercel.app
+        run: |
+          BODY=$(mktemp)
+          CODE=$(curl -sS --max-time 150 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o "$BODY" -w "%{http_code}" \
+            "$CRM_URL/api/cron/lead-insights")
+
+          echo "HTTP $CODE"
+          cat "$BODY"
+
+          if [ "$CODE" != "200" ]; then
+            echo "::error::La relecture IA a répondu $CODE."
+            exit 1
+          fi
