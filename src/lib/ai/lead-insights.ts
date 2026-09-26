@@ -382,8 +382,12 @@ export async function relireConversationsRetombees(limite = 10, budgetMs = 100_0
     }
     const r = await analyzeLead(f);
     if (r.outcome === "analysé") bilan.analyses++;
-    else if (r.outcome === "inchangé") bilan.inchanges++;
-    else bilan.erreurs++;
+    else if (r.outcome === "inchangé") {
+      bilan.inchanges++;
+      // Relue sans rien de neuf : sinon elle reste candidate à chaque passage
+      // et, triée en tête, bloque les 10 places du lot.
+      await db.execute(sql`update lead_insights set created_at = now() where lead_id = ${f.id}`);
+    } else bilan.erreurs++;
   }
   return bilan;
 }
