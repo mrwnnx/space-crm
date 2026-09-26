@@ -6,6 +6,7 @@ export const SETTINGS_TABS = [
   { id: "emails", label: "Emails" },
   { id: "branding", label: "Habillage" },
   { id: "whatsapp", label: "WhatsApp" },
+  { id: "promo", label: "Codes promo" },
   { id: "providers", label: "Providers" },
   { id: "team", label: "Équipe" },
   { id: "profile", label: "Mon profil" },
@@ -21,7 +22,7 @@ export function SettingsTabs({ current }: { current: SettingsTab }) {
           key={tab.id}
           href={tab.id === "site" ? "/settings" : `/settings?tab=${tab.id}`}
           className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
             current === tab.id
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"

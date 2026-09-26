@@ -14,6 +14,9 @@ import { getWhatsAppSettings } from "@/lib/whatsapp-settings";
 import { listerSavoir } from "@/lib/ai/knowledge";
 import { listButtonActions } from "@/lib/whatsapp-button-actions";
 import { getQuickReplies } from "@/lib/whatsapp-inbox";
+import { CodesPromo } from "@/components/settings/codes-promo";
+import { listerCodes, statsCodes } from "@/lib/promo";
+import { getBootcamps } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,7 @@ export default async function SettingsPage({
 }) {
   const { tab } = await searchParams;
   const current: SettingsTab =
-    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding" || tab === "whatsapp" || tab === "profile"
+    tab === "emails" || tab === "providers" || tab === "team" || tab === "branding" || tab === "whatsapp" || tab === "profile" || tab === "promo"
       ? tab
       : "site";
 
@@ -72,6 +75,9 @@ export default async function SettingsPage({
           listerSavoir(),
         ])
       : [null, [], null, [], null, [], [], []];
+
+  const [promos, promoStats, promoFormations] =
+    current === "promo" ? await Promise.all([listerCodes(), statsCodes(), getBootcamps()]) : [[], null, []];
 
   return (
     <>
@@ -219,6 +225,32 @@ export default async function SettingsPage({
                 awayEnd: waSettings.awayEnd,
                 awayDays: waSettings.awayDays.split(",").map(Number).filter(Boolean),
               }}
+            />
+          )}
+
+          {current === "promo" && promoStats && (
+            <CodesPromo
+              codes={promos.map((c) => {
+                const s = promoStats.parCode.find((x) => x.id === c.id);
+                return {
+                  id: c.id,
+                  code: c.code,
+                  label: c.label,
+                  source: c.source,
+                  remiseTotalPct: c.remiseTotalPct ?? "",
+                  remiseFacilitePct: c.remiseFacilitePct ?? "",
+                  validFrom: c.validFrom ?? "",
+                  validUntil: c.validUntil ?? "",
+                  bootcampIds: (c.bootcampIds as string[]) ?? [],
+                  assistantPeutProposer: c.assistantPeutProposer,
+                  actif: c.actif,
+                  leads: s?.leads ?? 0,
+                  inscrits: s?.inscrits ?? 0,
+                  encaisse: Number(s?.encaisse ?? 0),
+                };
+              })}
+              inconnus={promoStats.inconnus}
+              formations={promoFormations.map((f) => ({ id: f.id, name: f.name }))}
             />
           )}
 

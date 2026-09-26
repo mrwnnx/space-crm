@@ -3102,6 +3102,7 @@ export async function carryLeadsOver(
         motivation: src.motivation,
         wantsCall: src.wantsCall,
         promoCode: src.promoCode,
+        promoCodeId: src.promoCodeId,
         // La qualification humaine suit la personne, elle ne dépend pas
         // de la session ; l'offre, si : les prix peuvent changer.
         qualification: src.qualification,

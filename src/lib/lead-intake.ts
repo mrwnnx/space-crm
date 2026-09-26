@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db";
 import { leads, leadStatuses, contacts, formSources } from "@/db/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
+import { idDuCode } from "@/lib/promo";
 import {
   getOrCreateContactForLead,
   recordStageChange,
@@ -218,6 +219,7 @@ export async function ingestSubmission(
         organizationName: leadData.organizationName || null,
         intendedPlan: intendedPlan ?? undefined,
         promoCode: promoCode ?? undefined,
+        promoCodeId: await idDuCode(promoCode),
         motivation: motivation ?? undefined,
         wantsCall: wantsCall ?? undefined,
         rawPayload,
@@ -256,11 +258,15 @@ export async function ingestSubmission(
     const leadExtraUpdate: {
       intendedPlan?: "total" | "monthly";
       promoCode?: string;
+      promoCodeId?: string | null;
       motivation?: string;
       wantsCall?: boolean;
     } = {};
     if (intendedPlan && !existingLead.intendedPlan) leadExtraUpdate.intendedPlan = intendedPlan;
-    if (promoCode && !existingLead.promoCode) leadExtraUpdate.promoCode = promoCode;
+    if (promoCode && !existingLead.promoCode) {
+      leadExtraUpdate.promoCode = promoCode;
+      leadExtraUpdate.promoCodeId = await idDuCode(promoCode);
+    }
     if (motivation && !existingLead.motivation) leadExtraUpdate.motivation = motivation;
     if (wantsCall !== null && existingLead.wantsCall === null) leadExtraUpdate.wantsCall = wantsCall;
 

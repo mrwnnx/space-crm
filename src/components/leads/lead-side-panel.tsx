@@ -9,6 +9,7 @@ import {
 } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { OfferDialog } from "@/components/leads/offer-dialog";
+import type { CodeDuLead } from "@/lib/promo";
 import type { LeadSource, Bootcamp } from "@/db/schema";
 
 type LeadData = {
@@ -54,7 +55,10 @@ export function LeadSidePanel({
   contact,
   sources,
   bootcamp,
+  codeReconnu,
 }: {
+  /** Le code promo reconnu dans ce que le lead a tapé (Paramètres → Codes promo). */
+  codeReconnu?: CodeDuLead | null;
   /** Présent seulement si le lead est inscrit : l'argent vit là, pas dans `intendedPlan`. */
   schedule?: { paid: number; total: number } | null;
   leadId: string;
@@ -243,6 +247,21 @@ export function LeadSidePanel({
         value={lead.promoCode}
         onSave={(f, v) => updateLeadFieldAction(leadId, f, v)}
       />
+      {lead.promoCode?.trim() && (
+        <p className="-mt-0.5 mb-1 text-right text-[12.5px] text-muted-foreground">
+          {!codeReconnu
+            ? "Code non reconnu — à créer dans Paramètres → Codes promo"
+            : !codeReconnu.valable
+              ? `${codeReconnu.code} — pas valable pour cette formation aujourd'hui`
+              : [
+                  `✓ ${codeReconnu.code}`,
+                  codeReconnu.total != null ? `${codeReconnu.total} ${bootcamp?.currency ?? "TND"} en une fois` : "pas en une fois",
+                  codeReconnu.mensualite != null
+                    ? `${bootcamp?.monthlyCount} × ${codeReconnu.mensualite} en facilité`
+                    : "pas en facilité",
+                ].join(" · ")}
+        </p>
+      )}
 
       {lead.motivation && (
         <>

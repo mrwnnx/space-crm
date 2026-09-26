@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { sendWhatsApp } from "@/lib/messaging/whatsapp";
 import { carryLeadsOver, createActivity, getLeadById, moveLeadToStage, updateLead } from "@/lib/queries";
 import { recordWhatsAppSent } from "@/lib/whatsapp-inbox";
+import { codeValable, prixAvecCode } from "@/lib/promo";
 
 /*
  * Le formulaire WhatsApp « نحب نسجل » (Meta Flow `inscription_session_suivante`,
@@ -36,7 +37,7 @@ export async function donneesFlowInscription(
   const need_situation = !lead?.jobTitle?.trim();
   const need_plan = !lead?.intendedPlan;
   const rien = !need_age && !need_situation && !need_plan;
-  const formules = await formulesAvecPrix(formation);
+  const formules = await formulesAvecPrix(formation, lead?.promoCodeId);
   return {
     token: lead ? `${PREFIXE}${lead.id}${formationId ? `:${formationId}` : ""}` : "unused",
     data: {
@@ -51,31 +52,50 @@ export async function donneesFlowInscription(
   };
 }
 
-// La réduction du code nextlevel20 (paiement en une fois seulement), annoncée dans « formation complète ».
-const REMISE = 0.2;
+// Le code annoncé dans « formation complète » : il vaut pour tous ceux qui ouvrent ce formulaire.
+const CODE_DU_MODELE = "NEXTLEVEL20";
+
+/**
+ * Le code qui fixe les prix du formulaire : celui que la personne a déjà tapé
+ * s'il vaut pour cette session, sinon celui du modèle (réglé dans Codes promo).
+ */
+async function codePourFlow(promoCodeId: string | null | undefined, formationId: string | null) {
+  const codes = await db.query.promoCodes.findMany();
+  const sien = codes.find((c) => c.id === promoCodeId);
+  if (sien && codeValable(sien, formationId)) return sien;
+  const modele = codes.find((c) => c.code === CODE_DU_MODELE);
+  return modele && codeValable(modele, formationId) ? modele : null;
+}
 
 /**
  * Les deux formules avec le prix de la session visée, remise déjà faite, et
  * le prix normal en petit : le prix se lit au moment de choisir, pas après.
  */
-async function formulesAvecPrix(formationId: string | null) {
+async function formulesAvecPrix(formationId: string | null, promoCodeId?: string | null) {
   const [b] = formationId
     ? await db.execute<{ price_total: string | null; monthly_count: number | null; monthly_amount: string | null; currency: string }>(sql`
         select price_total::text, monthly_count, monthly_amount::text, currency from bootcamps where id = ${formationId}`)
     : [];
   const devise = !b?.currency || b.currency === "TND" ? "دينار" : b.currency;
-  const remise = (v: string) => Math.round(Number(v) * (1 - REMISE));
   const normal = (v: string) => String(Number(v));
+  const code = b ? await codePourFlow(promoCodeId, formationId) : null;
+  const prix = code && b ? prixAvecCode({ priceTotal: b.price_total, monthlyCount: b.monthly_count, monthlyAmount: b.monthly_amount }, code) : null;
+  const pct = (v: string | null) => String(Number(v));
   return [
     b?.price_total
-      ? { id: "total", title: `مرة وحدة — ${remise(b.price_total)} ${devise}`, description: `عوض ${normal(b.price_total)} ${devise}، تخفيض 20%` }
+      ? prix?.total != null
+        ? { id: "total", title: `مرة وحدة — ${prix.total} ${devise}`, description: `عوض ${normal(b.price_total)} ${devise}، تخفيض ${pct(code!.remiseTotalPct)}%` }
+        : { id: "total", title: `مرة وحدة — ${normal(b.price_total)} ${devise}` }
       : { id: "total", title: "مرة وحدة" },
-    // La remise ne vaut que pour le paiement en une fois (décision du 25/09).
+    // La remise « facilité » n'existe que si le code la prévoit (décision du 25/09 : NEXTLEVEL20 non).
     b?.monthly_count && b.monthly_amount
-      ? {
-          id: "monthly",
-          title: `على ${b.monthly_count} أقساط — ${b.monthly_count} × ${normal(b.monthly_amount)} ${devise}`,
-        }
+      ? prix?.mensualite != null
+        ? {
+            id: "monthly",
+            title: `على ${b.monthly_count} أقساط — ${b.monthly_count} × ${prix.mensualite} ${devise}`,
+            description: `عوض ${b.monthly_count} × ${normal(b.monthly_amount)} ${devise}، تخفيض ${pct(code!.remiseFacilitePct)}%`,
+          }
+        : { id: "monthly", title: `على ${b.monthly_count} أقساط — ${b.monthly_count} × ${normal(b.monthly_amount)} ${devise}` }
       : { id: "monthly", title: "على أقساط (كل شهر)" },
   ];
 }

@@ -435,6 +435,7 @@ export async function createLeadAction(formData: FormData) {
     mobileNo,
     intendedPlan,
     promoCode,
+    promoCodeId: await (await import("@/lib/promo")).idDuCode(promoCode),
     sourceId: String(formData.get("sourceId") || "") || null,
     bootcampId,
     statusId,
@@ -465,7 +466,11 @@ export async function updateLeadFieldAction(
   ];
   if (!allowed.includes(field)) return;
 
-  await updateLeadQuery(leadId, { [field]: value || null });
+  await updateLeadQuery(leadId, {
+    [field]: value || null,
+    // Le code tapé change : le code reconnu suit.
+    ...(field === "promoCode" ? { promoCodeId: await (await import("@/lib/promo")).idDuCode(value) } : {}),
+  });
 
   // L'email doit suivre sur le CONTACT : c'est lui qui sert aux campagnes.
   // Sans ça, corriger une adresse ici ne change rien à qui reçoit quoi.
@@ -1791,6 +1796,13 @@ export async function clearAssistantAction() {
   const { db } = await import("@/db");
   await db.delete(assistantMessages).where(eq(assistantMessages.userEmail, user.email ?? ""));
   return { ok: true };
+}
+
+/** Le code promo reconnu sur la fiche et les prix qu'il donne — pré-remplit l'inscription. */
+export async function codeDuLeadAction(leadId: string) {
+  await requireUser();
+  const { codeDuLead } = await import("@/lib/promo");
+  return codeDuLead(leadId);
 }
 
 export async function getTeamAction() {

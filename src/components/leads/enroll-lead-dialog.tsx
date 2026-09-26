@@ -6,7 +6,9 @@ import {
   enrollLeadAction,
   attachPaymentProofAction,
   getTeamAction,
+  codeDuLeadAction,
 } from "@/app/actions";
+import type { CodeDuLead } from "@/lib/promo";
 import { useTeamProfiles } from "@/components/team-profiles";
 import { PaymentMethodPicker } from "@/components/leads/payment-method-picker";
 import type { Bootcamp, Lead } from "@/db/schema";
@@ -63,6 +65,21 @@ export function EnrollLeadDialog({
   useEffect(() => {
     getTeamAction().then(setTeam).catch(() => setTeam([]));
   }, []);
+
+  // Le code promo reconnu remplace le tarif de la formation — jamais une offre
+  // déjà négociée à la main, qui reste prioritaire.
+  const [code, setCode] = useState<CodeDuLead | null>(null);
+  useEffect(() => {
+    codeDuLeadAction(lead.id)
+      .then((c) => {
+        setCode(c);
+        if (!c?.valable) return;
+        if (c.total != null && lead.offerTotal == null) setTotalAmount(String(c.total));
+        if (c.mensualite != null && lead.offerMonthlyAmount == null)
+          setMonthlyAmounts((prev) => prev.map(() => String(c.mensualite)));
+      })
+      .catch(() => {});
+  }, [lead.id, lead.offerTotal, lead.offerMonthlyAmount]);
 
   // Montants pre-remplis au tarif de la formation : le cas courant reste un
   // clic. Ils sont modifiables parce qu'un prix se negocie.
@@ -263,6 +280,19 @@ export function EnrollLeadDialog({
                   </span>
                 )}
               </p>
+              {code && (
+                <p className="mt-1 text-[12.5px] text-muted-foreground">
+                  {!code.valable
+                    ? `Code ${code.code} : pas valable pour cette formation aujourd'hui — tarif normal.`
+                    : plan === "total"
+                      ? code.total != null
+                        ? `Code ${code.code} : −${code.remiseTotalPct} % sur le paiement en une fois, déjà appliqué.`
+                        : `Code ${code.code} : ne vaut pas pour le paiement en une fois.`
+                      : code.mensualite != null
+                        ? `Code ${code.code} : −${code.remiseFacilitePct} % sur chaque mensualité, déjà appliqué.`
+                        : `Code ${code.code} : ne vaut pas pour le paiement en plusieurs fois.`}
+                </p>
+              )}
             </div>
 
             {/* 1er paiement encaissé */}

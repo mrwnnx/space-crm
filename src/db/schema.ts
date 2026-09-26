@@ -284,6 +284,8 @@ export const leads = pgTable("leads", {
   formSourceId: uuid("form_source_id").references(() => formSources.id), // d'où vient le lead
   intendedPlan: paymentPlanEnum("intended_plan"), // plan envisagé (noté pendant le pipeline, avant inscription)
   promoCode: text("promo_code"),
+  // Le code reconnu dans promo_codes (0155) — le texte tapé reste dans promoCode.
+  promoCodeId: uuid("promo_code_id"),
   // ── L'offre NÉGOCIÉE avec ce lead (migration 0124) ──
   // Distincte du tarif catalogue de la formation : on négocie, et une remise
   // accordée trois semaines avant l'inscription n'avait aucun endroit où vivre.
@@ -1232,6 +1234,25 @@ export const whatsappSettings = pgTable("whatsapp_settings", {
   aiMode: text("ai_mode").notNull().default("off"),
   aiThreshold: integer("ai_threshold").notNull().default(90),
   aiInstructions: text("ai_instructions").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Les codes promo gérés dans le CRM (0155). Remises en pourcentage ; une remise
+// « facilité » vide = code non valable en paiement en plusieurs fois.
+export const promoCodes = pgTable("promo_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").notNull().unique(),
+  label: text("label").notNull().default(""),
+  source: text("source").notNull().default(""),
+  remiseTotalPct: numeric("remise_total_pct"),
+  remiseFacilitePct: numeric("remise_facilite_pct"),
+  validFrom: date("valid_from"),
+  validUntil: date("valid_until"),
+  bootcampIds: jsonb("bootcamp_ids").notNull().default([]),
+  assistantPeutProposer: boolean("assistant_peut_proposer").notNull().default(false),
+  actif: boolean("actif").notNull().default(true),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

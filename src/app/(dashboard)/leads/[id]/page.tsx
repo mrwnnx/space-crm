@@ -13,6 +13,7 @@ import { LeadOverview, type OverviewData } from "@/components/leads/lead-overvie
 import { cn, statusColor, initials, formatRelative, formatDateTime } from "@/lib/utils";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
+import { codeDuLead } from "@/lib/promo";
 import { LeadTags } from "@/components/leads/lead-tags";
 import { MarkLeadSeen } from "@/components/leads/mark-lead-seen";
 import { DuplicateBanner } from "@/components/leads/duplicate-banner";
@@ -105,7 +106,7 @@ export default async function LeadDetailPage({
       : a.content;
 
   // ── Ce qui alimente les onglets « Score » et « Activité ».
-  const [insight, engagement, multiSet, timeline] = await Promise.all([
+  const [insight, engagement, multiSet, timeline, codeReconnu] = await Promise.all([
     getInsightForLead(lead.id),
     getEngagementForLead(lead.id),
     // Restreint à CE lead : sans le 3e argument, la fiche scannait le
@@ -114,6 +115,7 @@ export default async function LeadDetailPage({
       ? getMultiFormByBootcamp(lead.bootcampId, lead.id)
       : Promise.resolve(new Set<string>()),
     getLeadTimeline(lead.id),
+    codeDuLead(lead.id),
   ]);
 
   const lastCall = callLogs[0] ?? null;
@@ -371,6 +373,7 @@ export default async function LeadDetailPage({
       }}
       sources={sources}
       bootcamp={lead.bootcamp}
+      codeReconnu={codeReconnu}
     />
   );
   const paymentEl = schedule ? (
