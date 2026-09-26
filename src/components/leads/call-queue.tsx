@@ -70,6 +70,16 @@ export function CallQueue({ leads }: { leads: QueueLead[] }) {
                       {INTENT_LABEL[lead.intent] ?? lead.intent}
                     </span>
                   )}
+                  {lead.proposedTemperature && (
+                    // Proposée par la lecture IA, différente de l'actuelle.
+                    // S'applique depuis la fiche, jamais d'ici.
+                    <span
+                      title={`Température proposée par la lecture IA${lead.proposedTemperature.proof ? ` — ${lead.proposedTemperature.proof}` : ""}`}
+                      className="cursor-help text-[13px]"
+                    >
+                      {lead.proposedTemperature.value === "hot" ? "🔥" : "❄️"}
+                    </span>
+                  )}
                   <span className="text-[12px] text-muted-foreground/70">
                     {lead.bootcampName} · {lead.statusName}
                   </span>

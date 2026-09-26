@@ -1046,6 +1046,17 @@ export const leadInsights = pgTable("lead_insights", {
   // frein : celle-ci dit quoi FAIRE. Nullable — les analyses antérieures n'en
   // ont pas, et l'écran retombe alors sur la recommandation déduite des faits.
   recommendation: text("recommendation"),
+  // Température PROPOSÉE (0156) : jamais appliquée seule, un humain clique
+  // « Appliquer ». La preuve est la phrase ou le fait qui la justifie, pour
+  // qu'on puisse la contredire. Nullables : les lectures antérieures n'en ont pas.
+  suggestedTemperature: temperatureEnum("suggested_temperature"),
+  temperatureProof: text("temperature_proof"),
+  // L'action en quelques mots (« l'appeler aujourd'hui ») ; `recommendation`
+  // en donne l'angle en une phrase.
+  nextAction: text("next_action"),
+  // Les signaux WhatsApp CALCULÉS au moment de la lecture (pas par le modèle) :
+  // [{ sens: "chaud" | "froid" | "frein", label }]. Affichés tels quels.
+  waSignals: jsonb("wa_signals").$type<{ sens: "chaud" | "froid" | "frein"; label: string }[]>(),
   // Empreinte de ce qui a été analysé : si rien n'a changé, on ne repaie pas.
   sourceHash: text("source_hash").notNull(),
   model: text("model").notNull(),

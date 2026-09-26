@@ -256,7 +256,17 @@ export default async function LeadDetailPage({
           lateDays: Math.floor((Date.now() - new Date(lead.nextFollowUpAt).getTime()) / 86400000),
         }
       : null,
-    insight: insight ? { summary: insight.summary, objection: insight.objection } : null,
+    insight: insight
+      ? {
+          summary: insight.summary,
+          objection: insight.objection,
+          suggestedTemperature: insight.suggestedTemperature,
+          temperatureProof: insight.temperatureProof,
+          nextAction: insight.nextAction,
+          waSignals: insight.waSignals,
+        }
+      : null,
+    temperature: lead.temperature,
     recent: lead.activities.slice(0, 3).map((a) => ({
       id: a.id,
       at: a.createdAt.toISOString(),
@@ -486,6 +496,7 @@ export default async function LeadDetailPage({
         <LeadTabs
           leadId={lead.id}
           insight={insight}
+          temperature={lead.temperature}
           recommendation={reco}
           timeline={timeline}
           overview={
