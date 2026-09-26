@@ -10,6 +10,7 @@ import {
   apprendreStyleAction,
   modifierSavoirAction,
   remarqueAssistantAction,
+  repondreQuestionAction,
   saveAssistantAction,
   statutSavoirAction,
   supprimerSavoirAction,
@@ -38,6 +39,7 @@ const TYPE: Record<string, string> = {
   souvenir: "Souvenir",
   lecon: "Règle",
   style: "Style",
+  question: "Question",
 };
 
 /**
@@ -76,10 +78,11 @@ export function AssistantWhatsApp({
   }
 
   // Ce qu'il apprend (souvenirs, règles, style) est à part de ce qu'on lui donne.
-  const aValider = savoir.filter((s) => s.status === "a_valider");
+  const questions = savoir.filter((s) => s.kind === "question" && s.status === "a_valider");
+  const aValider = savoir.filter((s) => s.status === "a_valider" && s.kind !== "question");
   const regles = savoir.filter((s) => s.kind === "lecon" && s.status !== "a_valider");
   const style = savoir.find((s) => s.kind === "style" && s.status === "actif") ?? null;
-  const donne = savoir.filter((s) => s.status !== "a_valider" && s.kind !== "lecon" && s.kind !== "style");
+  const donne = savoir.filter((s) => s.status !== "a_valider" && s.kind !== "lecon" && s.kind !== "style" && s.kind !== "question");
   const actifs = donne.filter((s) => s.status === "actif");
   const volume = actifs.reduce((n, s) => n + s.content.length, 0);
 
@@ -163,6 +166,8 @@ export function AssistantWhatsApp({
           {isPending ? "Enregistrement…" : "Enregistrer"}
         </button>
       </div>
+
+      <QuestionsSansReponse questions={questions} />
 
       <CeQuIlApprend aValider={aValider} regles={regles} style={style} />
 
@@ -506,3 +511,82 @@ function CeQuIlApprend({ aValider, regles, style }: { aValider: SavoirItem[]; re
   );
 }
 
+
+/**
+ * Les questions auxquelles il n'a pas su répondre, faute d'information.
+ * L'équipe répond une fois : la réponse entre dans son savoir, il ne passera
+ * plus la main sur cette question.
+ */
+function QuestionsSansReponse({ questions }: { questions: SavoirItem[] }) {
+  return (
+    <div className="mt-6 border-t border-border pt-4">
+      <h4 className="text-[13px] font-semibold text-foreground">
+        Questions sans réponse {questions.length > 0 && <span className="text-amber-700">({questions.length})</span>}
+      </h4>
+      <p className="mb-3 text-[12.5px] text-muted-foreground">
+        Ce qu&apos;on lui a demandé et qu&apos;il ne savait pas. Donnez la réponse une fois : il la gardera en mémoire.
+      </p>
+      {questions.length === 0 ? (
+        <p className="text-[12.5px] text-muted-foreground/80">Aucune pour l&apos;instant.</p>
+      ) : (
+        <div className="space-y-2">
+          {questions.map((q) => (
+            <LigneQuestion key={q.id} q={q} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LigneQuestion({ q }: { q: SavoirItem }) {
+  const router = useRouter();
+  const [reponse, setReponse] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+      <p dir="auto" className="text-sm font-medium text-foreground">{q.title}</p>
+      <p dir="auto" className="mt-0.5 text-[12px] text-muted-foreground">{q.content}</p>
+      <textarea
+        dir="auto"
+        value={reponse}
+        onChange={(e) => setReponse(e.target.value)}
+        rows={2}
+        placeholder="La réponse, telle que l'assistant doit la connaître"
+        className="mt-2 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+      />
+      <div className="mt-1.5 flex items-center justify-end gap-3">
+        {erreur && <span className="text-xs text-red-600">{erreur}</span>}
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              await statutSavoirAction(q.id, "archive");
+              router.refresh();
+            })
+          }
+          className="text-[12.5px] text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
+        >
+          Ignorer
+        </button>
+        <button
+          type="button"
+          disabled={isPending || !reponse.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              setErreur(null);
+              const r = await repondreQuestionAction(q.id, reponse);
+              if (!r.ok) return setErreur(r.error);
+              router.refresh();
+            })
+          }
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        >
+          Enregistrer la réponse
+        </button>
+      </div>
+    </div>
+  );
+}

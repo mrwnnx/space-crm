@@ -226,3 +226,38 @@ export async function apprendreStyle(auteur: string | null) {
   return { ok: true as const, n: exemples.length };
 }
 
+
+// ── Banque de questions (26/09) ────────────────────────
+
+/**
+ * Une question à laquelle l'assistant n'a pas su répondre : elle attend la
+ * réponse de l'équipe dans Paramètres. Une question déjà en attente n'est pas
+ * reposée (même texte, à la casse près).
+ */
+export async function ajouterQuestion(question: string, messageDuLead: string) {
+  const q = question.trim().slice(0, 300);
+  if (!q) return;
+  const [deja] = await db.execute<{ id: string }>(sql`
+    select id from ai_knowledge where kind = 'question' and status = 'a_valider' and lower(title) = lower(${q}) limit 1`);
+  if (deja) return;
+  await db.insert(aiKnowledge).values({
+    kind: "question",
+    title: q,
+    content: `Message du lead : « ${messageDuLead.slice(0, 300)} »`,
+    status: "a_valider",
+    createdBy: "assistant",
+  });
+}
+
+/** L'équipe répond : la question devient un savoir actif (question + réponse). */
+export async function repondreQuestion(id: string, reponse: string, auteur: string | null) {
+  const r = reponse.trim();
+  if (!r) return { ok: false as const, error: "La réponse est vide." };
+  const [q] = await db.select().from(aiKnowledge).where(and(eq(aiKnowledge.id, id), eq(aiKnowledge.kind, "question")));
+  if (!q) return { ok: false as const, error: "Question introuvable." };
+  await db
+    .update(aiKnowledge)
+    .set({ kind: "texte", status: "actif", content: `Question : ${q.title}\nRéponse de l'équipe : ${r}`, createdBy: auteur, updatedAt: new Date() })
+    .where(eq(aiKnowledge.id, id));
+  return { ok: true as const };
+}

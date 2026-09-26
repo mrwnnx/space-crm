@@ -304,6 +304,15 @@ export async function modifierSavoirAction(id: string, titre: string, contenu: s
   return r;
 }
 
+/** Banque de questions : l'équipe donne la réponse, elle entre dans son savoir. */
+export async function repondreQuestionAction(id: string, reponse: string) {
+  const user = await requireUser();
+  const { repondreQuestion } = await import("@/lib/ai/knowledge");
+  const r = await repondreQuestion(id, reponse, user.email ?? null);
+  revalidatePath("/settings");
+  return r;
+}
+
 /** Une remarque sur une réponse de l'assistant → une règle qu'il respecte. */
 export async function remarqueAssistantAction(texte: string, contexte?: string | null) {
   const user = await requireUser();

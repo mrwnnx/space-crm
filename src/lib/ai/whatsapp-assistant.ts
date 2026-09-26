@@ -40,6 +40,7 @@ const Redaction = z.object({
   robot: z.boolean(),
   intentionInscription: z.boolean(),
   prometUnHumain: z.boolean(),
+  infoManquante: z.string().nullable(),
 });
 
 const Note = z.object({
@@ -141,6 +142,10 @@ export type Traitement = {
   raisons: string;
   // Les codes promo reconnus dans le message : notés sur la fiche s'il n'y en a pas.
   codes?: { id: string; code: string }[];
+  // Sa réponse promet qu'un conseiller rappelle : l'équipe doit être prévenue.
+  rappel?: boolean;
+  // La question à laquelle il manquait l'information → banque de questions.
+  infoManquante?: string | null;
 };
 
 /** Rédige et note, sans rien envoyer ni écrire. Sert au webhook et aux essais. */
@@ -173,8 +178,10 @@ Règles :
 - Ne redemande JAMAIS une information que le CRM a déjà (nom, téléphone, email, formule choisie) : utilise-la.
 - Si l'information manque, dis simplement qu'un conseiller va répondre.
 - Court : 1 à 4 phrases, comme sur WhatsApp. Pas de signature.
-- sujetArgent = true SEULEMENT pour un transfert d'argent : RIB, virement, preuve ou reçu de paiement, paiement à vérifier, remboursement, différence à payer, facture. Un prix, une formule ou un code promo ne sont PAS un sujet d'argent : réponds-y.
+- sujetArgent = true SEULEMENT pour ce qu'un humain doit vérifier : preuve ou reçu de paiement envoyé, paiement à vérifier, remboursement, différence à payer, facture, litige. Donner le RIB ou expliquer un moyen de paiement QUI EST DANS LE SAVOIR n'est PAS un sujet d'argent : réponds-y. Un prix, une formule ou un code promo non plus.
 - prometUnHumain = true si ta réponse annonce qu'un conseiller ou l'équipe va répondre, vérifier ou revenir vers la personne (une simple proposition « tu veux qu'on t'appelle ? » ne compte pas).
+- infoManquante = la question précise, reformulée courte en français, à laquelle tu n'as PAS pu répondre faute d'information dans le SAVOIR ou le CONTEXTE (ex. « Le certificat est-il homologué ? »). null si tu as tout.
+- Avant de rendre ta réponse, relis-la contre chaque RÈGLE DE L'ÉQUIPE, mot pour mot, et corrige toute violation.
 - robot = true si le message est une réponse automatique d'une entreprise, pas une personne.
 - Codes promo : n'utilise QUE les prix de la section CODES PROMO du contexte, au dinar près ; un code expiré ou qui ne vaut pas pour la formule demandée, dis-le simplement. Un code que la section ne connaît pas : dis qu'un conseiller va vérifier. Ne propose un code de toi-même que si la section l'autorise ET que la personne trouve le prix trop cher.
 - intentionInscription = true si la personne veut s'inscrire ou réserver sa place (« نحب نسجل », « كيفاش نقيد », « nheb nsajel »), ou dit oui quand l'école lui proposait de l'inscrire. Le formulaire d'inscription part alors avec ta réponse : écris juste une phrase courte et chaleureuse qui l'invite à le remplir (sans demander nom, téléphone ou email).
@@ -235,25 +242,28 @@ ${savoir}`,
   const note = r2.parsed_output;
   const score = Math.max(0, Math.min(100, Math.round(note?.score ?? 0)));
   const raisons = note?.raisons?.trim() || "Note illisible.";
+  const infoManquante = redaction.infoManquante?.trim() || null;
 
   if (redaction.sujetArgent) {
-    return { decision: "escalade", draft: redaction.reponse, score, raisons: `Question d'argent : toujours un humain. ${raisons}`, codes };
+    return { decision: "escalade", draft: redaction.reponse, score, raisons: `Question d'argent : toujours un humain. ${raisons}`, codes, infoManquante };
   }
-  // Promettre un humain sans le prévenir laisserait la personne sans réponse.
-  if (redaction.prometUnHumain && !redaction.intentionInscription) {
-    return { decision: "escalade", draft: redaction.reponse, score, raisons: `Sa réponse promet un conseiller : l'équipe est prévenue. ${raisons}`, codes };
-  }
+  // Promettre un humain : la réponse part quand même si elle est bonne (elle
+  // contient l'utile), et l'équipe est prévenue pour tenir la promesse.
+  // Remplacer une réponse notée 90 % par « on revient vers toi » (26/09) était pire.
+  const rappel = redaction.prometUnHumain && !redaction.intentionInscription;
   // Vouloir s'inscrire n'appelle pas une information risquée, mais un geste :
   // le formulaire. Il part quelle que soit la note de la phrase qui l'accompagne.
   if (redaction.intentionInscription) {
-    return { decision: "formulaire", draft: redaction.reponse, score, raisons: `Veut s'inscrire : le formulaire « نحب نسجل » part avec la réponse. ${raisons}`, codes };
+    return { decision: "formulaire", draft: redaction.reponse, score, raisons: `Veut s'inscrire : le formulaire « نحب نسجل » part avec la réponse. ${raisons}`, codes, infoManquante };
   }
   return {
     decision: score >= settings.aiThreshold ? "pret" : "escalade",
     draft: redaction.reponse,
     score,
-    raisons,
+    raisons: rappel ? `Sa réponse promet un conseiller : l'équipe est prévenue. ${raisons}` : raisons,
     codes,
+    rappel,
+    infoManquante,
   };
 }
 
@@ -297,17 +307,35 @@ export async function traiterMessageAssistant(input: {
       }
     }
 
+    // Ce qu'il ne savait pas va dans la banque de questions (Paramètres) :
+    // l'équipe y répond une fois, il le saura pour toujours.
+    if (t.infoManquante) {
+      const { ajouterQuestion } = await import("@/lib/ai/knowledge");
+      await ajouterQuestion(t.infoManquante, q).catch((e) => console.error("Banque de questions :", e));
+    }
+
     const envoyer = settings.aiMode === "auto" || estNumeroDeTest(input.numero, lireNumeros(settings.aiTesters));
     if (!envoyer || t.decision === "ignore") return;
 
     // Il passe la main : l'équipe est prévenue (la cloche mène à la conversation,
     // où sa proposition attend) — sinon « on revient vers toi » resterait sans suite.
-    if (t.decision === "escalade") {
+    // « On revient vers toi » une seule fois par demi-heure : envoyé huit fois
+    // de suite à Balkis le 26/09. Une seule notification aussi.
+    const [recent] = await db.execute<{ n: number }>(sql`
+      select count(*)::int as n from ai_replies
+      where lead_id = ${input.leadId} and id <> ${ligne.id} and created_at > now() - interval '30 minutes'
+        and (sent_text = ${MESSAGE_ATTENTE} or (decision = 'escalade' and sent_text is null))`);
+    const dejaPrevenu = (recent?.n ?? 0) > 0;
+    if (t.decision === "escalade" && dejaPrevenu) return;
+
+    if ((t.decision === "escalade" || t.rappel) && !dejaPrevenu) {
       const { createNotification } = await import("@/lib/queries");
       const fiche = await db.query.leads.findFirst({ where: eq(leads.id, input.leadId), columns: { fullName: true } });
       await createNotification({
         type: "assistant_escalade",
-        message: `L'assistant passe la main — ${fiche?.fullName ?? "un lead"} : « ${q.slice(0, 80)} »`,
+        message: t.rappel && t.decision !== "escalade"
+          ? `L'assistant a promis un appel — ${fiche?.fullName ?? "un lead"} : « ${q.slice(0, 80)} »`
+          : `L'assistant passe la main — ${fiche?.fullName ?? "un lead"} : « ${q.slice(0, 80)} »`,
         referenceType: "lead",
         referenceId: input.leadId,
       });
