@@ -1,4 +1,5 @@
-import { getContacts, getOrganizations, getViewSettings } from "@/lib/queries";
+import { countContacts, getContacts, getOrganizations, getViewSettings } from "@/lib/queries";
+import { Pagination } from "@/components/leads/leads-list";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, AvatarCell, TextCell, DateCell } from "@/components/data-table";
 import { NewContactButton } from "@/components/contacts/new-contact-button";
@@ -10,11 +11,14 @@ export const dynamic = "force-dynamic";
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; perPage?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, page, perPage } = await searchParams;
+  const parPage = [30, 50, 100].includes(Number(perPage)) ? Number(perPage) : 50;
+  const total = await countContacts(q);
+  const pageCourante = Math.min(Math.max(1, Math.floor(Number(page)) || 1), Math.max(1, Math.ceil(total / parPage)));
   const [contacts, organizations, savedViews] = await Promise.all([
-    getContacts(q),
+    getContacts(q, { limit: parPage, offset: (pageCourante - 1) * parPage }),
     getOrganizations(),
     getViewSettings("contacts"),
   ]);
@@ -23,7 +27,7 @@ export default async function ContactsPage({
     <>
       <PageHeader
         title="Contacts"
-        subtitle={`${contacts.length} contact${contacts.length > 1 ? "s" : ""}`}
+        subtitle={`${total} contact${total > 1 ? "s" : ""}`}
         actions={
           <div className="flex items-center gap-2">
             <SavedViewsDropdown
@@ -91,6 +95,7 @@ export default async function ContactsPage({
           getHref={(c) => `/contacts/${c.id}`}
         />
       </div>
+      {total > 0 && <Pagination total={total} page={pageCourante} perPage={parPage} basePath="/contacts" />}
     </>
   );
 }

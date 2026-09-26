@@ -367,7 +367,7 @@ export function LeadsList({
 }
 
 // Le bas de la liste : où on en est, page précédente / suivante, et combien par page.
-function Pagination({ total, page, perPage }: { total: number; page: number; perPage: number }) {
+export function Pagination({ total, page, perPage, basePath = "/leads" }: { total: number; page: number; perPage: number; basePath?: string }) {
   const searchParams = useSearchParams();
   const derniere = Math.max(1, Math.ceil(total / perPage));
 
@@ -380,7 +380,7 @@ function Pagination({ total, page, perPage }: { total: number; page: number; per
     if (pp !== 50) sp.set("perPage", String(pp));
     else sp.delete("perPage");
     const qs = sp.toString();
-    return `/leads${qs ? `?${qs}` : ""}`;
+    return `${basePath}${qs ? `?${qs}` : ""}`;
   }
 
   const bouton = "rounded-lg border border-border px-2.5 py-1.5 text-xs";

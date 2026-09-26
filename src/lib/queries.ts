@@ -611,18 +611,32 @@ export type ContactWithRelations = typeof contacts.$inferSelect & {
   organization: typeof organizations.$inferSelect | null;
 };
 
-export async function getContacts(search?: string): Promise<ContactWithRelations[]> {
+function filtreContacts(search?: string) {
+  return search
+    ? or(
+        ilike(contacts.fullName, `%${search}%`),
+        ilike(contacts.email, `%${search}%`),
+        ilike(contacts.mobileNo, `%${search}%`)
+      )
+    : undefined;
+}
+
+// Une page à la fois : les 10 846 contacts d'un coup mettaient 91 s et figeaient Chrome (audit 26/09).
+export async function getContacts(
+  search?: string,
+  page?: { limit: number; offset: number }
+): Promise<ContactWithRelations[]> {
   return db.query.contacts.findMany({
-    where: search
-      ? or(
-          ilike(contacts.fullName, `%${search}%`),
-          ilike(contacts.email, `%${search}%`),
-          ilike(contacts.mobileNo, `%${search}%`)
-        )
-      : undefined,
+    where: filtreContacts(search),
     with: { organization: true },
     orderBy: [desc(contacts.createdAt)],
+    ...(page ? { limit: page.limit, offset: page.offset } : {}),
   });
+}
+
+export async function countContacts(search?: string) {
+  const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(contacts).where(filtreContacts(search));
+  return r?.n ?? 0;
 }
 
 export async function getContactById(id: string) {

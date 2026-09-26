@@ -27,6 +27,10 @@ const MODEL = "claude-opus-5";
 // Le savoir est coupé au-delà : un prompt géant coûte cher et noie l'utile.
 const MAX_SAVOIR = 120_000;
 
+// Au-delà, l'assistant ne lit plus : garde-fou contre une facture Claude qui s'emballe.
+const PLAFOND_HEURE_PAR_NUMERO = 30; // un vrai test monte à ~20 (Balkis, 26/09)
+const PLAFOND_JOUR = 400;
+
 export const MESSAGE_ATTENTE = "شكرا على رسالتك 🙏 باش نرجعولك في أقرب وقت ممكن.";
 
 // Les messages automatiques d'autres entreprises (vus le 25/09) : ne jamais
@@ -283,6 +287,18 @@ export async function traiterMessageAssistant(input: {
     const q = input.question.trim();
     // Rien à lire : pièces jointes non lisibles, boutons, formulaires remplis.
     if (!q || q.startsWith("[") || q.startsWith("📝")) return;
+
+    // Plafonds (audit 26/09) : chaque message coûte deux appels Claude. Un
+    // numéro qui mitraille, ou un volume anormal sur la journée, et l'assistant
+    // se tait — les messages restent dans Messages, l'équipe y répond.
+    const [volume] = await db.execute<{ heure: number; jour: number }>(sql`
+      select count(*) filter (where lead_id = ${input.leadId} and created_at > now() - interval '1 hour')::int as heure,
+             count(*)::int as jour
+      from ai_replies where created_at > now() - interval '24 hours'`);
+    if ((volume?.heure ?? 0) >= PLAFOND_HEURE_PAR_NUMERO || (volume?.jour ?? 0) >= PLAFOND_JOUR) {
+      console.warn("Assistant WhatsApp : plafond atteint", { lead: input.leadId, ...volume });
+      return;
+    }
 
     const t = await preparerReponse({ leadId: input.leadId, question: q });
     const [ligne] = await db
