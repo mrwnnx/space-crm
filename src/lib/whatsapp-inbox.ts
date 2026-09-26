@@ -431,6 +431,15 @@ export async function ingestInboundWhatsApp(input: {
       content: contenu,
     })
     .returning({ id: activities.id });
+
+  // Il a écrit : il est « Contacté » (Nouveau, Intéressé, Did not answer → Contacté ;
+  // jamais en arrière). Un raté ne doit pas perdre le message déjà rangé.
+  try {
+    const { passerEnContacte } = await import("@/lib/pipeline-whatsapp");
+    await passerEnContacte(lead.id);
+  } catch (e) {
+    console.error("Passage en Contacté :", e);
+  }
   if (input.wamid) {
     await db
       .insert(whatsappMessages)

@@ -122,6 +122,9 @@ async function passerEnInteresse(leadId: string, colonne: string) {
   const [l] = await db.execute<{ status_id: string | null; kind: string | null }>(sql`
     select l.status_id, s.kind::text as kind from leads l left join lead_statuses s on s.id = l.status_id where l.id = ${leadId}`);
   if (!l || l.status_id === colonne || l.kind === "converted") return;
+  // Déjà plus loin (Contacté, Payment pending…) : le formulaire ne fait pas reculer.
+  const { dejaPlusLoin } = await import("@/lib/pipeline-whatsapp");
+  if (await dejaPlusLoin(leadId, colonne)) return;
   await moveLeadToStage(leadId, colonne);
   const { runStatusAutomations } = await import("@/lib/automations");
   await runStatusAutomations(leadId, colonne);
