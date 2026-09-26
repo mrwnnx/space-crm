@@ -192,7 +192,12 @@ ${savoir}`,
     messages: [
       {
         role: "user",
-        content: `CONTEXTE DE LA PERSONNE :\n${ctx}\n\nCONVERSATION :\n${conv || "(début)"}\n\nMESSAGE DE LA PERSONNE :\n${input.question}\n\nRÉPONSE PROPOSÉE :\n${redaction.reponse}`,
+        content: `CONTEXTE DE LA PERSONNE :\n${ctx}\n\nCONVERSATION :\n${conv || "(début)"}\n\nMESSAGE DE LA PERSONNE :\n${input.question}\n\nRÉPONSE PROPOSÉE :\n${redaction.reponse}${
+          // Sans cette précision, la note traitait d'« invention » la mention du formulaire.
+          redaction.intentionInscription
+            ? "\n\n(Le formulaire d'inscription « نحب نسجل » est joint automatiquement à cette réponse : la mentionner est juste.)"
+            : ""
+        }`,
       },
     ],
   });
