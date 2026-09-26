@@ -76,7 +76,7 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
                   </div>
                 )}
                 {activity.content && (
-                  <p className="mt-1 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap">
+                  <p dir="auto" className="mt-1 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap">
                     {activity.content}
                   </p>
                 )}

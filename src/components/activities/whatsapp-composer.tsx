@@ -131,7 +131,7 @@ export function WhatsAppComposer({
 
       {mode === "libre" ? (
         <form onSubmit={submit} className="space-y-2">
-          <textarea
+          <textarea dir="auto"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Votre message WhatsApp..."

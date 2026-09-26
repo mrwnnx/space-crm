@@ -240,7 +240,10 @@ export async function codesPourAssistant(leadId: string, message: string, dejaEc
   const proposable = codes.find(
     (c) => c.assistantPeutProposer && codeValable(c, b.id) && !ecrit.includes(c.code) && c.id !== lead?.promoCodeId
   );
+  // Un code que l'école a déjà envoyé à ce numéro (modèle « formation complète ») fait foi.
+  const annonces = codes.filter((c) => ecrit.includes(c.code) && !cites.some((x) => x.id === c.id) && c.id !== sien?.id);
   const lignes = [
+    annonces.length ? `Codes déjà annoncés à cette personne par l'école (tu peux t'y référer) :\n${annonces.map((c) => `- ${lignePrix(c, b, b.id)}`).join("\n")}` : "",
     cites.length ? `Codes cités dans le NOUVEAU message (déjà reconnus, fautes de frappe comprises) :\n${cites.map((c) => `- ${lignePrix(c, b, b.id)}`).join("\n")}` : "",
     sien ? `Code déjà noté sur sa fiche : ${lignePrix(sien, b, b.id)}` : "",
     proposable

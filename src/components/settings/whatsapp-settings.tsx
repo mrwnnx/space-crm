@@ -187,7 +187,7 @@ function SectionAuto({ initial }: { initial: AutoReplies }) {
             <span className="font-mono">{"{{formation}}"}</span> sont remplacés.
           </p>
           {v.welcomeEnabled && (
-            <textarea
+            <textarea dir="auto"
               value={v.welcomeText}
               onChange={(e) => setV({ ...v, welcomeText: e.target.value })}
               rows={3}
@@ -214,7 +214,7 @@ function SectionAuto({ initial }: { initial: AutoReplies }) {
           </p>
           {v.awayEnabled && (
             <div className="mt-2 space-y-2">
-              <textarea
+              <textarea dir="auto"
                 value={v.awayText}
                 onChange={(e) => setV({ ...v, awayText: e.target.value })}
                 rows={3}
@@ -331,7 +331,7 @@ function SectionReponsesRapides({ items }: { items: QuickReply[] }) {
           {items.map((q) => (
             <li key={q.id} className="flex items-start gap-3 px-3 py-2">
               <span className="shrink-0 font-mono text-xs text-primary">/{q.shortcut}</span>
-              <span className="min-w-0 flex-1 whitespace-pre-wrap text-xs text-foreground">{q.text}</span>
+              <span dir="auto" className="min-w-0 flex-1 whitespace-pre-wrap text-xs text-foreground">{q.text}</span>
               <button
                 type="button"
                 onClick={() => supprimer(q.id)}
@@ -360,7 +360,7 @@ function SectionReponsesRapides({ items }: { items: QuickReply[] }) {
         </label>
         <label className="min-w-64 flex-1">
           <span className={LABEL}>Texte</span>
-          <textarea
+          <textarea dir="auto"
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
@@ -563,7 +563,7 @@ function SectionProfil({
           </div>
           <div className="sm:col-span-2">
             <label className={LABEL}>Description (512 car.)</label>
-            <textarea name="description" defaultValue={p.description} maxLength={512} rows={3} className={INPUT} />
+            <textarea dir="auto" name="description" defaultValue={p.description} maxLength={512} rows={3} className={INPUT} />
           </div>
           <div>
             <label className={LABEL}>Adresse</label>
@@ -716,7 +716,7 @@ function LigneModele({
       {edition ? (
         <EditeurModele t={t} onFermer={() => setEdition(false)} />
       ) : (
-        t.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{t.body}</p>
+        t.body && <p dir="auto" className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{t.body}</p>
       )}
       {t.autresBoutons.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -848,7 +848,7 @@ function ActionBouton({
               ))}
             </select>
           </div>
-          <textarea
+          <textarea dir="auto"
             value={reply}
             onChange={(e) => setReply(e.target.value)}
             rows={2}
@@ -1196,7 +1196,7 @@ function NouveauModele({ existants }: { existants: string[] }) {
 
       <label>
         <span className={LABEL}>Message</span>
-        <textarea
+        <textarea dir="auto"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={5}

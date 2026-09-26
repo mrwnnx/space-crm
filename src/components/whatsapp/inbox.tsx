@@ -475,12 +475,15 @@ function Bulle({
               )}
             >
               <span className="block text-[12px] font-medium">{m.replyTo.direction === "outbound" ? "Vous" : "Le lead"}</span>
-              <span className="line-clamp-2">{m.replyTo.content}</span>
+              <span dir="auto" className="line-clamp-2">{m.replyTo.content}</span>
             </div>
           )}
           {m.media && <PieceJointe media={m.media} sortant={sortant} />}
           {/* Sans légende, le texte n'est que le libellé « 📷 Photo » : le média suffit. */}
-          {!(m.media && m.media.kind !== "document" && /^(📷|🎥|🎤|Sticker)/.test(m.content ?? "")) && m.content}
+          {!(m.media && m.media.kind !== "document" && /^(📷|🎥|🎤|Sticker)/.test(m.content ?? "")) && (
+            // L'arabe se lit de droite à gauche : le sens vient du texte lui-même.
+            <span dir="auto" className="block">{m.content}</span>
+          )}
           <p className={cn("mt-1 text-right text-[12px]", sortant ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {sortant && m.createdBy ? `${resolve(m.createdBy).name} · ` : ""}
             {d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
@@ -651,16 +654,13 @@ function useVocal(onFichier: (f: File) => void, onErreur: (e: string) => void) {
   return { enregistre, duree, demarrer, arreter };
 }
 
-/** Les coches de WhatsApp : ✓ envoyé, ✓✓ livré, ✓✓ bleues lu, ! échec. Rien = statut inconnu. */
+/** L'accusé en mots plutôt qu'en coches : Envoyé, Reçu, Vu, Échec. Rien = statut inconnu. */
 function Accuse({ status }: { status: Message["status"] }) {
-  if (!status) return null;
-  if (status === "failed") return <span className="ml-1 font-semibold text-red-300" title="Échec">!</span>;
+  if (!status || status === "received") return null;
+  if (status === "failed") return <span className="ml-1 font-semibold text-red-300">· Échec</span>;
   return (
-    <span
-      className={cn("ml-1", status === "read" ? "text-sky-300" : "text-primary-foreground/70")}
-      title={status === "read" ? "Lu" : status === "delivered" ? "Livré" : "Envoyé"}
-    >
-      {status === "sent" ? "✓" : "✓✓"}
+    <span className={cn("ml-1", status === "read" ? "font-semibold text-sky-200" : "text-primary-foreground/70")}>
+      · {status === "read" ? "Vu" : status === "delivered" ? "Reçu" : "Envoyé"}
     </span>
   );
 }
@@ -815,7 +815,7 @@ function ReponseLibre({
           Aucune réponse rapide — créez-en dans Paramètres → WhatsApp.
         </p>
       )}
-      <textarea
+      <textarea dir="auto"
         ref={zone}
         value={texte}
         onChange={(e) => setTexte(e.target.value)}
@@ -970,7 +970,7 @@ function ReponseModele({ leadId, to, templates }: { leadId: string; to: string; 
             ))}
           </select>
           {modele?.body && (
-            <p className="rounded-lg bg-muted px-3 py-2 text-xs whitespace-pre-wrap text-foreground">{modele.body}</p>
+            <p dir="auto" className="rounded-lg bg-muted px-3 py-2 text-xs whitespace-pre-wrap text-foreground">{modele.body}</p>
           )}
           {modele &&
             Array.from({ length: modele.variables }, (_, i) => (
