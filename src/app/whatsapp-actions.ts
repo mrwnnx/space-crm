@@ -56,7 +56,7 @@ export async function setWhatsAppArchivedAction(leadId: string, archived: boolea
 
 /** Texte libre — Meta le refuse hors fenêtre de 24 h, avec un message clair. `replyTo` cite un message. */
 export async function replyWhatsAppAction(leadId: string, to: string, body: string, replyTo?: string | null) {
-  await requireUser();
+  const user = await requireUser();
   const texte = body.trim();
   if (!texte) return { ok: false as const, error: "Message vide." };
 
@@ -76,7 +76,7 @@ export async function replyWhatsAppAction(leadId: string, to: string, body: stri
   // Répondu par un humain : la proposition de l'assistant est traitée, et cette
   // réponse nourrira sa mémoire.
   const { noterReponseHumaine } = await import("@/lib/ai/whatsapp-assistant");
-  await noterReponseHumaine(leadId, texte).catch(() => {});
+  await noterReponseHumaine(leadId, texte, user.email ?? null).catch(() => {});
   revalidatePath("/whatsapp");
   revalidatePath(`/leads/${leadId}`);
   return { ok: true as const };
@@ -287,6 +287,31 @@ export async function statutSavoirAction(id: string, status: "actif" | "archive"
   await changerStatutSavoir(id, status);
   revalidatePath("/settings");
   return { ok: true as const };
+}
+
+export async function modifierSavoirAction(id: string, titre: string, contenu: string) {
+  await requireUser();
+  const { modifierSavoir } = await import("@/lib/ai/knowledge");
+  const r = await modifierSavoir(id, titre, contenu);
+  revalidatePath("/settings");
+  return r;
+}
+
+/** Une remarque sur une réponse de l'assistant → une règle qu'il respecte. */
+export async function remarqueAssistantAction(texte: string, contexte?: string | null) {
+  const user = await requireUser();
+  const { ajouterLecon } = await import("@/lib/ai/knowledge");
+  const r = await ajouterLecon(texte, user.email ?? null, contexte);
+  revalidatePath("/settings");
+  return r;
+}
+
+export async function apprendreStyleAction() {
+  const user = await requireUser();
+  const { apprendreStyle } = await import("@/lib/ai/knowledge");
+  const r = await apprendreStyle(user.email ?? null);
+  revalidatePath("/settings");
+  return r;
 }
 
 export async function supprimerSavoirAction(id: string) {

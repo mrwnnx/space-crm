@@ -7,6 +7,9 @@ import {
   ajouterSavoirFichierAction,
   ajouterSavoirLienAction,
   ajouterSavoirTexteAction,
+  apprendreStyleAction,
+  modifierSavoirAction,
+  remarqueAssistantAction,
   saveAssistantAction,
   statutSavoirAction,
   supprimerSavoirAction,
@@ -28,7 +31,14 @@ const MODES = [
   { v: "auto", l: "Automatique", d: "Il envoie ses réponses sûres, et passe la main pour les autres. Bientôt." },
 ] as const;
 
-const TYPE: Record<string, string> = { texte: "Texte", fichier: "Fichier", lien: "Lien", souvenir: "Souvenir" };
+const TYPE: Record<string, string> = {
+  texte: "Texte",
+  fichier: "Fichier",
+  lien: "Lien",
+  souvenir: "Souvenir",
+  lecon: "Règle",
+  style: "Style",
+};
 
 /**
  * L'assistant WhatsApp : son mode, son seuil de confiance, ses consignes, et
@@ -62,7 +72,12 @@ export function AssistantWhatsApp({
     });
   }
 
-  const actifs = savoir.filter((s) => s.status === "actif");
+  // Ce qu'il apprend (souvenirs, règles, style) est à part de ce qu'on lui donne.
+  const aValider = savoir.filter((s) => s.status === "a_valider");
+  const regles = savoir.filter((s) => s.kind === "lecon" && s.status !== "a_valider");
+  const style = savoir.find((s) => s.kind === "style" && s.status === "actif") ?? null;
+  const donne = savoir.filter((s) => s.status !== "a_valider" && s.kind !== "lecon" && s.kind !== "style");
+  const actifs = donne.filter((s) => s.status === "actif");
   const volume = actifs.reduce((n, s) => n + s.content.length, 0);
 
   return (
@@ -133,6 +148,8 @@ export function AssistantWhatsApp({
         </button>
       </div>
 
+      <CeQuIlApprend aValider={aValider} regles={regles} style={style} />
+
       <div className="mt-6 border-t border-border pt-4">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h4 className="text-sm font-semibold text-foreground">Son savoir</h4>
@@ -141,13 +158,13 @@ export function AssistantWhatsApp({
           </span>
         </div>
         <AjoutSavoir />
-        {savoir.length === 0 ? (
+        {donne.length === 0 ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Rien pour l&apos;instant. Ajoutez la brochure, la page du programme, vos réponses habituelles…
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-border rounded-lg border border-border">
-            {savoir.map((s) => (
+            {donne.map((s) => (
               <LigneSavoir key={s.id} s={s} />
             ))}
           </ul>
@@ -289,8 +306,12 @@ function LigneSavoir({ s }: { s: SavoirItem }) {
   const router = useRouter();
   const [ouvert, setOuvert] = useState(false);
   const [confirme, setConfirme] = useState(false);
+  const [edition, setEdition] = useState(false);
+  const [titre, setTitre] = useState(s.title);
+  const [contenu, setContenu] = useState(s.content);
   const [isPending, startTransition] = useTransition();
   const actif = s.status === "actif";
+  const aValider = s.status === "a_valider";
 
   return (
     <li className="px-3 py-2.5">
@@ -300,14 +321,31 @@ function LigneSavoir({ s }: { s: SavoirItem }) {
           {s.title}
         </button>
         <span className="text-[12px] tabular-nums text-muted-foreground">{Math.round(s.content.length / 100) / 10} k</span>
-        {s.status === "a_valider" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11.5px] text-amber-800">à valider</span>}
+        {aValider ? (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => startTransition(async () => { await statutSavoirAction(s.id, "actif"); router.refresh(); })}
+            className="rounded-md bg-green-600 px-2 py-0.5 text-[12px] font-medium text-white hover:bg-green-700"
+          >
+            Valider
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => startTransition(async () => { await statutSavoirAction(s.id, actif ? "archive" : "actif"); router.refresh(); })}
+            className="text-[12.5px] text-muted-foreground hover:text-foreground hover:underline"
+          >
+            {actif ? "Mettre de côté" : "Activer"}
+          </button>
+        )}
         <button
           type="button"
-          disabled={isPending}
-          onClick={() => startTransition(async () => { await statutSavoirAction(s.id, actif ? "archive" : "actif"); router.refresh(); })}
+          onClick={() => { setEdition(!edition); setOuvert(false); }}
           className="text-[12.5px] text-muted-foreground hover:text-foreground hover:underline"
         >
-          {actif ? "Mettre de côté" : "Activer"}
+          Modifier
         </button>
         {confirme ? (
           <button
@@ -320,10 +358,34 @@ function LigneSavoir({ s }: { s: SavoirItem }) {
           </button>
         ) : (
           <button type="button" onClick={() => setConfirme(true)} className="text-[12.5px] text-muted-foreground hover:text-red-600 hover:underline">
-            Supprimer
+            {aValider ? "Rejeter" : "Supprimer"}
           </button>
         )}
       </div>
+      {edition && (
+        <div className="mt-2 space-y-2">
+          <input
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring"
+          />
+          <textarea
+            value={contenu}
+            onChange={(e) => setContenu(e.target.value)}
+            rows={6}
+            dir="auto"
+            className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[13px] outline-none focus:border-ring"
+          />
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => startTransition(async () => { const r = await modifierSavoirAction(s.id, titre, contenu); if (r.ok) { setEdition(false); router.refresh(); } })}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {isPending ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </div>
+      )}
       {s.source && s.kind === "lien" && (
         <a href={s.source} target="_blank" rel="noreferrer" className="mt-0.5 block truncate text-[12px] text-muted-foreground underline">
           {s.source}
@@ -337,3 +399,94 @@ function LigneSavoir({ s }: { s: SavoirItem }) {
     </li>
   );
 }
+
+/**
+ * Ce qu'il apprend : les souvenirs et le style à valider (rien n'entre dans
+ * sa mémoire sans l'équipe), les règles données par remarque, son style.
+ */
+function CeQuIlApprend({ aValider, regles, style }: { aValider: SavoirItem[]; regles: SavoirItem[]; style: SavoirItem | null }) {
+  const router = useRouter();
+  const [regle, setRegle] = useState("");
+  const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <div className="mt-6 border-t border-border pt-4">
+      <h4 className="mb-1 text-sm font-semibold text-foreground">Ce qu&apos;il apprend</h4>
+      <p className="mb-3 text-[12.5px] text-muted-foreground">
+        Vos corrections deviennent des souvenirs, vos remarques des règles. Rien n&apos;entre dans sa mémoire sans votre
+        validation.
+      </p>
+
+      {aValider.length > 0 && (
+        <div className="mb-4">
+          <p className="mb-1.5 text-[12.5px] font-medium text-amber-800">À valider ({aValider.length})</p>
+          <ul className="divide-y divide-amber-200 rounded-lg border border-amber-300 bg-amber-50/60">
+            {aValider.map((s) => (
+              <LigneSavoir key={s.id} s={s} />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="mb-1.5 text-[12.5px] font-medium text-foreground">Règles de l&apos;équipe ({regles.length})</p>
+      <div className="mb-2 flex gap-2">
+        <input
+          value={regle}
+          onChange={(e) => setRegle(e.target.value)}
+          placeholder="Ex. : propose toujours le formulaire quand quelqu'un hésite"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring"
+        />
+        <button
+          type="button"
+          disabled={isPending || !regle.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              const r = await remarqueAssistantAction(regle);
+              if (r.ok) { setRegle(""); router.refresh(); }
+            })
+          }
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        >
+          + Règle
+        </button>
+      </div>
+      {regles.length > 0 && (
+        <ul className="mb-4 divide-y divide-border rounded-lg border border-border">
+          {regles.map((s) => (
+            <LigneSavoir key={s.id} s={s} />
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[12.5px] font-medium text-foreground">Son style :</p>
+        <span className="text-[12.5px] text-muted-foreground">
+          {style ? "appris et validé" : "pas encore appris"}
+        </span>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              setMessage(null);
+              const r = await apprendreStyleAction();
+              setMessage(r.ok ? { ok: true, texte: `Style tiré de ${r.n} messages : relisez-le dans « À valider ».` } : { ok: false, texte: r.error });
+              router.refresh();
+            })
+          }
+          className="rounded-lg border border-violet-300 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+        >
+          {isPending ? "Il lit vos messages…" : style ? "✨ Réapprendre notre style" : "✨ Apprendre notre style"}
+        </button>
+      </div>
+      {style && (
+        <ul className="mt-2 rounded-lg border border-border">
+          <LigneSavoir s={style} />
+        </ul>
+      )}
+      {message && <p className={cn("mt-2 text-xs", message.ok ? "text-green-700" : "text-red-600")}>{message.texte}</p>}
+    </div>
+  );
+}
+

@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { aiKnowledge } from "@/db/schema";
 
@@ -138,3 +138,91 @@ export async function changerStatutSavoir(id: string, status: "actif" | "archive
 export async function supprimerSavoir(id: string) {
   await db.delete(aiKnowledge).where(eq(aiKnowledge.id, id));
 }
+
+export async function modifierSavoir(id: string, titre: string, contenu: string) {
+  const { texte } = couper(contenu);
+  if (!titre.trim() || !texte) return { ok: false as const, error: "Un titre et un texte, s'il vous plaît." };
+  await db.update(aiKnowledge).set({ title: titre.trim(), content: texte, updatedAt: new Date() }).where(eq(aiKnowledge.id, id));
+  return { ok: true as const };
+}
+
+// ── Ce qu'il apprend (étape 4) ─────────────────────────
+
+/**
+ * Une remarque de l'équipe sur une réponse : elle devient une RÈGLE, active
+ * tout de suite (c'est l'équipe qui parle), et passe avant tout le reste.
+ */
+export async function ajouterLecon(texte: string, auteur: string | null, contexte?: string | null) {
+  const t = texte.trim();
+  if (!t) return { ok: false as const, error: "La remarque est vide." };
+  await db.insert(aiKnowledge).values({
+    kind: "lecon",
+    title: t.length > 100 ? `${t.slice(0, 97)}…` : t,
+    content: contexte ? `${t}\n\n(À propos du message : « ${contexte.slice(0, 200)} »)` : t,
+    status: "actif",
+    createdBy: auteur,
+  });
+  return { ok: true as const };
+}
+
+/**
+ * L'équipe a répondu elle-même ou a CORRIGÉ la proposition : un souvenir « à
+ * valider ». Recopier la proposition telle quelle n'apprend rien : ignoré.
+ */
+export async function ajouterSouvenir(input: { question: string; humain: string; propose: string; auteur: string | null }) {
+  const normal = (x: string) => x.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!input.humain.trim() || normal(input.humain) === normal(input.propose)) return;
+  await db.insert(aiKnowledge).values({
+    kind: "souvenir",
+    title: input.question.length > 120 ? `${input.question.slice(0, 117)}…` : input.question,
+    content: [
+      `Question : ${input.question}`,
+      `Réponse de l'équipe : ${input.humain}`,
+      input.propose ? `(L'assistant avait proposé : « ${input.propose} » — l'équipe a répondu autrement.)` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    status: "a_valider",
+    createdBy: input.auteur,
+  });
+}
+
+/**
+ * « Apprendre notre style » : les dernières réponses écrites À LA MAIN par
+ * l'équipe sur WhatsApp → un guide d'écriture, à valider avant usage.
+ */
+export async function apprendreStyle(auteur: string | null) {
+  const exemples = await db.execute<{ content: string }>(sql`
+    select a.content from activities a
+    where a.type = 'whatsapp' and a.direction = 'outbound' and a.created_by like '%@%'
+      and length(coalesce(a.content, '')) between 15 and 1200
+    order by a.created_at desc limit 80`);
+  if (exemples.length < 5) return { ok: false as const, error: "Pas assez de réponses écrites par l'équipe pour en tirer un style (5 minimum)." };
+  if (!process.env.ANTHROPIC_API_KEY) return { ok: false as const, error: "ANTHROPIC_API_KEY absente" };
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  const client = new Anthropic(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {});
+  const r = await client.messages.create({
+    model: "claude-opus-5",
+    max_tokens: 4000,
+    output_config: { effort: "medium" },
+    messages: [
+      {
+        role: "user",
+        content: `Voici des messages WhatsApp écrits à la main par l'équipe d'une école tunisienne (Space Academy) à des prospects. Rédige, en français, un guide de style court (10 points maximum) pour qu'un assistant écrive EXACTEMENT comme elle : langue et écriture (derja en lettres latines ou arabes, français), tutoiement ou vouvoiement, longueur, salutations et formules de fin, emojis (lesquels, combien), ton, tournures typiques (cite-les), ce qu'elle ne fait jamais. Seulement ce que les exemples montrent. Réponds par le guide seul, sans introduction.\n\nMESSAGES :\n${exemples.map((e) => `- ${e.content.replace(/\s+/g, " ")}`).join("\n")}`,
+      },
+    ],
+  });
+  const guide = r.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+  if (!guide) return { ok: false as const, error: "Rien de lisible, réessayez." };
+  // Un seul style en attente : le nouveau remplace l'ancien brouillon.
+  await db.delete(aiKnowledge).where(and(eq(aiKnowledge.kind, "style"), eq(aiKnowledge.status, "a_valider")));
+  await db.insert(aiKnowledge).values({
+    kind: "style",
+    title: `Notre style (tiré de ${exemples.length} messages de l'équipe)`,
+    content: guide,
+    status: "a_valider",
+    createdBy: auteur,
+  });
+  return { ok: true as const, n: exemples.length };
+}
+

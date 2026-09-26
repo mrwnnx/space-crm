@@ -109,8 +109,19 @@ async function conversation(leadId: string) {
   return lignes.join("\n");
 }
 
-async function savoirTexte() {
+/** Les règles de l'équipe et son style : à part du savoir, car ils passent avant tout. */
+async function reglesEtStyle() {
   const sources = await savoirActif();
+  const regles = sources.filter((s) => s.kind === "lecon").map((s) => `- ${s.content.split("\n")[0]}`);
+  const style = sources.find((s) => s.kind === "style")?.content ?? "";
+  return {
+    regles: regles.length ? regles.join("\n") : "(aucune pour l'instant)",
+    style: style || "(pas encore de guide : reste court, chaleureux, en derja comme la personne)",
+  };
+}
+
+async function savoirTexte() {
+  const sources = (await savoirActif()).filter((s) => s.kind !== "lecon" && s.kind !== "style");
   let t = "";
   for (const s of sources) {
     const bloc = `### ${s.title}${s.kind === "souvenir" ? " (réponse déjà validée par l'équipe)" : ""}\n${s.content}\n\n`;
@@ -134,13 +145,19 @@ export async function preparerReponse(input: { leadId: string; question: string 
   if (ROBOT.test(input.question)) {
     return { decision: "ignore", draft: "", score: 0, raisons: "Message automatique d'une autre entreprise : on ne répond pas à un robot." };
   }
-  const [ctx, conv, savoir] = await Promise.all([contexteLead(input.leadId), conversation(input.leadId), savoirTexte()]);
+  const [ctx, conv, savoir, rs] = await Promise.all([contexteLead(input.leadId), conversation(input.leadId), savoirTexte(), reglesEtStyle()]);
   const consignes = settings.aiInstructions?.trim() || "Réponds en derja tunisienne, en tutoyant, court et chaleureux.";
 
   const system = `Tu es l'assistant WhatsApp de Space Academy, école tunisienne de design UX/UI. Tu réponds aux personnes qui écrivent au numéro de l'école.
 
 Consignes de l'équipe :
 ${consignes}
+
+RÈGLES APPRISES DE L'ÉQUIPE — à respecter absolument, elles passent avant tout le reste :
+${rs.regles}
+
+STYLE DE L'ÉQUIPE — écris comme elle :
+${rs.style}
 
 Règles :
 - Réponds au NOUVEAU MESSAGE, et à lui seul. La conversation sert à comprendre, pas à répondre de nouveau à d'anciennes questions. Une simple salutation (« 3aslema », « عسلامة », « salut ») appelle une salutation chaleureuse et « كيفاش نجم نعاونك ؟ », rien d'autre.
@@ -185,7 +202,11 @@ ${savoir}`;
 - Une réponse honnête « un conseiller va te répondre » ne vaut jamais plus de 60 : elle n'aide pas.
 - Ne retire RIEN parce qu'elle n'ajoute pas d'informations non demandées : on juge la réponse au NOUVEAU message. Une salutation qui répond par une salutation et « comment t'aider ? » mérite 95.
 - Retire beaucoup si elle répond à une ancienne question au lieu du nouveau message, ou si elle redemande une information que le CRM a déjà.
+- Retire beaucoup si elle enfreint une RÈGLE DE L'ÉQUIPE ci-dessous : l'équipe l'a demandée explicitement.
 Donne des raisons courtes, en français, lisibles par l'équipe.
+
+RÈGLES DE L'ÉQUIPE :
+${rs.regles}
 
 SAVOIR :
 ${savoir}`,
@@ -315,8 +336,8 @@ export async function traiterMessageAssistant(input: {
  * sauf quand il a passé la main (« on revient vers toi » est parti, pas la réponse).
  */
 export async function propositionEnAttente(leadId: string) {
-  const [p] = await db.execute<{ id: string; draft: string; score: number; decision: string; raisons: string }>(sql`
-    select r.id, r.draft, r.score, r.decision, r.raisons
+  const [p] = await db.execute<{ id: string; question: string; draft: string; score: number; decision: string; raisons: string }>(sql`
+    select r.id, r.question, r.draft, r.score, r.decision, r.raisons
     from ai_replies r
     where r.lead_id = ${leadId}
       and r.created_at > now() - interval '24 hours'
@@ -328,12 +349,20 @@ export async function propositionEnAttente(leadId: string) {
   return p ?? null;
 }
 
-/** Ce que l'équipe a répondu à la place de l'assistant : la matière de sa mémoire (étape 4). */
-export async function noterReponseHumaine(leadId: string, texte: string) {
-  await db.execute(sql`
+/**
+ * Ce que l'équipe a répondu à la place de l'assistant. S'il y a une
+ * différence avec sa proposition, elle devient un souvenir à valider : c'est
+ * ainsi qu'il apprend de ses fautes.
+ */
+export async function noterReponseHumaine(leadId: string, texte: string, auteur: string | null) {
+  const [r] = await db.execute<{ question: string; draft: string }>(sql`
     update ai_replies set human_reply = ${texte}
     where id = (select id from ai_replies where lead_id = ${leadId} and human_reply is null
                   and decision in ('pret', 'escalade', 'formulaire') and created_at > now() - interval '24 hours'
-                order by created_at desc limit 1)`);
+                order by created_at desc limit 1)
+    returning question, draft`);
+  if (!r) return;
+  const { ajouterSouvenir } = await import("@/lib/ai/knowledge");
+  await ajouterSouvenir({ question: r.question, humain: texte, propose: r.draft, auteur });
 }
 

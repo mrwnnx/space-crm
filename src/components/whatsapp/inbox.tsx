@@ -14,6 +14,7 @@ import {
   markWhatsAppUnreadAction,
   reactWhatsAppAction,
   replyWhatsAppAction,
+  remarqueAssistantAction,
   replyWhatsAppTemplateAction,
   sendWhatsAppMediaAction,
   whatsAppComposerDataAction,
@@ -73,7 +74,7 @@ type Thread = {
   lastInboundAt: string | null;
   ouverte: boolean; // fenêtre de 24 h ouverte — décidé côté serveur, à l'heure du serveur
   // Ce que l'assistant WhatsApp propose de répondre, en attente d'un humain.
-  proposition: { id: string; draft: string; score: number; decision: string; raisons: string } | null;
+  proposition: { id: string; question: string; draft: string; score: number; decision: string; raisons: string } | null;
 };
 
 type Bootcamp = { id: string; name: string };
@@ -778,6 +779,7 @@ function ReponseLibre({
           </div>
           <p dir="auto" className="whitespace-pre-wrap">{proposition.draft}</p>
           <p className="mt-1 text-[11.5px] opacity-70">{proposition.raisons}</p>
+          <RemarqueAssistant question={proposition.question} />
         </div>
       )}
       {citation && (
@@ -1022,3 +1024,46 @@ function ReponseModele({ leadId, to, templates }: { leadId: string; to: string; 
     </div>
   );
 }
+
+/**
+ * « ✎ Remarque » sous une proposition de l'assistant : « trop long », « ne dis
+ * jamais le soir »… La remarque devient une règle qu'il respecte ensuite.
+ */
+function RemarqueAssistant({ question }: { question: string }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [texte, setTexte] = useState("");
+  const [fait, setFait] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  if (fait) return <p className="mt-1.5 text-[12px] text-green-700">✓ Retenu : il respectera cette règle.</p>;
+  if (!ouvert) {
+    return (
+      <button type="button" onClick={() => setOuvert(true)} className="mt-1.5 text-[12px] font-medium opacity-80 hover:underline">
+        ✎ Remarque pour l&apos;assistant
+      </button>
+    );
+  }
+  return (
+    <div className="mt-1.5 flex gap-1.5">
+      <input
+        value={texte}
+        onChange={(e) => setTexte(e.target.value)}
+        placeholder="Ex. : ne dis jamais que les sessions sont le soir"
+        className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground outline-none focus:border-ring"
+      />
+      <button
+        type="button"
+        disabled={isPending || !texte.trim()}
+        onClick={() =>
+          startTransition(async () => {
+            const r = await remarqueAssistantAction(texte, question);
+            if (r.ok) setFait(true);
+          })
+        }
+        className="rounded-md bg-violet-600 px-2 py-1 text-[12px] font-medium text-white disabled:opacity-50"
+      >
+        {isPending ? "…" : "Retenir"}
+      </button>
+    </div>
+  );
+}
+

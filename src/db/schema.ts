@@ -1258,7 +1258,7 @@ export const aiReplies = pgTable("ai_replies", {
 // lien (texte de la page), souvenir (réponse humaine validée).
 export const aiKnowledge = pgTable("ai_knowledge", {
   id: uuid("id").primaryKey().defaultRandom(),
-  kind: text("kind").notNull(), // texte | fichier | lien | souvenir
+  kind: text("kind").notNull(), // texte | fichier | lien | souvenir | lecon (règle de l'équipe) | style
   title: text("title").notNull(),
   content: text("content").notNull(),
   source: text("source"), // nom du fichier ou adresse du lien
