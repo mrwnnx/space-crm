@@ -413,7 +413,13 @@ function SectionNumero({
   // pour qu'un « rien ne part » ne soit jamais un mystère.
   const modeLigne =
     envoi.mode === "live" ? (
-      <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">Tout part</span>
+      <>
+        <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">Tout part</span>
+        {/* Les testeurs : l'assistant leur répond seul, même en mode répétition. */}
+        <span className="ml-2 text-[12.5px] text-muted-foreground">
+          Testeurs de l&apos;assistant : {envoi.allowlist.length ? `+${envoi.allowlist.join(", +")}` : "aucun"}
+        </span>
+      </>
     ) : envoi.mode === "allowlist" ? (
       <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
         Test — seuls {envoi.allowlist.length} numéro{envoi.allowlist.length > 1 ? "s" : ""} reçoivent

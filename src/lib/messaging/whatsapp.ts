@@ -69,9 +69,15 @@ export function sendMode(): SendMode {
 }
 
 export function allowlist(): string[] {
+  // Un numéro peut être tapé avec des espaces (« +216 26 023 393 ») : on
+  // coupe d'abord aux virgules ; un morceau trop long pour un seul numéro,
+  // c'est une liste séparée par des espaces.
   return (process.env.WHATSAPP_TEST_ALLOWLIST ?? "")
-    .split(/[,\s]+/)
-    .map((n) => n.replace(/\D/g, ""))
+    .split(/[,;\n]+/)
+    .flatMap((morceau) => {
+      const n = morceau.replace(/\D/g, "");
+      return n.length <= 15 ? [n] : morceau.split(/\s+/).map((x) => x.replace(/\D/g, ""));
+    })
     .filter((n) => n.length >= 8)
     .map((n) => (n.length === 8 ? `216${n}` : n));
 }
